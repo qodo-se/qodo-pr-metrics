@@ -208,6 +208,24 @@ def save_checkpoint(org, state):
     checkpoint_path(org).write_text(json.dumps(state, indent=2))
 
 
+def get_total_pr_count(org, since):
+    """Return total merged PRs in the window from search API (approximate)."""
+    today = date.today()
+    q = (
+        f"org:{org} is:pr is:merged "
+        f"merged:{since.isoformat()}..{today.isoformat()}"
+    )
+    out = run_gh([
+        "api", "-X", "GET", "search/issues",
+        "-f", f"q={q}",
+        "--jq", ".total_count",
+    ])
+    try:
+        return int(out.strip())
+    except ValueError:
+        return None
+
+
 def cmd_count(args):
     cp_path = checkpoint_path(args.org)
     processed = set()
@@ -233,13 +251,18 @@ def cmd_count(args):
         else:
             print("  No checkpoint found — starting fresh.", file=sys.stderr)
 
+    print("  Fetching total PR count...", end="", file=sys.stderr, flush=True)
+    total_prs = get_total_pr_count(args.org, args.since)
+    print(f" {total_prs}" if total_prs is not None else " (unavailable)", file=sys.stderr)
+
     for owner, repo, number in search_merged_prs(args.org, args.since):
         if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
             continue
         pr_total += 1
         if not args.verbose:
+            total_str = f"/{total_prs}" if total_prs is not None else ""
             print(
-                f"\r  [{pr_total} PRs | {prs_with_qodo} with Qodo | "
+                f"\r  [{pr_total}{total_str} PRs | {prs_with_qodo} with Qodo | "
                 f"{suggestions_implemented}/{suggestions_total} suggestions] "
                 f"{owner}/{repo}#{number}{' ' * 10}",
                 end="", file=sys.stderr, flush=True,
