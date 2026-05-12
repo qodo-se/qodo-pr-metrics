@@ -56,14 +56,19 @@ SUGGESTION_LINE = re.compile(
 #   - the ballot-box-check emoji Qodo adds next to fixed items
 IMPLEMENTED_MARKERS = ("~~", "<s>", "<del>", "<strike>", "\u2611")  # ☑
 
-# Section header patterns — anchored to heading-like lines (##, ###, **...**)
-# to prevent suggestion titles containing "action required" from resetting the
-# section counter mid-parse.
+# Section header patterns — match both markdown headings (##, **) and the
+# <img> tags Qodo currently uses for section banners (e.g. action-required.png).
+# Anchored via .match() so suggestion titles containing these words don't
+# accidentally reset the section counter.
 _SECTION_ACTION = re.compile(
-    r"^(?:#+\s*|\*{1,2}\s*)action\s+required", re.IGNORECASE
+    r"^(?:(?:#+\s*|\*{1,2}\s*)action\s+required"
+    r"|<img\b[^>]*action-required\.png)",
+    re.IGNORECASE,
 )
 _SECTION_REVIEW = re.compile(
-    r"^(?:#+\s*|\*{1,2}\s*)review\s+recommended", re.IGNORECASE
+    r"^(?:(?:#+\s*|\*{1,2}\s*)(?:review|remediation)\s+recommended"
+    r"|<img\b[^>]*review-recommended\.png)",
+    re.IGNORECASE,
 )
 
 # Category label patterns (matched against each suggestion line).
@@ -299,7 +304,7 @@ def _classify_category(title: str) -> str:
 
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
-    "Days to Merge", "PR Creator", "Lines Changed", "Has Qodo Review",
+    "Hours to Merge", "PR Creator", "Lines Changed", "Has Qodo Review",
     "Action Required Suggestions", "Action Required Implemented",
     "Review Recommended Suggestions", "Review Recommended Implemented",
     "Bugs Suggested", "Bugs Implemented",
@@ -310,15 +315,16 @@ CSV_COLUMNS = [
 ]
 
 
-def _days_between(iso_start: str, iso_end: str) -> int:
-    """Return whole days between two ISO-8601 timestamps. Returns 0 on error."""
+def _hours_between(iso_start: str, iso_end: str) -> int:
+    """Return whole hours between two ISO-8601 timestamps. Returns 0 on error."""
     try:
         # Normalise GitHub's timestamps — strip trailing Z and any fractional
         # seconds so strptime works regardless of sub-second precision.
         def _parse(ts):
             ts = ts.rstrip("Z").split(".")[0]
             return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")
-        return max(0, (_parse(iso_end) - _parse(iso_start)).days)
+        delta = _parse(iso_end) - _parse(iso_start)
+        return max(0, int(delta.total_seconds() // 3600))
     except (ValueError, TypeError, AttributeError):
         return 0
 
@@ -343,7 +349,7 @@ def build_csv_row(pr: dict, lines_changed: int, stats) -> dict:
         "PR URL":                           pr.get("url", ""),
         "PR Creation Date":                 pr.get("created_at", ""),
         "PR Merge Date":                    pr.get("merged_at", ""),
-        "Days to Merge":                    _days_between(
+        "Hours to Merge":                   _hours_between(
                                                 pr.get("created_at", ""),
                                                 pr.get("merged_at", ""),
                                             ),
@@ -472,25 +478,34 @@ def cmd_count(args):
                     end="", file=sys.stderr, flush=True,
                 )
 
-            lines_changed = fetch_pr_lines(owner, repo, number) if args.csv else 0
             comments = fetch_comments(owner, repo, number)
             qodo = find_qodo_comment(comments)
 
             if not qodo:
                 if args.verbose:
-                    print(f"{owner}/{repo}#{number}: (no Qodo comment)")
-                stats = None
-            else:
-                prs_with_qodo += 1
-                stats = parse_qodo_comment(qodo["body"])
-                suggestions_total += stats.total_suggestions
-                suggestions_implemented += stats.total_implemented
-                if args.verbose:
-                    print(
-                        f"{owner}/{repo}#{number}: "
-                        f"{stats.total_implemented}/{stats.total_suggestions} implemented"
-                    )
+                    print(f"{owner}/{repo}#{number}: (no Qodo comment, skipped)")
+                processed.add((owner, repo, str(number)))
+                save_checkpoint(args.org, {
+                    "since": args.since.isoformat(),
+                    "pr_total": pr_total,
+                    "prs_with_qodo": prs_with_qodo,
+                    "suggestions_total": suggestions_total,
+                    "suggestions_implemented": suggestions_implemented,
+                    "processed": list(processed),
+                })
+                continue
 
+            prs_with_qodo += 1
+            stats = parse_qodo_comment(qodo["body"])
+            suggestions_total += stats.total_suggestions
+            suggestions_implemented += stats.total_implemented
+            if args.verbose:
+                print(
+                    f"{owner}/{repo}#{number}: "
+                    f"{stats.total_implemented}/{stats.total_suggestions} implemented"
+                )
+
+            lines_changed = fetch_pr_lines(owner, repo, number) if args.csv else 0
             if csv_writer:
                 csv_writer.writerow(build_csv_row(pr, lines_changed, stats))
 

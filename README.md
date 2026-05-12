@@ -54,13 +54,48 @@ python3 github.py --org acme-corp --verbose
 
 # Inspect mode — prints the first Qodo comment found (useful for verifying the parser)
 python3 github.py --org acme-corp --inspect
+
+# Write a per-PR CSV report
+python3 github.py --org acme-corp --csv report.csv
+python3 github.py --org acme-corp --days 90 --csv report.csv
 ```
 
 **Windows:**
 
 ```bash
 python github.py --org acme-corp
+python github.py --org acme-corp --csv report.csv
 ```
+
+### CSV report
+
+The `--csv FILE` flag writes a row for every merged PR in the window to a CSV file in addition to printing the console summary. Each row contains 23 columns:
+
+| Column | Description |
+|---|---|
+| Repo Name | Repository name within the org |
+| PR # | Pull request number |
+| PR URL | Link to the PR on GitHub |
+| PR Creation Date | ISO-8601 timestamp when the PR was opened |
+| PR Merge Date | ISO-8601 timestamp when the PR was merged |
+| Hours to Merge | Whole hours from creation to merge |
+| PR Creator | GitHub login of the PR author |
+| Lines Changed | Total lines added + deleted |
+| Has Qodo Review | `True` if Qodo left a review comment, `False` otherwise |
+| Action Required Suggestions | Count of "Action Required" suggestions |
+| Action Required Implemented | Count of implemented "Action Required" suggestions |
+| Review Recommended Suggestions | Count of "Review Recommended" suggestions |
+| Review Recommended Implemented | Count of implemented "Review Recommended" suggestions |
+| Bugs Suggested | Count of bug suggestions |
+| Bugs Implemented | Count of implemented bug suggestions |
+| Rule Violations Suggested | Count of rule-violation suggestions |
+| Rule Violations Implemented | Count of implemented rule-violation suggestions |
+| Requirement Gaps Suggested | Count of requirement-gap suggestions |
+| Requirement Gaps Implemented | Count of implemented requirement-gap suggestions |
+| Total Suggestions | Sum of all suggestion categories |
+| Total Implemented | Sum of all implemented categories |
+| Implementation Rate (%) | `Total Implemented / Total Suggestions × 100`, blank when 0 suggestions |
+| Suggestions per 100 Lines | `Total Suggestions / Lines Changed × 100`, blank when lines = 0 or suggestions = 0 |
 
 ### Options
 
@@ -69,5 +104,6 @@ python github.py --org acme-corp
 | `--org` | GitHub org login (required, e.g. `acme-corp`) |
 | `--since` | Start date in `YYYY-MM-DD` format |
 | `--days` | Lookback window in days (default: `365`; mutually exclusive with `--since`) |
+| `--csv` | Write per-PR report to a CSV file (e.g. `--csv report.csv`) |
 | `--inspect` | Print the raw body of the first Qodo comment found and exit |
 | `--verbose` | Print per-PR suggestion counts instead of just the final summary |
