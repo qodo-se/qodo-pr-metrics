@@ -4,7 +4,7 @@ from report import aggregate, ReportData
 
 
 def _row(repo="backend", creator="alice", has_qodo=True,
-         suggestions=4, implemented=2,
+         suggestions=8, implemented=2,
          ar_sug=2, ar_imp=1, rr_sug=2, rr_imp=1,
          bugs_sug=1, bugs_imp=1, rule_sug=2, rule_imp=1,
          req_sug=1, req_imp=0):
@@ -126,3 +126,16 @@ def test_aggregate_category_totals():
     assert agg.rule_violations_implemented == 2
     assert agg.requirement_gaps_suggested == 1
     assert agg.requirement_gaps_implemented == 1
+
+
+def test_aggregate_zero_suggestions_rates_are_zero():
+    rows = [_row(ar_sug=0, ar_imp=0, rr_sug=0, rr_imp=0,
+                 bugs_sug=0, bugs_imp=0, rule_sug=0, rule_imp=0,
+                 req_sug=0, req_imp=0, suggestions=0, implemented=0)]
+    agg = aggregate(rows)
+    assert agg.action_required_rate_pct == 0.0
+    assert agg.review_recommended_rate_pct == 0.0
+    assert agg.bugs_rate_pct == 0.0
+    assert agg.rule_violations_rate_pct == 0.0
+    assert agg.requirement_gaps_rate_pct == 0.0
+    assert agg.overall_impl_rate_pct == 0.0
