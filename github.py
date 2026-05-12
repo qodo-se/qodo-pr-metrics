@@ -39,6 +39,8 @@ from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
+import report
+
 
 # Stable marker in Qodo Merge's review comment, independent of bot account name.
 QODO_MARKER = re.compile(r"Code Review by Qodo", re.IGNORECASE)
@@ -515,11 +517,18 @@ def cmd_count(args):
         print(file=sys.stderr)  # end the rolling status line
 
     stem = _output_stem(args.org, args.since, date.today())
+
     csv_path = Path(f"{stem}.csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
         writer.writeheader()
         writer.writerows(rows)
+
+    html_path = Path(f"{stem}.html")
+    html_path.write_text(
+        report.generate_html(rows, args.org, args.since, date.today(), "logo.png"),
+        encoding="utf-8",
+    )
 
     if cp_path.exists():
         cp_path.unlink()
@@ -533,6 +542,10 @@ def cmd_count(args):
     if suggestions_total:
         rate = 100 * suggestions_implemented / suggestions_total
         print(f"Implementation rate:         {rate:.1f}%")
+
+    print(f"\nReports written:")
+    print(f"  CSV:  {csv_path}")
+    print(f"  HTML: {html_path}")
 
 
 def main():
