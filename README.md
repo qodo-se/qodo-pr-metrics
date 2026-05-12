@@ -105,3 +105,4 @@ Each row in the CSV contains 23 columns with per-PR data:
 | `--days` | Lookback window in days (default: `365`; mutually exclusive with `--since`) |
 | `--inspect` | Print the raw body of the first Qodo comment found and exit |
 | `--verbose` | Print per-PR suggestion counts instead of just the final summary |
+| `--resume` | Resume from a previous checkpoint (`ORG-checkpoint.json`) |
