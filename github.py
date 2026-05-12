@@ -33,6 +33,7 @@ import re
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -53,6 +54,41 @@ SUGGESTION_LINE = re.compile(
 #   - HTML strikethrough (<s>, <del>, <strike>)
 #   - the ballot-box-check emoji Qodo adds next to fixed items
 IMPLEMENTED_MARKERS = ("~~", "<s>", "<del>", "<strike>", "\u2611")  # ☑
+
+# Section header patterns — anchored to heading-like lines (##, ###, **...**)
+# to prevent suggestion titles containing "action required" from resetting the
+# section counter mid-parse.
+_SECTION_ACTION = re.compile(
+    r"^(?:#+\s*|\*{1,2}\s*)action\s+required", re.IGNORECASE
+)
+_SECTION_REVIEW = re.compile(
+    r"^(?:#+\s*|\*{1,2}\s*)review\s+recommended", re.IGNORECASE
+)
+
+# Category label patterns (matched against each suggestion line).
+# _CAT_RULE is checked before _CAT_BUG because "Rule violation" would not
+# match \bBug\b anyway, but ordering is explicit to prevent future regressions.
+_CAT_BUG  = re.compile(r"\bBug\b", re.IGNORECASE)
+_CAT_RULE = re.compile(r"\bRule\s+violation", re.IGNORECASE)
+_CAT_REQ  = re.compile(r"\bRequirement\s+gap", re.IGNORECASE)
+
+
+@dataclass
+class QodoStats:
+    action_required_total: int = 0
+    action_required_implemented: int = 0
+    review_recommended_total: int = 0
+    review_recommended_implemented: int = 0
+    bugs_suggested: int = 0
+    bugs_implemented: int = 0
+    rule_violations_suggested: int = 0
+    rule_violations_implemented: int = 0
+    requirement_gaps_suggested: int = 0
+    requirement_gaps_implemented: int = 0
+    # Direct totals — count ALL items regardless of section so PRs with
+    # no section headers still produce correct Total Suggestions counts.
+    total_suggestions: int = 0
+    total_implemented: int = 0
 
 
 def _rate_limit_reset_epoch():
@@ -161,16 +197,75 @@ def find_qodo_comment(comments):
     return None
 
 
-def parse_qodo_comment(body):
-    """Return (total_suggestions, implemented_count)."""
-    total = 0
-    implemented = 0
-    for match in SUGGESTION_LINE.finditer(body):
-        title = match.group(1)
-        total += 1
-        if any(marker in title for marker in IMPLEMENTED_MARKERS):
-            implemented += 1
-    return total, implemented
+def parse_qodo_comment(body: str) -> "QodoStats":
+    """Parse a Qodo review comment body into structured QodoStats."""
+    stats = QodoStats()
+    if not body:
+        return stats
+
+    # Track which section we're currently in (None = preamble/unknown)
+    section = None  # "action_required" | "review_recommended" | None
+
+    for line in body.splitlines():
+        # Detect section transitions — check before suggestion matching so
+        # heading lines are never mis-counted as suggestion items.
+        if _SECTION_ACTION.match(line.strip()):
+            section = "action_required"
+            continue
+        if _SECTION_REVIEW.match(line.strip()):
+            section = "review_recommended"
+            continue
+
+        # Match numbered suggestion lines
+        m = SUGGESTION_LINE.search(line)
+        if not m:
+            continue
+
+        title = m.group(1)
+        is_implemented = any(marker in title for marker in IMPLEMENTED_MARKERS)
+        cat = _classify_category(title)
+
+        # Always increment global totals (covers PRs with no section headers)
+        stats.total_suggestions += 1
+        if is_implemented:
+            stats.total_implemented += 1
+
+        # Section counts
+        if section == "action_required":
+            stats.action_required_total += 1
+            if is_implemented:
+                stats.action_required_implemented += 1
+        elif section == "review_recommended":
+            stats.review_recommended_total += 1
+            if is_implemented:
+                stats.review_recommended_implemented += 1
+
+        # Category counts
+        if cat == "bug":
+            stats.bugs_suggested += 1
+            if is_implemented:
+                stats.bugs_implemented += 1
+        elif cat == "rule_violation":
+            stats.rule_violations_suggested += 1
+            if is_implemented:
+                stats.rule_violations_implemented += 1
+        elif cat == "requirement_gap":
+            stats.requirement_gaps_suggested += 1
+            if is_implemented:
+                stats.requirement_gaps_implemented += 1
+
+    return stats
+
+
+def _classify_category(title: str) -> str:
+    """Return 'bug', 'rule_violation', 'requirement_gap', or 'unknown'."""
+    if _CAT_RULE.search(title):
+        return "rule_violation"
+    if _CAT_REQ.search(title):
+        return "requirement_gap"
+    if _CAT_BUG.search(title):
+        return "bug"
+    return "unknown"
 
 
 def cmd_inspect(args):
@@ -182,9 +277,9 @@ def cmd_inspect(args):
         if not qodo:
             continue
         print(file=sys.stderr)
-        total, implemented = parse_qodo_comment(qodo["body"])
+        stats = parse_qodo_comment(qodo["body"])
         print(f"=== {owner}/{repo}#{number} ===")
-        print(f"Parser found: {implemented}/{total} implemented\n")
+        print(f"Parser found: {stats.total_implemented}/{stats.total_suggestions} implemented\n")
         print("--- RAW COMMENT BODY ---")
         print(qodo["body"])
         return
@@ -274,11 +369,11 @@ def cmd_count(args):
                 print(f"{owner}/{repo}#{number}: (no Qodo comment)")
         else:
             prs_with_qodo += 1
-            t, i = parse_qodo_comment(qodo["body"])
-            suggestions_total += t
-            suggestions_implemented += i
+            stats = parse_qodo_comment(qodo["body"])
+            suggestions_total += stats.total_suggestions
+            suggestions_implemented += stats.total_implemented
             if args.verbose:
-                print(f"{owner}/{repo}#{number}: {i}/{t} implemented")
+                print(f"{owner}/{repo}#{number}: {stats.total_implemented}/{stats.total_suggestions} implemented")
 
         processed.add((owner, repo, str(number)))
         save_checkpoint(args.org, {
