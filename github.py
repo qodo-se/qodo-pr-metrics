@@ -327,6 +327,11 @@ def _hours_between(iso_start: str, iso_end: str) -> int:
         return 0
 
 
+def _output_stem(org: str, since: date, until: date) -> str:
+    """Return the base filename (no extension) for output files."""
+    return f"{org}_{since.isoformat()}_{until.isoformat()}"
+
+
 def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"]) -> dict:
     has_qodo = stats is not None
     total = stats.total_suggestions if has_qodo else 0
@@ -509,6 +514,13 @@ def cmd_count(args):
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
 
+    stem = _output_stem(args.org, args.since, date.today())
+    csv_path = Path(f"{stem}.csv")
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
     if cp_path.exists():
         cp_path.unlink()
 
@@ -539,8 +551,6 @@ def main():
                    help="Print per-PR results")
     p.add_argument("--resume", action="store_true",
                    help="Resume from a previous checkpoint (ORG-checkpoint.json)")
-    p.add_argument("--csv", metavar="FILE",
-                   help="Write per-PR CSV report to FILE (e.g. report.csv)")
     args = p.parse_args()
 
     if not args.since:
