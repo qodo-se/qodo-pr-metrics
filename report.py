@@ -1,9 +1,11 @@
 from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date
+from html import escape as _h
 from pathlib import Path
 from typing import Optional
 import base64
+import mimetypes
 
 
 def _rate(implemented: int, total: int) -> float:
@@ -201,8 +203,10 @@ def _embed_logo(logo_path: Optional[str]) -> str:
     p = Path(logo_path)
     if not p.exists():
         return ""
+    mime, _ = mimetypes.guess_type(str(p))
+    mime = mime or "image/png"
     b64 = base64.b64encode(p.read_bytes()).decode()
-    return f'<img src="data:image/png;base64,{b64}" alt="Qodo" height="48">'
+    return f'<img src="data:{mime};base64,{b64}" alt="Qodo" height="48">'
 
 
 def _rate_str(implemented: int, total: int) -> str:
@@ -248,12 +252,12 @@ def _table(headers: list, rows_html: str) -> str:
 
 def _section_adoption(agg: ReportData) -> str:
     repo_rows = "".join(
-        f"<tr><td>{r['repo']}</td><td>{r['prs']}</td><td>{r['suggestions']}</td>"
+        f"<tr><td>{_h(r['repo'])}</td><td>{r['prs']}</td><td>{r['suggestions']}</td>"
         f"<td>{_rate_str(r['implemented'], r['suggestions'])}</td></tr>"
         for r in agg.by_repo
     )
     dev_rows = "".join(
-        f"<tr><td>{r['developer']}</td><td>{r['prs']}</td><td>{r['suggestions']}</td>"
+        f"<tr><td>{_h(r['developer'])}</td><td>{r['prs']}</td><td>{r['suggestions']}</td>"
         f"<td>{_rate_str(r['implemented'], r['suggestions'])}</td></tr>"
         for r in agg.by_developer
     )
@@ -293,10 +297,11 @@ def _section_top_prs(agg: ReportData) -> str:
     pr_rows = ""
     for r in agg.top_prs:
         url = r.get("PR URL", "")
-        pr_ref = f'<a href="{url}">#{r["PR #"]}</a>' if url else f'#{r["PR #"]}'
+        safe_url = url if url.startswith(("https://", "http://")) else ""
+        pr_ref = f'<a href="{_h(safe_url)}">#{r["PR #"]}</a>' if safe_url else f'#{r["PR #"]}'
         pr_rows += (
-            f'<tr><td>{r["Repo Name"]}</td><td>{pr_ref}</td>'
-            f'<td>{r["PR Creator"]}</td>'
+            f'<tr><td>{_h(r["Repo Name"])}</td><td>{pr_ref}</td>'
+            f'<td>{_h(r["PR Creator"])}</td>'
             f'<td>{r["Total Suggestions"]}</td><td>{r["Total Implemented"]}</td>'
             f'<td>{r.get("Implementation Rate (%)", "—")}</td></tr>'
         )
@@ -322,7 +327,7 @@ def generate_html(
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Qodo Impact Report &mdash; {org}</title>
+  <title>Qodo Impact Report &mdash; {_h(org)}</title>
   <style>{_CSS}</style>
 </head>
 <body>
@@ -331,7 +336,7 @@ def generate_html(
     {logo_tag}
     <div>
       <h1>Qodo Code Review &mdash; Impact Report</h1>
-      <p class="subtitle">{org} &middot; {since_fmt} &ndash; {until_fmt} &middot; Generated {generated}</p>
+      <p class="subtitle">{_h(org)} &middot; {since_fmt} &ndash; {until_fmt} &middot; Generated {generated}</p>
     </div>
   </header>
   {_section_exec_summary(agg)}

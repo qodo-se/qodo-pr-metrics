@@ -160,6 +160,6 @@ def test_generate_html_smoke():
     assert "Impact by Category" in html
     assert "Top 5 PRs" in html
     # stat values present
-    assert ">1<" in html   # prs_with_qodo
-    assert ">5<" in html   # total_suggestions
-    assert ">3<" in html   # total_implemented
+    assert 'class="stat-value">1<' in html   # prs_with_qodo
+    assert 'class="stat-value">5<' in html   # total_suggestions
+    assert 'class="stat-value">3<' in html   # total_implemented
