@@ -37,6 +37,7 @@ import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional
 
 
 # Stable marker in Qodo Merge's review comment, independent of bot account name.
@@ -301,7 +302,7 @@ def _classify_category(title: str) -> str:
 
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
-    "Hours to Merge", "PR Creator", "Lines Changed",
+    "Hours to Merge", "PR Creator", "Lines Changed", "Has Qodo Review",
     "Action Required Suggestions", "Action Required Implemented",
     "Review Recommended Suggestions", "Review Recommended Implemented",
     "Bugs Suggested", "Bugs Implemented",
@@ -326,13 +327,12 @@ def _hours_between(iso_start: str, iso_end: str) -> int:
         return 0
 
 
-def build_csv_row(pr: dict, lines_changed: int, stats: "QodoStats") -> dict:
-    total = stats.total_suggestions
-    implemented = stats.total_implemented
+def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"]) -> dict:
+    has_qodo = stats is not None
+    total = stats.total_suggestions if has_qodo else 0
+    implemented = stats.total_implemented if has_qodo else 0
 
-    impl_rate = (
-        f"{100 * implemented / total:.1f}" if total > 0 else ""
-    )
+    impl_rate = f"{100 * implemented / total:.1f}" if total > 0 else ""
     per_100 = (
         f"{100 * total / lines_changed:.1f}" if lines_changed > 0 and total > 0 else ""
     )
@@ -349,16 +349,17 @@ def build_csv_row(pr: dict, lines_changed: int, stats: "QodoStats") -> dict:
                                             ),
         "PR Creator":                       pr.get("creator", ""),
         "Lines Changed":                    lines_changed,
-        "Action Required Suggestions":      stats.action_required_total,
-        "Action Required Implemented":      stats.action_required_implemented,
-        "Review Recommended Suggestions":   stats.review_recommended_total,
-        "Review Recommended Implemented":   stats.review_recommended_implemented,
-        "Bugs Suggested":                   stats.bugs_suggested,
-        "Bugs Implemented":                 stats.bugs_implemented,
-        "Rule Violations Suggested":        stats.rule_violations_suggested,
-        "Rule Violations Implemented":      stats.rule_violations_implemented,
-        "Requirement Gaps Suggested":       stats.requirement_gaps_suggested,
-        "Requirement Gaps Implemented":     stats.requirement_gaps_implemented,
+        "Has Qodo Review":                  has_qodo,
+        "Action Required Suggestions":      stats.action_required_total if has_qodo else 0,
+        "Action Required Implemented":      stats.action_required_implemented if has_qodo else 0,
+        "Review Recommended Suggestions":   stats.review_recommended_total if has_qodo else 0,
+        "Review Recommended Implemented":   stats.review_recommended_implemented if has_qodo else 0,
+        "Bugs Suggested":                   stats.bugs_suggested if has_qodo else 0,
+        "Bugs Implemented":                 stats.bugs_implemented if has_qodo else 0,
+        "Rule Violations Suggested":        stats.rule_violations_suggested if has_qodo else 0,
+        "Rule Violations Implemented":      stats.rule_violations_implemented if has_qodo else 0,
+        "Requirement Gaps Suggested":       stats.requirement_gaps_suggested if has_qodo else 0,
+        "Requirement Gaps Implemented":     stats.requirement_gaps_implemented if has_qodo else 0,
         "Total Suggestions":                total,
         "Total Implemented":                implemented,
         "Implementation Rate (%)":          impl_rate,
