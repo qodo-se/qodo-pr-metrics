@@ -139,3 +139,27 @@ def test_aggregate_zero_suggestions_rates_are_zero():
     assert agg.rule_violations_rate_pct == 0.0
     assert agg.requirement_gaps_rate_pct == 0.0
     assert agg.overall_impl_rate_pct == 0.0
+
+
+from datetime import date
+
+
+def test_generate_html_smoke():
+    from report import generate_html
+    rows = [
+        _row(repo="api", creator="alice", suggestions=5, implemented=3),
+        _row(repo="web", creator="bob", has_qodo=False, suggestions=0, implemented=0),
+    ]
+    html = generate_html(rows, "acme-corp", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "<!DOCTYPE html>" in html
+    assert "acme-corp" in html
+    assert "Qodo Code Review" in html
+    assert "Executive Summary" in html
+    assert "Adoption" in html
+    assert "Impact by Severity" in html
+    assert "Impact by Category" in html
+    assert "Top 5 PRs" in html
+    # stat values present
+    assert ">1<" in html   # prs_with_qodo
+    assert ">5<" in html   # total_suggestions
+    assert ">3<" in html   # total_implemented
