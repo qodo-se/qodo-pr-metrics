@@ -64,9 +64,12 @@ python github.py --org acme-corp
 
 ### Output files
 
-The script automatically generates CSV and HTML report files (coming soon) in addition to printing the console summary. Files are named using the pattern: `{org}_{since_date}_{until_date}.csv`
+The script automatically generates two output files in addition to printing the console summary:
 
-For example, running `python3 github.py --org acme-corp` creates a file like `acme-corp_2025-05-12_2026-05-12.csv`.
+- `{org}_{since_date}_{until_date}.csv` — raw per-PR data
+- `{org}_{since_date}_{until_date}.html` — visual summary report
+
+For example, running `python3 github.py --org acme-corp` creates `acme-corp_2025-05-12_2026-05-12.csv` and `acme-corp_2025-05-12_2026-05-12.html`.
 
 Each row in the CSV contains 23 columns with per-PR data:
 

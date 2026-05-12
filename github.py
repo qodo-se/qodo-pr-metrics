@@ -331,7 +331,8 @@ def _hours_between(iso_start: str, iso_end: str) -> int:
 
 def _output_stem(org: str, since: date, until: date) -> str:
     """Return the base filename (no extension) for output files."""
-    return f"{org}_{since.isoformat()}_{until.isoformat()}"
+    safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
+    return f"{safe_org}_{since.isoformat()}_{until.isoformat()}"
 
 
 def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"]) -> dict:
@@ -435,6 +436,7 @@ def cmd_count(args):
     prs_with_qodo = 0
     suggestions_total = 0
     suggestions_implemented = 0
+    rows: list[dict] = []
 
     if args.resume:
         data = load_checkpoint(args.org)
@@ -444,6 +446,7 @@ def cmd_count(args):
             suggestions_total = data["suggestions_total"]
             suggestions_implemented = data["suggestions_implemented"]
             processed = {tuple(x) for x in data["processed"]}
+            rows = data.get("rows", [])
             since_str = data.get("since", args.since.isoformat())
             args.since = date.fromisoformat(since_str)
             print(
@@ -456,8 +459,6 @@ def cmd_count(args):
     print("  Fetching total PR count...", end="", file=sys.stderr, flush=True)
     total_prs = get_total_pr_count(args.org, args.since)
     print(f" {total_prs}" if total_prs is not None else " (unavailable)", file=sys.stderr)
-
-    rows: list[dict] = []
 
     for pr in search_merged_prs(args.org, args.since):
         owner, repo, number = pr["owner"], pr["repo"], pr["number"]
@@ -488,6 +489,7 @@ def cmd_count(args):
                 "suggestions_total": suggestions_total,
                 "suggestions_implemented": suggestions_implemented,
                 "processed": list(processed),
+                "rows": rows,
             })
             continue
 
@@ -512,14 +514,16 @@ def cmd_count(args):
             "suggestions_total": suggestions_total,
             "suggestions_implemented": suggestions_implemented,
             "processed": list(processed),
+            "rows": rows,
         })
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
 
     today = date.today()
     stem = _output_stem(args.org, args.since, today)
+    base = Path.cwd()
 
-    csv_path = Path(f"{stem}.csv")
+    csv_path = base / f"{stem}.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
         writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
         writer.writeheader()
@@ -527,7 +531,7 @@ def cmd_count(args):
 
     html_path = None
     try:
-        html_path = Path(f"{stem}.html")
+        html_path = base / f"{stem}.html"
         html_path.write_text(
             report.generate_html(rows, args.org, args.since, today, "logo.png"),
             encoding="utf-8",
