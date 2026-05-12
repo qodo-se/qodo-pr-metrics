@@ -450,59 +450,29 @@ def cmd_count(args):
     total_prs = get_total_pr_count(args.org, args.since)
     print(f" {total_prs}" if total_prs is not None else " (unavailable)", file=sys.stderr)
 
-    csv_file = None
-    csv_writer = None
-    if args.csv:
-        csv_file = open(args.csv, "w", newline="", encoding="utf-8")
-        csv_writer = csv.DictWriter(csv_file, fieldnames=CSV_COLUMNS)
-        csv_writer.writeheader()
+    rows: list[dict] = []
 
-    try:
-        for pr in search_merged_prs(args.org, args.since):
-            owner, repo, number = pr["owner"], pr["repo"], pr["number"]
-            if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
-                continue
-            pr_total += 1
-            if not args.verbose:
-                total_str = f"/{total_prs}" if total_prs is not None else ""
-                print(
-                    f"\r  [{pr_total}{total_str} PRs | {prs_with_qodo} with Qodo | "
-                    f"{suggestions_implemented}/{suggestions_total} suggestions] "
-                    f"{owner}/{repo}#{number}{' ' * 10}",
-                    end="", file=sys.stderr, flush=True,
-                )
+    for pr in search_merged_prs(args.org, args.since):
+        owner, repo, number = pr["owner"], pr["repo"], pr["number"]
+        if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
+            continue
+        pr_total += 1
+        if not args.verbose:
+            total_str = f"/{total_prs}" if total_prs is not None else ""
+            print(
+                f"\r  [{pr_total}{total_str} PRs | {prs_with_qodo} with Qodo | "
+                f"{suggestions_implemented}/{suggestions_total} suggestions] "
+                f"{owner}/{repo}#{number}{' ' * 10}",
+                end="", file=sys.stderr, flush=True,
+            )
 
-            comments = fetch_comments(owner, repo, number)
-            qodo = find_qodo_comment(comments)
+        comments = fetch_comments(owner, repo, number)
+        qodo = find_qodo_comment(comments)
 
-            if not qodo:
-                if args.verbose:
-                    print(f"{owner}/{repo}#{number}: (no Qodo comment, skipped)")
-                processed.add((owner, repo, str(number)))
-                save_checkpoint(args.org, {
-                    "since": args.since.isoformat(),
-                    "pr_total": pr_total,
-                    "prs_with_qodo": prs_with_qodo,
-                    "suggestions_total": suggestions_total,
-                    "suggestions_implemented": suggestions_implemented,
-                    "processed": list(processed),
-                })
-                continue
-
-            prs_with_qodo += 1
-            stats = parse_qodo_comment(qodo["body"])
-            suggestions_total += stats.total_suggestions
-            suggestions_implemented += stats.total_implemented
+        if not qodo:
             if args.verbose:
-                print(
-                    f"{owner}/{repo}#{number}: "
-                    f"{stats.total_implemented}/{stats.total_suggestions} implemented"
-                )
-
-            lines_changed = fetch_pr_lines(owner, repo, number) if args.csv else 0
-            if csv_writer:
-                csv_writer.writerow(build_csv_row(pr, lines_changed, stats))
-
+                print(f"{owner}/{repo}#{number}: (no Qodo comment)")
+            rows.append(build_csv_row(pr, lines_changed=0, stats=None))
             processed.add((owner, repo, str(number)))
             save_checkpoint(args.org, {
                 "since": args.since.isoformat(),
@@ -512,10 +482,30 @@ def cmd_count(args):
                 "suggestions_implemented": suggestions_implemented,
                 "processed": list(processed),
             })
-    finally:
-        if csv_file:
-            csv_file.close()
+            continue
 
+        prs_with_qodo += 1
+        stats = parse_qodo_comment(qodo["body"])
+        suggestions_total += stats.total_suggestions
+        suggestions_implemented += stats.total_implemented
+        if args.verbose:
+            print(
+                f"{owner}/{repo}#{number}: "
+                f"{stats.total_implemented}/{stats.total_suggestions} implemented"
+            )
+
+        lines_changed = fetch_pr_lines(owner, repo, number)
+        rows.append(build_csv_row(pr, lines_changed, stats))
+
+        processed.add((owner, repo, str(number)))
+        save_checkpoint(args.org, {
+            "since": args.since.isoformat(),
+            "pr_total": pr_total,
+            "prs_with_qodo": prs_with_qodo,
+            "suggestions_total": suggestions_total,
+            "suggestions_implemented": suggestions_implemented,
+            "processed": list(processed),
+        })
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
 
