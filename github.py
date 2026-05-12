@@ -204,6 +204,19 @@ def fetch_comments(owner, repo, number):
     return comments
 
 
+def fetch_pr_lines(owner: str, repo: str, number: int) -> int:
+    """Return additions + deletions for a PR. Returns 0 on any error."""
+    out = run_gh([
+        "api", f"repos/{owner}/{repo}/pulls/{number}",
+        "--jq", "{additions: .additions, deletions: .deletions}",
+    ])
+    try:
+        data = json.loads(out.strip())
+        return (data.get("additions") or 0) + (data.get("deletions") or 0)
+    except (json.JSONDecodeError, ValueError):
+        return 0
+
+
 def find_qodo_comment(comments):
     """Return the Qodo review comment, or None."""
     for c in comments:
