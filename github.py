@@ -313,11 +313,13 @@ CSV_COLUMNS = [
 def _days_between(iso_start: str, iso_end: str) -> int:
     """Return whole days between two ISO-8601 timestamps. Returns 0 on error."""
     try:
-        fmt = "%Y-%m-%dT%H:%M:%SZ"
-        start = datetime.strptime(iso_start, fmt)
-        end   = datetime.strptime(iso_end, fmt)
-        return max(0, (end - start).days)
-    except (ValueError, TypeError):
+        # Normalise GitHub's timestamps — strip trailing Z and any fractional
+        # seconds so strptime works regardless of sub-second precision.
+        def _parse(ts):
+            ts = ts.rstrip("Z").split(".")[0]
+            return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")
+        return max(0, (_parse(iso_end) - _parse(iso_start)).days)
+    except (ValueError, TypeError, AttributeError):
         return 0
 
 
