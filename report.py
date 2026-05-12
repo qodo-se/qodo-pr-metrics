@@ -239,8 +239,8 @@ def _section_exec_summary(agg: ReportData) -> str:
         _stat_card("PRs Reviewed by Qodo", str(agg.prs_with_qodo)),
         _stat_card("Qodo Coverage", f"{agg.qodo_coverage_pct:.1f}%"),
         _stat_card("Total Issues Caught", str(agg.total_suggestions)),
-        _stat_card("Issues Implemented", str(agg.total_implemented)),
-        _stat_card("Implementation Rate", f"{agg.overall_impl_rate_pct:.1f}%"),
+        _stat_card("Issues Resolved", str(agg.total_implemented)),
+        _stat_card("Overall Implementation Rate", f"{agg.overall_impl_rate_pct:.1f}%"),
     ])
     return f'<section><h2>Executive Summary</h2><div class="stat-grid">{cards}</div></section>'
 

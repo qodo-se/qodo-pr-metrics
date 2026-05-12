@@ -516,7 +516,8 @@ def cmd_count(args):
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
 
-    stem = _output_stem(args.org, args.since, date.today())
+    today = date.today()
+    stem = _output_stem(args.org, args.since, today)
 
     csv_path = Path(f"{stem}.csv")
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
@@ -528,7 +529,7 @@ def cmd_count(args):
     try:
         html_path = Path(f"{stem}.html")
         html_path.write_text(
-            report.generate_html(rows, args.org, args.since, date.today(), "logo.png"),
+            report.generate_html(rows, args.org, args.since, today, "logo.png"),
             encoding="utf-8",
         )
     except Exception as exc:
@@ -539,7 +540,7 @@ def cmd_count(args):
         cp_path.unlink()
 
     print()
-    print(f"Window:                      {args.since} → {date.today()}")
+    print(f"Window:                      {args.since} → {today}")
     print(f"Merged PRs in window:        {pr_total}")
     print(f"PRs with a Qodo review:      {prs_with_qodo}")
     print(f"Total Qodo suggestions:      {suggestions_total}")

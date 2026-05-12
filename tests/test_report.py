@@ -4,7 +4,7 @@ from report import aggregate, ReportData
 
 
 def _row(repo="backend", creator="alice", has_qodo=True,
-         suggestions=8, implemented=2,
+         suggestions=4, implemented=2,
          ar_sug=2, ar_imp=1, rr_sug=2, rr_imp=1,
          bugs_sug=1, bugs_imp=1, rule_sug=2, rule_imp=1,
          req_sug=1, req_imp=0):
