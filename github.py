@@ -129,7 +129,10 @@ def run_gh(args, paginate=False):
 
 
 def search_merged_prs(org, since, chunk_days=30):
-    """Yield (owner, repo, number) for every merged PR in the window.
+    """Yield a dict of PR metadata for every merged PR in the window.
+
+    Each yielded dict contains: owner, repo, number, url, creator,
+    created_at, merged_at.
 
     Chunked by date range to stay under the search API's 1000-result cap.
     Shrink chunk_days if a single chunk ever exceeds 1000 for your org.
@@ -155,7 +158,16 @@ def search_merged_prs(org, since, chunk_days=30):
             "api", "-X", "GET", "search/issues",
             "-f", f"q={q}",
             "--paginate",
-            "--jq", ".items[] | {number: .number, repo: .repository_url}",
+            "--jq", (
+                ".items[] | {"
+                "number: .number, "
+                "repo: .repository_url, "
+                "url: .html_url, "
+                "creator: .user.login, "
+                "created_at: .created_at, "
+                "merged_at: .pull_request.merged_at"
+                "}"
+            ),
         ])
         chunk_count = 0
         for line in filter(None, out.split("\n")):
@@ -167,7 +179,15 @@ def search_merged_prs(org, since, chunk_days=30):
             seen.add(key)
             chunk_count += 1
             owner, repo = owner_repo.split("/", 1)
-            yield owner, repo, item["number"]
+            yield {
+                "owner": owner,
+                "repo": repo,
+                "number": item["number"],
+                "url": item.get("url", ""),
+                "creator": item.get("creator", ""),
+                "created_at": item.get("created_at", ""),
+                "merged_at": item.get("merged_at", ""),
+            }
         print(f" {chunk_count} PRs", file=sys.stderr)
         cursor = chunk_end + timedelta(days=1)
 
@@ -270,7 +290,8 @@ def _classify_category(title: str) -> str:
 
 def cmd_inspect(args):
     """Print the first Qodo comment we find so you can sanity-check the parser."""
-    for owner, repo, number in search_merged_prs(args.org, args.since):
+    for pr in search_merged_prs(args.org, args.since):
+        owner, repo, number = pr["owner"], pr["repo"], pr["number"]
         print(f"\r  Checking {owner}/{repo}#{number}...{' ' * 20}", end="", file=sys.stderr, flush=True)
         comments = fetch_comments(owner, repo, number)
         qodo = find_qodo_comment(comments)
@@ -350,7 +371,8 @@ def cmd_count(args):
     total_prs = get_total_pr_count(args.org, args.since)
     print(f" {total_prs}" if total_prs is not None else " (unavailable)", file=sys.stderr)
 
-    for owner, repo, number in search_merged_prs(args.org, args.since):
+    for pr in search_merged_prs(args.org, args.since):
+        owner, repo, number = pr["owner"], pr["repo"], pr["number"]
         if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
             continue
         pr_total += 1
