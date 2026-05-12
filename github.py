@@ -194,11 +194,6 @@ def search_merged_prs(org, since, chunk_days=30):
 
 def fetch_comments(owner, repo, number):
     """All issue comments on a PR. (PRs use the issues comments endpoint.)"""
-    out = run_gh(
-        ["api", f"repos/{owner}/{repo}/issues/{number}/comments", "--paginate"],
-    )
-    # --paginate concatenates pages; each page is a JSON array. The simplest
-    # robust parse: ask gh to flatten via jq.
     out = run_gh([
         "api", f"repos/{owner}/{repo}/issues/{number}/comments",
         "--paginate", "--jq", ".[]",
