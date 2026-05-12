@@ -80,3 +80,14 @@ def test_no_sections_still_counts_totals():
     # Global totals count ALL items regardless of section
     assert stats.total_suggestions == 2
     assert stats.total_implemented == 1
+
+
+def test_two_suggestions_on_one_line():
+    """Each match on a single line must be counted independently."""
+    body = "<summary>1. Fix null check 🐛 Bug ≡ Correctness</summary> <summary>2. ~~Rename var~~ ☑ 📋 Rule violation ≡ Style</summary>"
+    stats = parse_qodo_comment(body)
+    assert stats.total_suggestions == 2
+    assert stats.total_implemented == 1
+    assert stats.bugs_suggested == 1
+    assert stats.rule_violations_suggested == 1
+    assert stats.rule_violations_implemented == 1

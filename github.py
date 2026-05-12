@@ -250,43 +250,40 @@ def parse_qodo_comment(body: str) -> "QodoStats":
             section = "review_recommended"
             continue
 
-        # Match numbered suggestion lines
-        m = SUGGESTION_LINE.search(line)
-        if not m:
-            continue
+        # Match all numbered suggestion patterns on this line
+        for m in SUGGESTION_LINE.finditer(line):
+            title = m.group(1)
+            is_implemented = any(marker in title for marker in IMPLEMENTED_MARKERS)
+            cat = _classify_category(title)
 
-        title = m.group(1)
-        is_implemented = any(marker in title for marker in IMPLEMENTED_MARKERS)
-        cat = _classify_category(title)
+            # Always increment global totals (covers PRs with no section headers)
+            stats.total_suggestions += 1
+            if is_implemented:
+                stats.total_implemented += 1
 
-        # Always increment global totals (covers PRs with no section headers)
-        stats.total_suggestions += 1
-        if is_implemented:
-            stats.total_implemented += 1
+            # Section counts
+            if section == "action_required":
+                stats.action_required_total += 1
+                if is_implemented:
+                    stats.action_required_implemented += 1
+            elif section == "review_recommended":
+                stats.review_recommended_total += 1
+                if is_implemented:
+                    stats.review_recommended_implemented += 1
 
-        # Section counts
-        if section == "action_required":
-            stats.action_required_total += 1
-            if is_implemented:
-                stats.action_required_implemented += 1
-        elif section == "review_recommended":
-            stats.review_recommended_total += 1
-            if is_implemented:
-                stats.review_recommended_implemented += 1
-
-        # Category counts
-        if cat == "bug":
-            stats.bugs_suggested += 1
-            if is_implemented:
-                stats.bugs_implemented += 1
-        elif cat == "rule_violation":
-            stats.rule_violations_suggested += 1
-            if is_implemented:
-                stats.rule_violations_implemented += 1
-        elif cat == "requirement_gap":
-            stats.requirement_gaps_suggested += 1
-            if is_implemented:
-                stats.requirement_gaps_implemented += 1
+            # Category counts
+            if cat == "bug":
+                stats.bugs_suggested += 1
+                if is_implemented:
+                    stats.bugs_implemented += 1
+            elif cat == "rule_violation":
+                stats.rule_violations_suggested += 1
+                if is_implemented:
+                    stats.rule_violations_implemented += 1
+            elif cat == "requirement_gap":
+                stats.requirement_gaps_suggested += 1
+                if is_implemented:
+                    stats.requirement_gaps_implemented += 1
 
     return stats
 
@@ -304,7 +301,7 @@ def _classify_category(title: str) -> str:
 
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
-    "Hours to Merge", "PR Creator", "Lines Changed", "Has Qodo Review",
+    "Hours to Merge", "PR Creator", "Lines Changed",
     "Action Required Suggestions", "Action Required Implemented",
     "Review Recommended Suggestions", "Review Recommended Implemented",
     "Bugs Suggested", "Bugs Implemented",
@@ -329,11 +326,9 @@ def _hours_between(iso_start: str, iso_end: str) -> int:
         return 0
 
 
-def build_csv_row(pr: dict, lines_changed: int, stats) -> dict:
-    """Build one CSV row dict from PR metadata and optional QodoStats."""
-    has_qodo = stats is not None
-    total = stats.total_suggestions if has_qodo else 0
-    implemented = stats.total_implemented if has_qodo else 0
+def build_csv_row(pr: dict, lines_changed: int, stats: "QodoStats") -> dict:
+    total = stats.total_suggestions
+    implemented = stats.total_implemented
 
     impl_rate = (
         f"{100 * implemented / total:.1f}" if total > 0 else ""
@@ -342,7 +337,6 @@ def build_csv_row(pr: dict, lines_changed: int, stats) -> dict:
         f"{100 * total / lines_changed:.1f}" if lines_changed > 0 and total > 0 else ""
     )
 
-    s = stats or QodoStats()
     return {
         "Repo Name":                        pr["repo"],
         "PR #":                             pr["number"],
@@ -355,17 +349,16 @@ def build_csv_row(pr: dict, lines_changed: int, stats) -> dict:
                                             ),
         "PR Creator":                       pr.get("creator", ""),
         "Lines Changed":                    lines_changed,
-        "Has Qodo Review":                  has_qodo,
-        "Action Required Suggestions":      s.action_required_total,
-        "Action Required Implemented":      s.action_required_implemented,
-        "Review Recommended Suggestions":   s.review_recommended_total,
-        "Review Recommended Implemented":   s.review_recommended_implemented,
-        "Bugs Suggested":                   s.bugs_suggested,
-        "Bugs Implemented":                 s.bugs_implemented,
-        "Rule Violations Suggested":        s.rule_violations_suggested,
-        "Rule Violations Implemented":      s.rule_violations_implemented,
-        "Requirement Gaps Suggested":       s.requirement_gaps_suggested,
-        "Requirement Gaps Implemented":     s.requirement_gaps_implemented,
+        "Action Required Suggestions":      stats.action_required_total,
+        "Action Required Implemented":      stats.action_required_implemented,
+        "Review Recommended Suggestions":   stats.review_recommended_total,
+        "Review Recommended Implemented":   stats.review_recommended_implemented,
+        "Bugs Suggested":                   stats.bugs_suggested,
+        "Bugs Implemented":                 stats.bugs_implemented,
+        "Rule Violations Suggested":        stats.rule_violations_suggested,
+        "Rule Violations Implemented":      stats.rule_violations_implemented,
+        "Requirement Gaps Suggested":       stats.requirement_gaps_suggested,
+        "Requirement Gaps Implemented":     stats.requirement_gaps_implemented,
         "Total Suggestions":                total,
         "Total Implemented":                implemented,
         "Implementation Rate (%)":          impl_rate,
