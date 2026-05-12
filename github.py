@@ -28,11 +28,13 @@ Usage:
 """
 
 import argparse
+import csv
 import json
 import re
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
@@ -53,6 +55,46 @@ SUGGESTION_LINE = re.compile(
 #   - HTML strikethrough (<s>, <del>, <strike>)
 #   - the ballot-box-check emoji Qodo adds next to fixed items
 IMPLEMENTED_MARKERS = ("~~", "<s>", "<del>", "<strike>", "\u2611")  # ☑
+
+# Section header patterns — match both markdown headings (##, **) and the
+# <img> tags Qodo currently uses for section banners (e.g. action-required.png).
+# Anchored via .match() so suggestion titles containing these words don't
+# accidentally reset the section counter.
+_SECTION_ACTION = re.compile(
+    r"^(?:(?:#+\s*|\*{1,2}\s*)action\s+required"
+    r"|<img\b[^>]*action-required\.png)",
+    re.IGNORECASE,
+)
+_SECTION_REVIEW = re.compile(
+    r"^(?:(?:#+\s*|\*{1,2}\s*)(?:review|remediation)\s+recommended"
+    r"|<img\b[^>]*review-recommended\.png)",
+    re.IGNORECASE,
+)
+
+# Category label patterns (matched against each suggestion line).
+# _CAT_RULE is checked before _CAT_BUG because "Rule violation" would not
+# match \bBug\b anyway, but ordering is explicit to prevent future regressions.
+_CAT_BUG  = re.compile(r"\bBug\b", re.IGNORECASE)
+_CAT_RULE = re.compile(r"\bRule\s+violation", re.IGNORECASE)
+_CAT_REQ  = re.compile(r"\bRequirement\s+gap", re.IGNORECASE)
+
+
+@dataclass
+class QodoStats:
+    action_required_total: int = 0
+    action_required_implemented: int = 0
+    review_recommended_total: int = 0
+    review_recommended_implemented: int = 0
+    bugs_suggested: int = 0
+    bugs_implemented: int = 0
+    rule_violations_suggested: int = 0
+    rule_violations_implemented: int = 0
+    requirement_gaps_suggested: int = 0
+    requirement_gaps_implemented: int = 0
+    # Direct totals — count ALL items regardless of section so PRs with
+    # no section headers still produce correct Total Suggestions counts.
+    total_suggestions: int = 0
+    total_implemented: int = 0
 
 
 def _rate_limit_reset_epoch():
@@ -93,7 +135,10 @@ def run_gh(args, paginate=False):
 
 
 def search_merged_prs(org, since, chunk_days=30):
-    """Yield (owner, repo, number) for every merged PR in the window.
+    """Yield a dict of PR metadata for every merged PR in the window.
+
+    Each yielded dict contains: owner, repo, number, url, creator,
+    created_at, merged_at.
 
     Chunked by date range to stay under the search API's 1000-result cap.
     Shrink chunk_days if a single chunk ever exceeds 1000 for your org.
@@ -119,7 +164,16 @@ def search_merged_prs(org, since, chunk_days=30):
             "api", "-X", "GET", "search/issues",
             "-f", f"q={q}",
             "--paginate",
-            "--jq", ".items[] | {number: .number, repo: .repository_url}",
+            "--jq", (
+                ".items[] | {"
+                "number: .number, "
+                "repo: .repository_url, "
+                "url: .html_url, "
+                "creator: .user.login, "
+                "created_at: .created_at, "
+                "merged_at: .pull_request.merged_at"
+                "}"
+            ),
         ])
         chunk_count = 0
         for line in filter(None, out.split("\n")):
@@ -131,18 +185,21 @@ def search_merged_prs(org, since, chunk_days=30):
             seen.add(key)
             chunk_count += 1
             owner, repo = owner_repo.split("/", 1)
-            yield owner, repo, item["number"]
+            yield {
+                "owner": owner,
+                "repo": repo,
+                "number": item["number"],
+                "url": item.get("url", ""),
+                "creator": item.get("creator", ""),
+                "created_at": item.get("created_at", ""),
+                "merged_at": item.get("merged_at", ""),
+            }
         print(f" {chunk_count} PRs", file=sys.stderr)
         cursor = chunk_end + timedelta(days=1)
 
 
 def fetch_comments(owner, repo, number):
     """All issue comments on a PR. (PRs use the issues comments endpoint.)"""
-    out = run_gh(
-        ["api", f"repos/{owner}/{repo}/issues/{number}/comments", "--paginate"],
-    )
-    # --paginate concatenates pages; each page is a JSON array. The simplest
-    # robust parse: ask gh to flatten via jq.
     out = run_gh([
         "api", f"repos/{owner}/{repo}/issues/{number}/comments",
         "--paginate", "--jq", ".[]",
@@ -153,6 +210,19 @@ def fetch_comments(owner, repo, number):
     return comments
 
 
+def fetch_pr_lines(owner: str, repo: str, number: int) -> int:
+    """Return additions + deletions for a PR. Returns 0 on any error."""
+    out = run_gh([
+        "api", f"repos/{owner}/{repo}/pulls/{number}",
+        "--jq", "{additions: .additions, deletions: .deletions}",
+    ])
+    try:
+        data = json.loads(out.strip())
+        return (data.get("additions") or 0) + (data.get("deletions") or 0)
+    except (json.JSONDecodeError, ValueError):
+        return 0
+
+
 def find_qodo_comment(comments):
     """Return the Qodo review comment, or None."""
     for c in comments:
@@ -161,30 +231,154 @@ def find_qodo_comment(comments):
     return None
 
 
-def parse_qodo_comment(body):
-    """Return (total_suggestions, implemented_count)."""
-    total = 0
-    implemented = 0
-    for match in SUGGESTION_LINE.finditer(body):
-        title = match.group(1)
-        total += 1
-        if any(marker in title for marker in IMPLEMENTED_MARKERS):
-            implemented += 1
-    return total, implemented
+def parse_qodo_comment(body: str) -> "QodoStats":
+    """Parse a Qodo review comment body into structured QodoStats."""
+    stats = QodoStats()
+    if not body:
+        return stats
+
+    # Track which section we're currently in (None = preamble/unknown)
+    section = None  # "action_required" | "review_recommended" | None
+
+    for line in body.splitlines():
+        # Detect section transitions — check before suggestion matching so
+        # heading lines are never mis-counted as suggestion items.
+        if _SECTION_ACTION.match(line.strip()):
+            section = "action_required"
+            continue
+        if _SECTION_REVIEW.match(line.strip()):
+            section = "review_recommended"
+            continue
+
+        # Match all numbered suggestion patterns on this line
+        for m in SUGGESTION_LINE.finditer(line):
+            title = m.group(1)
+            is_implemented = any(marker in title for marker in IMPLEMENTED_MARKERS)
+            cat = _classify_category(title)
+
+            # Always increment global totals (covers PRs with no section headers)
+            stats.total_suggestions += 1
+            if is_implemented:
+                stats.total_implemented += 1
+
+            # Section counts
+            if section == "action_required":
+                stats.action_required_total += 1
+                if is_implemented:
+                    stats.action_required_implemented += 1
+            elif section == "review_recommended":
+                stats.review_recommended_total += 1
+                if is_implemented:
+                    stats.review_recommended_implemented += 1
+
+            # Category counts
+            if cat == "bug":
+                stats.bugs_suggested += 1
+                if is_implemented:
+                    stats.bugs_implemented += 1
+            elif cat == "rule_violation":
+                stats.rule_violations_suggested += 1
+                if is_implemented:
+                    stats.rule_violations_implemented += 1
+            elif cat == "requirement_gap":
+                stats.requirement_gaps_suggested += 1
+                if is_implemented:
+                    stats.requirement_gaps_implemented += 1
+
+    return stats
+
+
+def _classify_category(title: str) -> str:
+    """Return 'bug', 'rule_violation', 'requirement_gap', or 'unknown'."""
+    if _CAT_RULE.search(title):
+        return "rule_violation"
+    if _CAT_REQ.search(title):
+        return "requirement_gap"
+    if _CAT_BUG.search(title):
+        return "bug"
+    return "unknown"
+
+
+CSV_COLUMNS = [
+    "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
+    "Hours to Merge", "PR Creator", "Lines Changed",
+    "Action Required Suggestions", "Action Required Implemented",
+    "Review Recommended Suggestions", "Review Recommended Implemented",
+    "Bugs Suggested", "Bugs Implemented",
+    "Rule Violations Suggested", "Rule Violations Implemented",
+    "Requirement Gaps Suggested", "Requirement Gaps Implemented",
+    "Total Suggestions", "Total Implemented",
+    "Implementation Rate (%)", "Suggestions per 100 Lines",
+]
+
+
+def _hours_between(iso_start: str, iso_end: str) -> int:
+    """Return whole hours between two ISO-8601 timestamps. Returns 0 on error."""
+    try:
+        # Normalise GitHub's timestamps — strip trailing Z and any fractional
+        # seconds so strptime works regardless of sub-second precision.
+        def _parse(ts):
+            ts = ts.rstrip("Z").split(".")[0]
+            return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")
+        delta = _parse(iso_end) - _parse(iso_start)
+        return max(0, int(delta.total_seconds() // 3600))
+    except (ValueError, TypeError, AttributeError):
+        return 0
+
+
+def build_csv_row(pr: dict, lines_changed: int, stats: "QodoStats") -> dict:
+    total = stats.total_suggestions
+    implemented = stats.total_implemented
+
+    impl_rate = (
+        f"{100 * implemented / total:.1f}" if total > 0 else ""
+    )
+    per_100 = (
+        f"{100 * total / lines_changed:.1f}" if lines_changed > 0 and total > 0 else ""
+    )
+
+    return {
+        "Repo Name":                        pr["repo"],
+        "PR #":                             pr["number"],
+        "PR URL":                           pr.get("url", ""),
+        "PR Creation Date":                 pr.get("created_at", ""),
+        "PR Merge Date":                    pr.get("merged_at", ""),
+        "Hours to Merge":                   _hours_between(
+                                                pr.get("created_at", ""),
+                                                pr.get("merged_at", ""),
+                                            ),
+        "PR Creator":                       pr.get("creator", ""),
+        "Lines Changed":                    lines_changed,
+        "Action Required Suggestions":      stats.action_required_total,
+        "Action Required Implemented":      stats.action_required_implemented,
+        "Review Recommended Suggestions":   stats.review_recommended_total,
+        "Review Recommended Implemented":   stats.review_recommended_implemented,
+        "Bugs Suggested":                   stats.bugs_suggested,
+        "Bugs Implemented":                 stats.bugs_implemented,
+        "Rule Violations Suggested":        stats.rule_violations_suggested,
+        "Rule Violations Implemented":      stats.rule_violations_implemented,
+        "Requirement Gaps Suggested":       stats.requirement_gaps_suggested,
+        "Requirement Gaps Implemented":     stats.requirement_gaps_implemented,
+        "Total Suggestions":                total,
+        "Total Implemented":                implemented,
+        "Implementation Rate (%)":          impl_rate,
+        "Suggestions per 100 Lines":        per_100,
+    }
 
 
 def cmd_inspect(args):
     """Print the first Qodo comment we find so you can sanity-check the parser."""
-    for owner, repo, number in search_merged_prs(args.org, args.since):
+    for pr in search_merged_prs(args.org, args.since):
+        owner, repo, number = pr["owner"], pr["repo"], pr["number"]
         print(f"\r  Checking {owner}/{repo}#{number}...{' ' * 20}", end="", file=sys.stderr, flush=True)
         comments = fetch_comments(owner, repo, number)
         qodo = find_qodo_comment(comments)
         if not qodo:
             continue
         print(file=sys.stderr)
-        total, implemented = parse_qodo_comment(qodo["body"])
+        stats = parse_qodo_comment(qodo["body"])
         print(f"=== {owner}/{repo}#{number} ===")
-        print(f"Parser found: {implemented}/{total} implemented\n")
+        print(f"Parser found: {stats.total_implemented}/{stats.total_suggestions} implemented\n")
         print("--- RAW COMMENT BODY ---")
         print(qodo["body"])
         return
@@ -255,40 +449,71 @@ def cmd_count(args):
     total_prs = get_total_pr_count(args.org, args.since)
     print(f" {total_prs}" if total_prs is not None else " (unavailable)", file=sys.stderr)
 
-    for owner, repo, number in search_merged_prs(args.org, args.since):
-        if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
-            continue
-        pr_total += 1
-        if not args.verbose:
-            total_str = f"/{total_prs}" if total_prs is not None else ""
-            print(
-                f"\r  [{pr_total}{total_str} PRs | {prs_with_qodo} with Qodo | "
-                f"{suggestions_implemented}/{suggestions_total} suggestions] "
-                f"{owner}/{repo}#{number}{' ' * 10}",
-                end="", file=sys.stderr, flush=True,
-            )
-        comments = fetch_comments(owner, repo, number)
-        qodo = find_qodo_comment(comments)
-        if not qodo:
-            if args.verbose:
-                print(f"{owner}/{repo}#{number}: (no Qodo comment)")
-        else:
-            prs_with_qodo += 1
-            t, i = parse_qodo_comment(qodo["body"])
-            suggestions_total += t
-            suggestions_implemented += i
-            if args.verbose:
-                print(f"{owner}/{repo}#{number}: {i}/{t} implemented")
+    csv_file = None
+    csv_writer = None
+    if args.csv:
+        csv_file = open(args.csv, "w", newline="", encoding="utf-8")
+        csv_writer = csv.DictWriter(csv_file, fieldnames=CSV_COLUMNS)
+        csv_writer.writeheader()
 
-        processed.add((owner, repo, str(number)))
-        save_checkpoint(args.org, {
-            "since": args.since.isoformat(),
-            "pr_total": pr_total,
-            "prs_with_qodo": prs_with_qodo,
-            "suggestions_total": suggestions_total,
-            "suggestions_implemented": suggestions_implemented,
-            "processed": list(processed),
-        })
+    try:
+        for pr in search_merged_prs(args.org, args.since):
+            owner, repo, number = pr["owner"], pr["repo"], pr["number"]
+            if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
+                continue
+            pr_total += 1
+            if not args.verbose:
+                total_str = f"/{total_prs}" if total_prs is not None else ""
+                print(
+                    f"\r  [{pr_total}{total_str} PRs | {prs_with_qodo} with Qodo | "
+                    f"{suggestions_implemented}/{suggestions_total} suggestions] "
+                    f"{owner}/{repo}#{number}{' ' * 10}",
+                    end="", file=sys.stderr, flush=True,
+                )
+
+            comments = fetch_comments(owner, repo, number)
+            qodo = find_qodo_comment(comments)
+
+            if not qodo:
+                if args.verbose:
+                    print(f"{owner}/{repo}#{number}: (no Qodo comment, skipped)")
+                processed.add((owner, repo, str(number)))
+                save_checkpoint(args.org, {
+                    "since": args.since.isoformat(),
+                    "pr_total": pr_total,
+                    "prs_with_qodo": prs_with_qodo,
+                    "suggestions_total": suggestions_total,
+                    "suggestions_implemented": suggestions_implemented,
+                    "processed": list(processed),
+                })
+                continue
+
+            prs_with_qodo += 1
+            stats = parse_qodo_comment(qodo["body"])
+            suggestions_total += stats.total_suggestions
+            suggestions_implemented += stats.total_implemented
+            if args.verbose:
+                print(
+                    f"{owner}/{repo}#{number}: "
+                    f"{stats.total_implemented}/{stats.total_suggestions} implemented"
+                )
+
+            lines_changed = fetch_pr_lines(owner, repo, number) if args.csv else 0
+            if csv_writer:
+                csv_writer.writerow(build_csv_row(pr, lines_changed, stats))
+
+            processed.add((owner, repo, str(number)))
+            save_checkpoint(args.org, {
+                "since": args.since.isoformat(),
+                "pr_total": pr_total,
+                "prs_with_qodo": prs_with_qodo,
+                "suggestions_total": suggestions_total,
+                "suggestions_implemented": suggestions_implemented,
+                "processed": list(processed),
+            })
+    finally:
+        if csv_file:
+            csv_file.close()
 
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
@@ -323,6 +548,8 @@ def main():
                    help="Print per-PR results")
     p.add_argument("--resume", action="store_true",
                    help="Resume from a previous checkpoint (ORG-checkpoint.json)")
+    p.add_argument("--csv", metavar="FILE",
+                   help="Write per-PR CSV report to FILE (e.g. report.csv)")
     args = p.parse_args()
 
     if not args.since:
