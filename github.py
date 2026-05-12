@@ -524,11 +524,16 @@ def cmd_count(args):
         writer.writeheader()
         writer.writerows(rows)
 
-    html_path = Path(f"{stem}.html")
-    html_path.write_text(
-        report.generate_html(rows, args.org, args.since, date.today(), "logo.png"),
-        encoding="utf-8",
-    )
+    html_path = None
+    try:
+        html_path = Path(f"{stem}.html")
+        html_path.write_text(
+            report.generate_html(rows, args.org, args.since, date.today(), "logo.png"),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        print(f"\n  Warning: HTML report not written: {exc}", file=sys.stderr)
+        html_path = None
 
     if cp_path.exists():
         cp_path.unlink()
@@ -545,7 +550,8 @@ def cmd_count(args):
 
     print(f"\nReports written:")
     print(f"  CSV:  {csv_path}")
-    print(f"  HTML: {html_path}")
+    if html_path:
+        print(f"  HTML: {html_path}")
 
 
 def main():
