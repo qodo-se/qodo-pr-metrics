@@ -54,22 +54,21 @@ python3 github.py --org acme-corp --verbose
 
 # Inspect mode — prints the first Qodo comment found (useful for verifying the parser)
 python3 github.py --org acme-corp --inspect
-
-# Write a per-PR CSV report
-python3 github.py --org acme-corp --csv report.csv
-python3 github.py --org acme-corp --days 90 --csv report.csv
 ```
 
 **Windows:**
 
 ```bash
 python github.py --org acme-corp
-python github.py --org acme-corp --csv report.csv
 ```
 
-### CSV report
+### Output files
 
-The `--csv FILE` flag writes a row for every merged PR in the window to a CSV file in addition to printing the console summary. Each row contains 23 columns:
+The script automatically generates CSV and HTML report files (coming soon) in addition to printing the console summary. Files are named using the pattern: `{org}_{since_date}_{until_date}.csv`
+
+For example, running `python3 github.py --org acme-corp` creates a file like `acme-corp_2025-05-12_2026-05-12.csv`.
+
+Each row in the CSV contains 23 columns with per-PR data:
 
 | Column | Description |
 |---|---|
@@ -104,6 +103,5 @@ The `--csv FILE` flag writes a row for every merged PR in the window to a CSV fi
 | `--org` | GitHub org login (required, e.g. `acme-corp`) |
 | `--since` | Start date in `YYYY-MM-DD` format |
 | `--days` | Lookback window in days (default: `365`; mutually exclusive with `--since`) |
-| `--csv` | Write per-PR report to a CSV file (e.g. `--csv report.csv`) |
 | `--inspect` | Print the raw body of the first Qodo comment found and exit |
 | `--verbose` | Print per-PR suggestion counts instead of just the final summary |
