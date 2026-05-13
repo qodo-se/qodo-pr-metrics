@@ -570,7 +570,7 @@ def cmd_count(args):
     try:
         html_path = base / f"{stem}.html"
         html_path.write_text(
-            report.generate_html(rows, args.org, args.since, today, "logo.png"),
+            report.generate_html(rows, args.org, args.since, today, "logo.svg"),
             encoding="utf-8",
         )
     except Exception as exc:
