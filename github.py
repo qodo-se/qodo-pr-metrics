@@ -137,7 +137,7 @@ def run_gh(args, paginate=False):
     sys.exit(f"`{' '.join(cmd)}` failed after rate-limit retry:\n{result.stderr}")
 
 
-def search_merged_prs(org, since, chunk_days=30):
+def search_merged_prs(org, since, chunk_days=30, repos=None):
     """Yield a dict of PR metadata for every merged PR in the window.
 
     Each yielded dict contains: owner, repo, number, url, creator,
@@ -146,58 +146,62 @@ def search_merged_prs(org, since, chunk_days=30):
     Chunked by date range to stay under the search API's 1000-result cap.
     Shrink chunk_days if a single chunk ever exceeds 1000 for your org.
     """
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     today = date.today()
     total_days = max(1, (today - since).days)
-    total_chunks = (total_days + chunk_days - 1) // chunk_days
+    total_chunks = ((total_days + chunk_days - 1) // chunk_days) * len(qualifiers)
     cursor = since
     seen = set()
-    chunk_num = 0
+    call_num = 0
     while cursor <= today:
         chunk_end = min(cursor + timedelta(days=chunk_days), today)
-        chunk_num += 1
-        print(
-            f"  [{chunk_num}/{total_chunks}] Searching {cursor} .. {chunk_end} ...",
-            end="", file=sys.stderr, flush=True,
-        )
-        q = (
-            f"org:{org} is:pr is:merged "
-            f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
-        )
-        out = run_gh([
-            "api", "-X", "GET", "search/issues",
-            "-f", f"q={q}",
-            "--paginate",
-            "--jq", (
-                ".items[] | {"
-                "number: .number, "
-                "repo: .repository_url, "
-                "url: .html_url, "
-                "creator: .user.login, "
-                "created_at: .created_at, "
-                "merged_at: .pull_request.merged_at"
-                "}"
-            ),
-        ])
-        chunk_count = 0
-        for line in filter(None, out.split("\n")):
-            item = json.loads(line)
-            owner_repo = item["repo"].split("/repos/", 1)[1]
-            key = (owner_repo, item["number"])
-            if key in seen:
-                continue
-            seen.add(key)
-            chunk_count += 1
-            owner, repo = owner_repo.split("/", 1)
-            yield {
-                "owner": owner,
-                "repo": repo,
-                "number": item["number"],
-                "url": item.get("url", ""),
-                "creator": item.get("creator", ""),
-                "created_at": item.get("created_at", ""),
-                "merged_at": item.get("merged_at", ""),
-            }
-        print(f" {chunk_count} PRs", file=sys.stderr)
+        for qual in qualifiers:
+            call_num += 1
+            qual_label = qual.split(":", 1)[1]
+            print(
+                f"  [{call_num}/{total_chunks}] Searching {cursor} .. {chunk_end}"
+                f" ({qual_label}) ...",
+                end="", file=sys.stderr, flush=True,
+            )
+            q = (
+                f"{qual} is:pr is:merged "
+                f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
+            )
+            out = run_gh([
+                "api", "-X", "GET", "search/issues",
+                "-f", f"q={q}",
+                "--paginate",
+                "--jq", (
+                    ".items[] | {"
+                    "number: .number, "
+                    "repo: .repository_url, "
+                    "url: .html_url, "
+                    "creator: .user.login, "
+                    "created_at: .created_at, "
+                    "merged_at: .pull_request.merged_at"
+                    "}"
+                ),
+            ])
+            chunk_count = 0
+            for line in filter(None, out.split("\n")):
+                item = json.loads(line)
+                owner_repo = item["repo"].split("/repos/", 1)[1]
+                key = (owner_repo, item["number"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                chunk_count += 1
+                owner, repo = owner_repo.split("/", 1)
+                yield {
+                    "owner": owner,
+                    "repo": repo,
+                    "number": item["number"],
+                    "url": item.get("url", ""),
+                    "creator": item.get("creator", ""),
+                    "created_at": item.get("created_at", ""),
+                    "merged_at": item.get("merged_at", ""),
+                }
+            print(f" {chunk_count} PRs", file=sys.stderr)
         cursor = chunk_end + timedelta(days=1)
 
 
@@ -329,9 +333,13 @@ def _hours_between(iso_start: str, iso_end: str) -> int:
         return 0
 
 
-def _output_stem(org: str, since: date, until: date) -> str:
+def _output_stem(org: str, since: date, until: date, repos: Optional[list[str]] = None) -> str:
     """Return the base filename (no extension) for output files."""
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
+    if repos:
+        n = len(repos)
+        repo_segment = f"{n}-repo" if n == 1 else f"{n}-repos"
+        return f"{safe_org}_{repo_segment}_{since.isoformat()}_{until.isoformat()}"
     return f"{safe_org}_{since.isoformat()}_{until.isoformat()}"
 
 
@@ -377,7 +385,7 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"]) ->
 
 def cmd_inspect(args):
     """Print the first Qodo comment we find so you can sanity-check the parser."""
-    for pr in search_merged_prs(args.org, args.since):
+    for pr in search_merged_prs(args.org, args.since, repos=args.repos):
         owner, repo, number = pr["owner"], pr["repo"], pr["number"]
         print(f"\r  Checking {owner}/{repo}#{number}...{' ' * 20}", end="", file=sys.stderr, flush=True)
         comments = fetch_comments(owner, repo, number)
@@ -411,9 +419,26 @@ def save_checkpoint(org, state):
     checkpoint_path(org).write_text(json.dumps(state, indent=2))
 
 
-def get_total_pr_count(org, since):
+def get_total_pr_count(org: str, since: date, repos: Optional[list[str]] = None) -> Optional[int]:
     """Return total merged PRs in the window from search API (approximate)."""
     today = date.today()
+    if repos:
+        total = 0
+        for repo in repos:
+            q = (
+                f"repo:{org}/{repo} is:pr is:merged "
+                f"merged:{since.isoformat()}..{today.isoformat()}"
+            )
+            out = run_gh([
+                "api", "-X", "GET", "search/issues",
+                "-f", f"q={q}",
+                "--jq", ".total_count",
+            ])
+            try:
+                total += int(out.strip())
+            except ValueError:
+                return None
+        return total
     q = (
         f"org:{org} is:pr is:merged "
         f"merged:{since.isoformat()}..{today.isoformat()}"
@@ -441,26 +466,36 @@ def cmd_count(args):
     if args.resume:
         data = load_checkpoint(args.org)
         if data:
-            pr_total = data["pr_total"]
-            prs_with_qodo = data["prs_with_qodo"]
-            suggestions_total = data["suggestions_total"]
-            suggestions_implemented = data["suggestions_implemented"]
-            processed = {tuple(x) for x in data["processed"]}
-            rows = data.get("rows", [])
-            since_str = data.get("since", args.since.isoformat())
-            args.since = date.fromisoformat(since_str)
-            print(
-                f"  Resuming from checkpoint: {pr_total} PRs already processed.",
-                file=sys.stderr,
-            )
+            stored_repos = data.get("repos")
+            current_repos = sorted(args.repos) if args.repos else None
+            normalized_stored = sorted(stored_repos) if stored_repos else None
+            if normalized_stored != current_repos:
+                print(
+                    "  Warning: checkpoint was created with different --repos scope"
+                    " — starting fresh.",
+                    file=sys.stderr,
+                )
+            else:
+                pr_total = data["pr_total"]
+                prs_with_qodo = data["prs_with_qodo"]
+                suggestions_total = data["suggestions_total"]
+                suggestions_implemented = data["suggestions_implemented"]
+                processed = {tuple(x) for x in data["processed"]}
+                rows = data.get("rows", [])
+                since_str = data.get("since", args.since.isoformat())
+                args.since = date.fromisoformat(since_str)
+                print(
+                    f"  Resuming from checkpoint: {pr_total} PRs already processed.",
+                    file=sys.stderr,
+                )
         else:
             print("  No checkpoint found — starting fresh.", file=sys.stderr)
 
     print("  Fetching total PR count...", end="", file=sys.stderr, flush=True)
-    total_prs = get_total_pr_count(args.org, args.since)
+    total_prs = get_total_pr_count(args.org, args.since, repos=args.repos)
     print(f" {total_prs}" if total_prs is not None else " (unavailable)", file=sys.stderr)
 
-    for pr in search_merged_prs(args.org, args.since):
+    for pr in search_merged_prs(args.org, args.since, repos=args.repos):
         owner, repo, number = pr["owner"], pr["repo"], pr["number"]
         if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
             continue
@@ -490,6 +525,7 @@ def cmd_count(args):
                 "suggestions_implemented": suggestions_implemented,
                 "processed": list(processed),
                 "rows": rows,
+                "repos": sorted(args.repos) if args.repos else None,
             })
             continue
 
@@ -515,12 +551,13 @@ def cmd_count(args):
             "suggestions_implemented": suggestions_implemented,
             "processed": list(processed),
             "rows": rows,
+            "repos": sorted(args.repos) if args.repos else None,
         })
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
 
     today = date.today()
-    stem = _output_stem(args.org, args.since, today)
+    stem = _output_stem(args.org, args.since, today, repos=args.repos)
     base = Path.cwd()
 
     csv_path = base / f"{stem}.csv"
@@ -544,6 +581,8 @@ def cmd_count(args):
         cp_path.unlink()
 
     print()
+    if args.repos:
+        print(f"Repos in scope:              {' '.join(args.repos)}")
     print(f"Window:                      {args.since} → {today}")
     print(f"Merged PRs in window:        {pr_total}")
     print(f"PRs with a Qodo review:      {prs_with_qodo}")
@@ -575,10 +614,17 @@ def main():
                    help="Print per-PR results")
     p.add_argument("--resume", action="store_true",
                    help="Resume from a previous checkpoint (ORG-checkpoint.json)")
+    p.add_argument(
+        "--repos", nargs="+", metavar="REPO",
+        help="Limit to specific repos (e.g. --repos frontend-app backend-api)",
+    )
     args = p.parse_args()
 
     if not args.since:
         args.since = date.today() - timedelta(days=args.days)
+
+    if args.repos:
+        args.repos = list(dict.fromkeys(args.repos))
 
     if args.inspect:
         cmd_inspect(args)

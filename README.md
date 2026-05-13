@@ -54,6 +54,9 @@ python3 github.py --org acme-corp --verbose
 
 # Inspect mode — prints the first Qodo comment found (useful for verifying the parser)
 python3 github.py --org acme-corp --inspect
+
+# Scope to specific repos
+python3 github.py --org acme-corp --repos frontend-app backend-api
 ```
 
 **Windows:**
@@ -109,3 +112,4 @@ Each row in the CSV contains 23 columns with per-PR data:
 | `--inspect` | Print the raw body of the first Qodo comment found and exit |
 | `--verbose` | Print per-PR suggestion counts instead of just the final summary |
 | `--resume` | Resume from a previous checkpoint (`ORG-checkpoint.json`) |
+| `--repos` | Space-delimited list of repo names to scope the run (e.g. `--repos frontend-app backend-api`); omit to scan the full org |
