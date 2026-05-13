@@ -37,7 +37,7 @@ import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 import report
 
@@ -333,7 +333,7 @@ def _hours_between(iso_start: str, iso_end: str) -> int:
         return 0
 
 
-def _output_stem(org: str, since: date, until: date, repos: Optional[list[str]] = None) -> str:
+def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] = None) -> str:
     """Return the base filename (no extension) for output files."""
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
     if repos:
@@ -419,7 +419,7 @@ def save_checkpoint(org, state):
     checkpoint_path(org).write_text(json.dumps(state, indent=2))
 
 
-def get_total_pr_count(org: str, since: date, repos: Optional[list[str]] = None) -> Optional[int]:
+def get_total_pr_count(org: str, since: date, repos: Optional[List[str]] = None) -> Optional[int]:
     """Return total merged PRs in the window from search API (approximate)."""
     today = date.today()
     if repos:
@@ -461,7 +461,7 @@ def cmd_count(args):
     prs_with_qodo = 0
     suggestions_total = 0
     suggestions_implemented = 0
-    rows: list[dict] = []
+    rows: List[dict] = []
 
     if args.resume:
         data = load_checkpoint(args.org)
