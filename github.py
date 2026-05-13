@@ -118,7 +118,7 @@ def run_gh(args, paginate=False):
     if paginate and "--paginate" not in cmd:
         cmd.append("--paginate")
     for attempt in range(2):
-        result = subprocess.run(cmd, capture_output=True, text=True)
+        result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
         if result.returncode == 0:
             return result.stdout
         if "rate limit" in result.stderr.lower() and attempt == 0:
