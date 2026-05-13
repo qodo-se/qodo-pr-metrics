@@ -554,7 +554,7 @@ def cmd_count(args):
             "suggestions_implemented": suggestions_implemented,
             "processed": list(processed),
             "rows": rows,
-            "repos": getattr(args, "repos", None),
+            "repos": sorted(getattr(args, "repos", None) or []) or None,
         })
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
