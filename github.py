@@ -37,6 +37,9 @@ import time
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
+from typing import Optional
+
+import report
 
 
 # Stable marker in Qodo Merge's review comment, independent of bot account name.
@@ -301,7 +304,7 @@ def _classify_category(title: str) -> str:
 
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
-    "Hours to Merge", "PR Creator", "Lines Changed",
+    "Hours to Merge", "PR Creator", "Lines Changed", "Has Qodo Review",
     "Action Required Suggestions", "Action Required Implemented",
     "Review Recommended Suggestions", "Review Recommended Implemented",
     "Bugs Suggested", "Bugs Implemented",
@@ -326,13 +329,18 @@ def _hours_between(iso_start: str, iso_end: str) -> int:
         return 0
 
 
-def build_csv_row(pr: dict, lines_changed: int, stats: "QodoStats") -> dict:
-    total = stats.total_suggestions
-    implemented = stats.total_implemented
+def _output_stem(org: str, since: date, until: date) -> str:
+    """Return the base filename (no extension) for output files."""
+    safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
+    return f"{safe_org}_{since.isoformat()}_{until.isoformat()}"
 
-    impl_rate = (
-        f"{100 * implemented / total:.1f}" if total > 0 else ""
-    )
+
+def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"]) -> dict:
+    has_qodo = stats is not None
+    total = stats.total_suggestions if has_qodo else 0
+    implemented = stats.total_implemented if has_qodo else 0
+
+    impl_rate = f"{100 * implemented / total:.1f}" if total > 0 else ""
     per_100 = (
         f"{100 * total / lines_changed:.1f}" if lines_changed > 0 and total > 0 else ""
     )
@@ -349,16 +357,17 @@ def build_csv_row(pr: dict, lines_changed: int, stats: "QodoStats") -> dict:
                                             ),
         "PR Creator":                       pr.get("creator", ""),
         "Lines Changed":                    lines_changed,
-        "Action Required Suggestions":      stats.action_required_total,
-        "Action Required Implemented":      stats.action_required_implemented,
-        "Review Recommended Suggestions":   stats.review_recommended_total,
-        "Review Recommended Implemented":   stats.review_recommended_implemented,
-        "Bugs Suggested":                   stats.bugs_suggested,
-        "Bugs Implemented":                 stats.bugs_implemented,
-        "Rule Violations Suggested":        stats.rule_violations_suggested,
-        "Rule Violations Implemented":      stats.rule_violations_implemented,
-        "Requirement Gaps Suggested":       stats.requirement_gaps_suggested,
-        "Requirement Gaps Implemented":     stats.requirement_gaps_implemented,
+        "Has Qodo Review":                  has_qodo,
+        "Action Required Suggestions":      stats.action_required_total if has_qodo else 0,
+        "Action Required Implemented":      stats.action_required_implemented if has_qodo else 0,
+        "Review Recommended Suggestions":   stats.review_recommended_total if has_qodo else 0,
+        "Review Recommended Implemented":   stats.review_recommended_implemented if has_qodo else 0,
+        "Bugs Suggested":                   stats.bugs_suggested if has_qodo else 0,
+        "Bugs Implemented":                 stats.bugs_implemented if has_qodo else 0,
+        "Rule Violations Suggested":        stats.rule_violations_suggested if has_qodo else 0,
+        "Rule Violations Implemented":      stats.rule_violations_implemented if has_qodo else 0,
+        "Requirement Gaps Suggested":       stats.requirement_gaps_suggested if has_qodo else 0,
+        "Requirement Gaps Implemented":     stats.requirement_gaps_implemented if has_qodo else 0,
         "Total Suggestions":                total,
         "Total Implemented":                implemented,
         "Implementation Rate (%)":          impl_rate,
@@ -427,6 +436,7 @@ def cmd_count(args):
     prs_with_qodo = 0
     suggestions_total = 0
     suggestions_implemented = 0
+    rows: list[dict] = []
 
     if args.resume:
         data = load_checkpoint(args.org)
@@ -436,6 +446,7 @@ def cmd_count(args):
             suggestions_total = data["suggestions_total"]
             suggestions_implemented = data["suggestions_implemented"]
             processed = {tuple(x) for x in data["processed"]}
+            rows = data.get("rows", [])
             since_str = data.get("since", args.since.isoformat())
             args.since = date.fromisoformat(since_str)
             print(
@@ -449,59 +460,27 @@ def cmd_count(args):
     total_prs = get_total_pr_count(args.org, args.since)
     print(f" {total_prs}" if total_prs is not None else " (unavailable)", file=sys.stderr)
 
-    csv_file = None
-    csv_writer = None
-    if args.csv:
-        csv_file = open(args.csv, "w", newline="", encoding="utf-8")
-        csv_writer = csv.DictWriter(csv_file, fieldnames=CSV_COLUMNS)
-        csv_writer.writeheader()
+    for pr in search_merged_prs(args.org, args.since):
+        owner, repo, number = pr["owner"], pr["repo"], pr["number"]
+        if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
+            continue
+        pr_total += 1
+        if not args.verbose:
+            total_str = f"/{total_prs}" if total_prs is not None else ""
+            print(
+                f"\r  [{pr_total}{total_str} PRs | {prs_with_qodo} with Qodo | "
+                f"{suggestions_implemented}/{suggestions_total} suggestions] "
+                f"{owner}/{repo}#{number}{' ' * 10}",
+                end="", file=sys.stderr, flush=True,
+            )
 
-    try:
-        for pr in search_merged_prs(args.org, args.since):
-            owner, repo, number = pr["owner"], pr["repo"], pr["number"]
-            if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
-                continue
-            pr_total += 1
-            if not args.verbose:
-                total_str = f"/{total_prs}" if total_prs is not None else ""
-                print(
-                    f"\r  [{pr_total}{total_str} PRs | {prs_with_qodo} with Qodo | "
-                    f"{suggestions_implemented}/{suggestions_total} suggestions] "
-                    f"{owner}/{repo}#{number}{' ' * 10}",
-                    end="", file=sys.stderr, flush=True,
-                )
+        comments = fetch_comments(owner, repo, number)
+        qodo = find_qodo_comment(comments)
 
-            comments = fetch_comments(owner, repo, number)
-            qodo = find_qodo_comment(comments)
-
-            if not qodo:
-                if args.verbose:
-                    print(f"{owner}/{repo}#{number}: (no Qodo comment, skipped)")
-                processed.add((owner, repo, str(number)))
-                save_checkpoint(args.org, {
-                    "since": args.since.isoformat(),
-                    "pr_total": pr_total,
-                    "prs_with_qodo": prs_with_qodo,
-                    "suggestions_total": suggestions_total,
-                    "suggestions_implemented": suggestions_implemented,
-                    "processed": list(processed),
-                })
-                continue
-
-            prs_with_qodo += 1
-            stats = parse_qodo_comment(qodo["body"])
-            suggestions_total += stats.total_suggestions
-            suggestions_implemented += stats.total_implemented
+        if not qodo:
             if args.verbose:
-                print(
-                    f"{owner}/{repo}#{number}: "
-                    f"{stats.total_implemented}/{stats.total_suggestions} implemented"
-                )
-
-            lines_changed = fetch_pr_lines(owner, repo, number) if args.csv else 0
-            if csv_writer:
-                csv_writer.writerow(build_csv_row(pr, lines_changed, stats))
-
+                print(f"{owner}/{repo}#{number}: (no Qodo comment)")
+            rows.append(build_csv_row(pr, lines_changed=0, stats=None))
             processed.add((owner, repo, str(number)))
             save_checkpoint(args.org, {
                 "since": args.since.isoformat(),
@@ -510,19 +489,62 @@ def cmd_count(args):
                 "suggestions_total": suggestions_total,
                 "suggestions_implemented": suggestions_implemented,
                 "processed": list(processed),
+                "rows": rows,
             })
-    finally:
-        if csv_file:
-            csv_file.close()
+            continue
 
+        prs_with_qodo += 1
+        stats = parse_qodo_comment(qodo["body"])
+        suggestions_total += stats.total_suggestions
+        suggestions_implemented += stats.total_implemented
+        if args.verbose:
+            print(
+                f"{owner}/{repo}#{number}: "
+                f"{stats.total_implemented}/{stats.total_suggestions} implemented"
+            )
+
+        lines_changed = fetch_pr_lines(owner, repo, number)
+        rows.append(build_csv_row(pr, lines_changed, stats))
+
+        processed.add((owner, repo, str(number)))
+        save_checkpoint(args.org, {
+            "since": args.since.isoformat(),
+            "pr_total": pr_total,
+            "prs_with_qodo": prs_with_qodo,
+            "suggestions_total": suggestions_total,
+            "suggestions_implemented": suggestions_implemented,
+            "processed": list(processed),
+            "rows": rows,
+        })
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
+
+    today = date.today()
+    stem = _output_stem(args.org, args.since, today)
+    base = Path.cwd()
+
+    csv_path = base / f"{stem}.csv"
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+        writer.writeheader()
+        writer.writerows(rows)
+
+    html_path = None
+    try:
+        html_path = base / f"{stem}.html"
+        html_path.write_text(
+            report.generate_html(rows, args.org, args.since, today, "logo.png"),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        print(f"\n  Warning: HTML report not written: {exc}", file=sys.stderr)
+        html_path = None
 
     if cp_path.exists():
         cp_path.unlink()
 
     print()
-    print(f"Window:                      {args.since} → {date.today()}")
+    print(f"Window:                      {args.since} → {today}")
     print(f"Merged PRs in window:        {pr_total}")
     print(f"PRs with a Qodo review:      {prs_with_qodo}")
     print(f"Total Qodo suggestions:      {suggestions_total}")
@@ -530,6 +552,11 @@ def cmd_count(args):
     if suggestions_total:
         rate = 100 * suggestions_implemented / suggestions_total
         print(f"Implementation rate:         {rate:.1f}%")
+
+    print(f"\nReports written:")
+    print(f"  CSV:  {csv_path}")
+    if html_path:
+        print(f"  HTML: {html_path}")
 
 
 def main():
@@ -548,8 +575,6 @@ def main():
                    help="Print per-PR results")
     p.add_argument("--resume", action="store_true",
                    help="Resume from a previous checkpoint (ORG-checkpoint.json)")
-    p.add_argument("--csv", metavar="FILE",
-                   help="Write per-PR CSV report to FILE (e.g. report.csv)")
     args = p.parse_args()
 
     if not args.since:
