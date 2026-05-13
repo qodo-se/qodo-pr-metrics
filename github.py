@@ -469,8 +469,7 @@ def cmd_count(args):
         data = load_checkpoint(args.org)
         if data:
             stored_repos = data.get("repos")
-            _repos = args.repos
-            current_repos = sorted(_repos) if _repos else None
+            current_repos = sorted(args.repos) if args.repos else None
             normalized_stored = sorted(stored_repos) if stored_repos else None
             if normalized_stored != current_repos:
                 print(
@@ -554,7 +553,7 @@ def cmd_count(args):
             "suggestions_implemented": suggestions_implemented,
             "processed": list(processed),
             "rows": rows,
-            "repos": sorted(getattr(args, "repos", None) or []) or None,
+            "repos": sorted(args.repos) if args.repos else None,
         })
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
