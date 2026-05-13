@@ -385,7 +385,7 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"]) ->
 
 def cmd_inspect(args):
     """Print the first Qodo comment we find so you can sanity-check the parser."""
-    for pr in search_merged_prs(args.org, args.since):
+    for pr in search_merged_prs(args.org, args.since, repos=args.repos):
         owner, repo, number = pr["owner"], pr["repo"], pr["number"]
         print(f"\r  Checking {owner}/{repo}#{number}...{' ' * 20}", end="", file=sys.stderr, flush=True)
         comments = fetch_comments(owner, repo, number)
@@ -469,7 +469,7 @@ def cmd_count(args):
         data = load_checkpoint(args.org)
         if data:
             stored_repos = data.get("repos")
-            _repos = getattr(args, "repos", None)
+            _repos = args.repos
             current_repos = sorted(_repos) if _repos else None
             normalized_stored = sorted(stored_repos) if stored_repos else None
             if normalized_stored != current_repos:
@@ -495,10 +495,10 @@ def cmd_count(args):
             print("  No checkpoint found — starting fresh.", file=sys.stderr)
 
     print("  Fetching total PR count...", end="", file=sys.stderr, flush=True)
-    total_prs = get_total_pr_count(args.org, args.since)
+    total_prs = get_total_pr_count(args.org, args.since, repos=args.repos)
     print(f" {total_prs}" if total_prs is not None else " (unavailable)", file=sys.stderr)
 
-    for pr in search_merged_prs(args.org, args.since):
+    for pr in search_merged_prs(args.org, args.since, repos=args.repos):
         owner, repo, number = pr["owner"], pr["repo"], pr["number"]
         if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
             continue
@@ -528,7 +528,7 @@ def cmd_count(args):
                 "suggestions_implemented": suggestions_implemented,
                 "processed": list(processed),
                 "rows": rows,
-                "repos": sorted(getattr(args, "repos", None) or []) or None,
+                "repos": sorted(args.repos) if args.repos else None,
             })
             continue
 
@@ -560,7 +560,7 @@ def cmd_count(args):
         print(file=sys.stderr)  # end the rolling status line
 
     today = date.today()
-    stem = _output_stem(args.org, args.since, today)
+    stem = _output_stem(args.org, args.since, today, repos=args.repos)
     base = Path.cwd()
 
     csv_path = base / f"{stem}.csv"
@@ -584,6 +584,8 @@ def cmd_count(args):
         cp_path.unlink()
 
     print()
+    if args.repos:
+        print(f"Repos in scope:              {' '.join(args.repos)}")
     print(f"Window:                      {args.since} → {today}")
     print(f"Merged PRs in window:        {pr_total}")
     print(f"PRs with a Qodo review:      {prs_with_qodo}")
@@ -615,6 +617,10 @@ def main():
                    help="Print per-PR results")
     p.add_argument("--resume", action="store_true",
                    help="Resume from a previous checkpoint (ORG-checkpoint.json)")
+    p.add_argument(
+        "--repos", nargs="+", metavar="REPO",
+        help="Limit to specific repos (e.g. --repos frontend-app backend-api)",
+    )
     args = p.parse_args()
 
     if not args.since:
