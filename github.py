@@ -471,7 +471,8 @@ def cmd_count(args):
             stored_repos = data.get("repos")
             _repos = getattr(args, "repos", None)
             current_repos = sorted(_repos) if _repos else None
-            if stored_repos != current_repos:
+            normalized_stored = sorted(stored_repos) if stored_repos else None
+            if normalized_stored != current_repos:
                 print(
                     "  Warning: checkpoint was created with different --repos scope"
                     " — starting fresh.",
@@ -527,7 +528,7 @@ def cmd_count(args):
                 "suggestions_implemented": suggestions_implemented,
                 "processed": list(processed),
                 "rows": rows,
-                "repos": getattr(args, "repos", None),
+                "repos": sorted(getattr(args, "repos", None) or []) or None,
             })
             continue
 
