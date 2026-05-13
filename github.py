@@ -424,7 +424,6 @@ def get_total_pr_count(org: str, since: date, repos: Optional[list[str]] = None)
     today = date.today()
     if repos:
         total = 0
-        all_failed = True
         for repo in repos:
             q = (
                 f"repo:{org}/{repo} is:pr is:merged "
@@ -437,10 +436,9 @@ def get_total_pr_count(org: str, since: date, repos: Optional[list[str]] = None)
             ])
             try:
                 total += int(out.strip())
-                all_failed = False
             except ValueError:
-                pass
-        return None if all_failed else total
+                return None
+        return total
     q = (
         f"org:{org} is:pr is:merged "
         f"merged:{since.isoformat()}..{today.isoformat()}"
@@ -624,6 +622,9 @@ def main():
 
     if not args.since:
         args.since = date.today() - timedelta(days=args.days)
+
+    if args.repos:
+        args.repos = list(dict.fromkeys(args.repos))
 
     if args.inspect:
         cmd_inspect(args)
