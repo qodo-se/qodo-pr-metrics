@@ -185,29 +185,21 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
             chunk_count = 0
             for line in filter(None, out.split("\n")):
                 item = json.loads(line)
-                # Support both jq-processed output (repo key) and raw API shape
-                # (repository_url key) so unit-test fakes work without jq.
-                repo_url = item.get("repo") or item.get("repository_url", "")
-                owner_repo = repo_url.split("/repos/", 1)[1] if "/repos/" in repo_url else repo_url
+                owner_repo = item["repo"].split("/repos/", 1)[1]
                 key = (owner_repo, item["number"])
                 if key in seen:
                     continue
                 seen.add(key)
                 chunk_count += 1
-                owner, repo_name = owner_repo.split("/", 1)
-                # Support both jq-processed shape and raw API shape for remaining fields.
-                url = item.get("url") or item.get("html_url", "")
-                creator = item.get("creator") or (item.get("user") or {}).get("login", "")
-                created_at = item.get("created_at", "")
-                merged_at = item.get("merged_at") or (item.get("pull_request") or {}).get("merged_at", "")
+                owner, repo = owner_repo.split("/", 1)
                 yield {
                     "owner": owner,
-                    "repo": repo_name,
+                    "repo": repo,
                     "number": item["number"],
-                    "url": url,
-                    "creator": creator,
-                    "created_at": created_at,
-                    "merged_at": merged_at,
+                    "url": item.get("url", ""),
+                    "creator": item.get("creator", ""),
+                    "created_at": item.get("created_at", ""),
+                    "merged_at": item.get("merged_at", ""),
                 }
             print(f" {chunk_count} PRs", file=sys.stderr)
         cursor = chunk_end + timedelta(days=1)

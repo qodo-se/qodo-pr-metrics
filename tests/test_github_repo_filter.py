@@ -111,11 +111,11 @@ def test_search_merged_prs_deduplicates_across_repos(monkeypatch):
     import json
     pr_json = json.dumps({
         "number": 1,
-        "repository_url": "https://api.github.com/repos/acme/frontend",
-        "html_url": "https://github.com/acme/frontend/pull/1",
-        "user": {"login": "alice"},
+        "repo": "https://api.github.com/repos/acme/frontend",
+        "url": "https://github.com/acme/frontend/pull/1",
+        "creator": "alice",
         "created_at": "2026-01-01T10:00:00Z",
-        "pull_request": {"merged_at": "2026-01-02T10:00:00Z"},
+        "merged_at": "2026-01-02T10:00:00Z",
     })
     call_count = [0]
     def fake_run_gh(args, **kw):
