@@ -68,3 +68,9 @@ def test_get_total_pr_count_with_repos_uses_repo_qualifiers(monkeypatch):
     assert any("repo:acme/frontend" in q for q in captured_queries)
     assert any("repo:acme/backend" in q for q in captured_queries)
     assert not any("org:acme" in q for q in captured_queries)
+
+
+def test_get_total_pr_count_with_repos_all_fail_returns_none(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: "not-a-number\n")
+    result = get_total_pr_count("acme", date(2025, 1, 1), repos=["frontend", "backend"])
+    assert result is None
