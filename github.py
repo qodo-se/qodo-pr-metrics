@@ -149,17 +149,17 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     today = date.today()
     total_days = max(1, (today - since).days)
-    total_chunks = (total_days + chunk_days - 1) // chunk_days
+    total_chunks = ((total_days + chunk_days - 1) // chunk_days) * len(qualifiers)
     cursor = since
     seen = set()
-    chunk_num = 0
+    call_num = 0
     while cursor <= today:
         chunk_end = min(cursor + timedelta(days=chunk_days), today)
-        chunk_num += 1
         for qual in qualifiers:
+            call_num += 1
             qual_label = qual.split(":", 1)[1]
             print(
-                f"  [{chunk_num}/{total_chunks}] Searching {cursor} .. {chunk_end}"
+                f"  [{call_num}/{total_chunks}] Searching {cursor} .. {chunk_end}"
                 f" ({qual_label}) ...",
                 end="", file=sys.stderr, flush=True,
             )

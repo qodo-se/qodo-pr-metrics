@@ -107,7 +107,7 @@ def test_search_merged_prs_with_repos_uses_repo_qualifiers(monkeypatch):
     assert not any("org:acme" in q for q in captured)
 
 
-def test_search_merged_prs_deduplicates_across_repos(monkeypatch):
+def test_search_merged_prs_deduplicates_when_same_repo_listed_twice(monkeypatch):
     import json
     pr_json = json.dumps({
         "number": 1,
