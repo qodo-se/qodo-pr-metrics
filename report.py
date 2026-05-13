@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Optional
 import base64
 import mimetypes
+import re
 
 
 def _rate(implemented: int, total: int) -> float:
@@ -127,7 +128,7 @@ body {
   padding: 24px 28px; margin-bottom: 24px;
   border-bottom: 3px solid #634fd1;
 }
-.report-header img { height: 48px; flex-shrink: 0; }
+.report-header img, .report-header svg { height: 48px; flex-shrink: 0; }
 .report-header h1 { font-size: 22px; font-weight: 700; color: #634fd1; }
 .subtitle { color: #6e6e6e; font-size: 13px; margin-top: 4px; }
 section {
@@ -203,6 +204,13 @@ def _embed_logo(logo_path: Optional[str]) -> str:
     p = Path(logo_path)
     if not p.exists():
         return ""
+    if p.suffix.lower() == ".svg":
+        text = p.read_text(encoding="utf-8")
+        text = re.sub(r"<\?xml[^?]*\?>", "", text).strip()
+        text = re.sub(r'\s+width="[^"]*"', "", text, count=1)
+        text = re.sub(r'\s+height="[^"]*"', "", text, count=1)
+        text = re.sub(r"(<svg\b)", r'\1 height="48"', text, count=1)
+        return text
     mime, _ = mimetypes.guess_type(str(p))
     mime = mime or "image/png"
     b64 = base64.b64encode(p.read_bytes()).decode()
@@ -314,7 +322,7 @@ def generate_html(
     org: str,
     since: "date",
     until: "date",
-    logo_path: Optional[str] = "logo.png",
+    logo_path: Optional[str] = "logo.svg",
 ) -> str:
     agg = aggregate(rows)
     logo_tag = _embed_logo(logo_path)
