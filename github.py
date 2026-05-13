@@ -415,9 +415,26 @@ def save_checkpoint(org, state):
     checkpoint_path(org).write_text(json.dumps(state, indent=2))
 
 
-def get_total_pr_count(org, since):
+def get_total_pr_count(org, since, repos=None):
     """Return total merged PRs in the window from search API (approximate)."""
     today = date.today()
+    if repos:
+        total = 0
+        for repo in repos:
+            q = (
+                f"repo:{org}/{repo} is:pr is:merged "
+                f"merged:{since.isoformat()}..{today.isoformat()}"
+            )
+            out = run_gh([
+                "api", "-X", "GET", "search/issues",
+                "-f", f"q={q}",
+                "--jq", ".total_count",
+            ])
+            try:
+                total += int(out.strip())
+            except ValueError:
+                pass
+        return total
     q = (
         f"org:{org} is:pr is:merged "
         f"merged:{since.isoformat()}..{today.isoformat()}"

@@ -28,3 +28,43 @@ def test_output_stem_two_repos():
 
 def test_output_stem_empty_list_treated_as_no_repos():
     assert _output_stem("acme-corp", _SINCE, _UNTIL, repos=[]) == "acme-corp_2025-05-12_2026-05-12"
+
+
+from github import get_total_pr_count
+
+
+def test_get_total_pr_count_no_repos_uses_org_query(monkeypatch):
+    captured = []
+    def fake_run_gh(args, **kw):
+        captured.extend(args)
+        return "42\n"
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    result = get_total_pr_count("acme", date(2025, 1, 1))
+    assert result == 42
+    q_arg = next(a for a in captured if a.startswith("q="))
+    assert "org:acme" in q_arg
+    assert "repo:" not in q_arg
+
+
+def test_get_total_pr_count_with_repos_sums_per_repo(monkeypatch):
+    call_count = [0]
+    def fake_run_gh(args, **kw):
+        call_count[0] += 1
+        return "5\n"
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    result = get_total_pr_count("acme", date(2025, 1, 1), repos=["frontend", "backend"])
+    assert result == 10  # 5 per repo × 2 repos
+    assert call_count[0] == 2
+
+
+def test_get_total_pr_count_with_repos_uses_repo_qualifiers(monkeypatch):
+    captured_queries = []
+    def fake_run_gh(args, **kw):
+        q_args = [a for a in args if a.startswith("q=")]
+        captured_queries.extend(q_args)
+        return "3\n"
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    get_total_pr_count("acme", date(2025, 1, 1), repos=["frontend", "backend"])
+    assert any("repo:acme/frontend" in q for q in captured_queries)
+    assert any("repo:acme/backend" in q for q in captured_queries)
+    assert not any("org:acme" in q for q in captured_queries)
