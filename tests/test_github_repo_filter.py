@@ -124,3 +124,39 @@ def test_search_merged_prs_deduplicates_when_same_repo_listed_twice(monkeypatch)
     monkeypatch.setattr("github.run_gh", fake_run_gh)
     results = list(search_merged_prs("acme", date.today() - timedelta(days=1), repos=["frontend", "frontend"]))
     assert len(results) == 1  # deduped
+
+
+import json as _json
+from github import save_checkpoint, load_checkpoint, checkpoint_path
+
+
+def test_checkpoint_stores_and_loads_repos(monkeypatch, tmp_path):
+    monkeypatch.setattr("github.checkpoint_path", lambda org: tmp_path / f"{org}-checkpoint.json")
+    save_checkpoint("acme", {
+        "since": "2025-01-01",
+        "pr_total": 0,
+        "prs_with_qodo": 0,
+        "suggestions_total": 0,
+        "suggestions_implemented": 0,
+        "processed": [],
+        "rows": [],
+        "repos": ["frontend", "backend"],
+    })
+    data = load_checkpoint("acme")
+    assert data["repos"] == ["frontend", "backend"]
+
+
+def test_checkpoint_repos_none_when_not_filtered(monkeypatch, tmp_path):
+    monkeypatch.setattr("github.checkpoint_path", lambda org: tmp_path / f"{org}-checkpoint.json")
+    save_checkpoint("acme", {
+        "since": "2025-01-01",
+        "pr_total": 0,
+        "prs_with_qodo": 0,
+        "suggestions_total": 0,
+        "suggestions_implemented": 0,
+        "processed": [],
+        "rows": [],
+        "repos": None,
+    })
+    data = load_checkpoint("acme")
+    assert data["repos"] is None

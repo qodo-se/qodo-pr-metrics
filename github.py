@@ -468,18 +468,28 @@ def cmd_count(args):
     if args.resume:
         data = load_checkpoint(args.org)
         if data:
-            pr_total = data["pr_total"]
-            prs_with_qodo = data["prs_with_qodo"]
-            suggestions_total = data["suggestions_total"]
-            suggestions_implemented = data["suggestions_implemented"]
-            processed = {tuple(x) for x in data["processed"]}
-            rows = data.get("rows", [])
-            since_str = data.get("since", args.since.isoformat())
-            args.since = date.fromisoformat(since_str)
-            print(
-                f"  Resuming from checkpoint: {pr_total} PRs already processed.",
-                file=sys.stderr,
-            )
+            stored_repos = data.get("repos")
+            _repos = getattr(args, "repos", None)
+            current_repos = sorted(_repos) if _repos else None
+            if stored_repos != current_repos:
+                print(
+                    "  Warning: checkpoint was created with different --repos scope"
+                    " — starting fresh.",
+                    file=sys.stderr,
+                )
+            else:
+                pr_total = data["pr_total"]
+                prs_with_qodo = data["prs_with_qodo"]
+                suggestions_total = data["suggestions_total"]
+                suggestions_implemented = data["suggestions_implemented"]
+                processed = {tuple(x) for x in data["processed"]}
+                rows = data.get("rows", [])
+                since_str = data.get("since", args.since.isoformat())
+                args.since = date.fromisoformat(since_str)
+                print(
+                    f"  Resuming from checkpoint: {pr_total} PRs already processed.",
+                    file=sys.stderr,
+                )
         else:
             print("  No checkpoint found — starting fresh.", file=sys.stderr)
 
@@ -517,6 +527,7 @@ def cmd_count(args):
                 "suggestions_implemented": suggestions_implemented,
                 "processed": list(processed),
                 "rows": rows,
+                "repos": getattr(args, "repos", None),
             })
             continue
 
@@ -542,6 +553,7 @@ def cmd_count(args):
             "suggestions_implemented": suggestions_implemented,
             "processed": list(processed),
             "rows": rows,
+            "repos": getattr(args, "repos", None),
         })
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
