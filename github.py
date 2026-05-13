@@ -329,7 +329,7 @@ def _hours_between(iso_start: str, iso_end: str) -> int:
         return 0
 
 
-def _output_stem(org: str, since: date, until: date, repos: Optional[list] = None) -> str:
+def _output_stem(org: str, since: date, until: date, repos: Optional[list[str]] = None) -> str:
     """Return the base filename (no extension) for output files."""
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
     if repos:

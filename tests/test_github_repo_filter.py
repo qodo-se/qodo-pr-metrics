@@ -24,3 +24,7 @@ def test_output_stem_multiple_repos_uses_plural():
 def test_output_stem_two_repos():
     result = _output_stem("acme-corp", _SINCE, _UNTIL, repos=["a", "b"])
     assert result == "acme-corp_2-repos_2025-05-12_2026-05-12"
+
+
+def test_output_stem_empty_list_treated_as_no_repos():
+    assert _output_stem("acme-corp", _SINCE, _UNTIL, repos=[]) == "acme-corp_2025-05-12_2026-05-12"
