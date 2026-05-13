@@ -160,3 +160,30 @@ def test_checkpoint_repos_none_when_not_filtered(monkeypatch, tmp_path):
     })
     data = load_checkpoint("acme")
     assert data["repos"] is None
+
+
+def _mismatch(stored_repos, current_repos_arg):
+    """Replicate the resume mismatch detection logic from cmd_count."""
+    normalized_stored = sorted(stored_repos) if stored_repos else None
+    current_repos = sorted(current_repos_arg) if current_repos_arg else None
+    return normalized_stored != current_repos
+
+
+def test_resume_mismatch_detected_when_repos_differ():
+    assert _mismatch(["frontend"], ["backend"])
+
+
+def test_resume_mismatch_not_triggered_when_repos_match():
+    assert not _mismatch(["frontend", "backend"], ["backend", "frontend"])
+
+
+def test_resume_mismatch_not_triggered_when_both_none():
+    assert not _mismatch(None, None)
+
+
+def test_resume_mismatch_detected_when_stored_none_current_set():
+    assert _mismatch(None, ["frontend"])
+
+
+def test_resume_mismatch_detected_when_stored_set_current_none():
+    assert _mismatch(["frontend"], None)
