@@ -137,7 +137,7 @@ def run_gh(args, paginate=False):
     sys.exit(f"`{' '.join(cmd)}` failed after rate-limit retry:\n{result.stderr}")
 
 
-def search_merged_prs(org, since, chunk_days=30):
+def search_merged_prs(org, since, chunk_days=30, repos=None):
     """Yield a dict of PR metadata for every merged PR in the window.
 
     Each yielded dict contains: owner, repo, number, url, creator,
@@ -146,6 +146,7 @@ def search_merged_prs(org, since, chunk_days=30):
     Chunked by date range to stay under the search API's 1000-result cap.
     Shrink chunk_days if a single chunk ever exceeds 1000 for your org.
     """
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     today = date.today()
     total_days = max(1, (today - since).days)
     total_chunks = (total_days + chunk_days - 1) // chunk_days
@@ -155,49 +156,60 @@ def search_merged_prs(org, since, chunk_days=30):
     while cursor <= today:
         chunk_end = min(cursor + timedelta(days=chunk_days), today)
         chunk_num += 1
-        print(
-            f"  [{chunk_num}/{total_chunks}] Searching {cursor} .. {chunk_end} ...",
-            end="", file=sys.stderr, flush=True,
-        )
-        q = (
-            f"org:{org} is:pr is:merged "
-            f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
-        )
-        out = run_gh([
-            "api", "-X", "GET", "search/issues",
-            "-f", f"q={q}",
-            "--paginate",
-            "--jq", (
-                ".items[] | {"
-                "number: .number, "
-                "repo: .repository_url, "
-                "url: .html_url, "
-                "creator: .user.login, "
-                "created_at: .created_at, "
-                "merged_at: .pull_request.merged_at"
-                "}"
-            ),
-        ])
-        chunk_count = 0
-        for line in filter(None, out.split("\n")):
-            item = json.loads(line)
-            owner_repo = item["repo"].split("/repos/", 1)[1]
-            key = (owner_repo, item["number"])
-            if key in seen:
-                continue
-            seen.add(key)
-            chunk_count += 1
-            owner, repo = owner_repo.split("/", 1)
-            yield {
-                "owner": owner,
-                "repo": repo,
-                "number": item["number"],
-                "url": item.get("url", ""),
-                "creator": item.get("creator", ""),
-                "created_at": item.get("created_at", ""),
-                "merged_at": item.get("merged_at", ""),
-            }
-        print(f" {chunk_count} PRs", file=sys.stderr)
+        for qual in qualifiers:
+            qual_label = qual.split(":", 1)[1]
+            print(
+                f"  [{chunk_num}/{total_chunks}] Searching {cursor} .. {chunk_end}"
+                f" ({qual_label}) ...",
+                end="", file=sys.stderr, flush=True,
+            )
+            q = (
+                f"{qual} is:pr is:merged "
+                f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
+            )
+            out = run_gh([
+                "api", "-X", "GET", "search/issues",
+                "-f", f"q={q}",
+                "--paginate",
+                "--jq", (
+                    ".items[] | {"
+                    "number: .number, "
+                    "repo: .repository_url, "
+                    "url: .html_url, "
+                    "creator: .user.login, "
+                    "created_at: .created_at, "
+                    "merged_at: .pull_request.merged_at"
+                    "}"
+                ),
+            ])
+            chunk_count = 0
+            for line in filter(None, out.split("\n")):
+                item = json.loads(line)
+                # Support both jq-processed output (repo key) and raw API shape
+                # (repository_url key) so unit-test fakes work without jq.
+                repo_url = item.get("repo") or item.get("repository_url", "")
+                owner_repo = repo_url.split("/repos/", 1)[1] if "/repos/" in repo_url else repo_url
+                key = (owner_repo, item["number"])
+                if key in seen:
+                    continue
+                seen.add(key)
+                chunk_count += 1
+                owner, repo_name = owner_repo.split("/", 1)
+                # Support both jq-processed shape and raw API shape for remaining fields.
+                url = item.get("url") or item.get("html_url", "")
+                creator = item.get("creator") or (item.get("user") or {}).get("login", "")
+                created_at = item.get("created_at", "")
+                merged_at = item.get("merged_at") or (item.get("pull_request") or {}).get("merged_at", "")
+                yield {
+                    "owner": owner,
+                    "repo": repo_name,
+                    "number": item["number"],
+                    "url": url,
+                    "creator": creator,
+                    "created_at": created_at,
+                    "merged_at": merged_at,
+                }
+            print(f" {chunk_count} PRs", file=sys.stderr)
         cursor = chunk_end + timedelta(days=1)
 
 

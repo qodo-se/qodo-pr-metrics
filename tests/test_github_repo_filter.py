@@ -74,3 +74,53 @@ def test_get_total_pr_count_with_repos_all_fail_returns_none(monkeypatch):
     monkeypatch.setattr("github.run_gh", lambda args, **kw: "not-a-number\n")
     result = get_total_pr_count("acme", date(2025, 1, 1), repos=["frontend", "backend"])
     assert result is None
+
+
+from datetime import timedelta
+from github import search_merged_prs
+
+
+def _make_fake_run_gh(captured_queries, pr_lines=None):
+    """Returns a fake run_gh that records q= args and returns pr_lines as JSON."""
+    pr_lines = pr_lines or []
+    def fake(args, **kw):
+        q_args = [a for a in args if a.startswith("q=")]
+        captured_queries.extend(q_args)
+        return "\n".join(pr_lines)
+    return fake
+
+
+def test_search_merged_prs_no_repos_uses_org_qualifier(monkeypatch):
+    captured = []
+    monkeypatch.setattr("github.run_gh", _make_fake_run_gh(captured))
+    list(search_merged_prs("acme", date.today() - timedelta(days=1)))
+    assert any("org:acme" in q for q in captured)
+    assert not any("repo:" in q for q in captured)
+
+
+def test_search_merged_prs_with_repos_uses_repo_qualifiers(monkeypatch):
+    captured = []
+    monkeypatch.setattr("github.run_gh", _make_fake_run_gh(captured))
+    list(search_merged_prs("acme", date.today() - timedelta(days=1), repos=["frontend", "backend"]))
+    assert any("repo:acme/frontend" in q for q in captured)
+    assert any("repo:acme/backend" in q for q in captured)
+    assert not any("org:acme" in q for q in captured)
+
+
+def test_search_merged_prs_deduplicates_across_repos(monkeypatch):
+    import json
+    pr_json = json.dumps({
+        "number": 1,
+        "repository_url": "https://api.github.com/repos/acme/frontend",
+        "html_url": "https://github.com/acme/frontend/pull/1",
+        "user": {"login": "alice"},
+        "created_at": "2026-01-01T10:00:00Z",
+        "pull_request": {"merged_at": "2026-01-02T10:00:00Z"},
+    })
+    call_count = [0]
+    def fake_run_gh(args, **kw):
+        call_count[0] += 1
+        return pr_json  # same PR returned from both queries
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    results = list(search_merged_prs("acme", date.today() - timedelta(days=1), repos=["frontend", "frontend"]))
+    assert len(results) == 1  # deduped
