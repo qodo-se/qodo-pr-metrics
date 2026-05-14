@@ -190,3 +190,83 @@ def test_generate_html_includes_top_prs_by_implemented_section():
     ]
     html = generate_html(rows, "acme-corp", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
     assert "Top 5 Merged PRs by Implemented Suggestions" in html
+
+
+import json as _json
+
+
+def _timing_row(repo="backend", creator="alice", has_qodo=True,
+                suggestions=4, implemented=2,
+                qodo_min=8, human_min=270, has_human=True,
+                spotlight=None):
+    base = _row(repo=repo, creator=creator, has_qodo=has_qodo,
+                suggestions=suggestions, implemented=implemented)
+    base["Time to First Qodo Comment (min)"] = qodo_min if qodo_min is not None else ""
+    base["Time to First Human Comment (min)"] = human_min if human_min is not None else ""
+    base["Has Human Comment"] = has_human
+    base["Spotlight Issues"] = _json.dumps(spotlight or [])
+    return base
+
+
+def test_aggregate_velocity_median():
+    rows = [
+        _timing_row(qodo_min=6, human_min=200),
+        _timing_row(qodo_min=10, human_min=300),
+        _timing_row(qodo_min=8, human_min=None, has_human=False),
+    ]
+    agg = aggregate(rows)
+    assert agg.velocity_qodo_median_min == 8.0      # median of [6, 8, 10]
+    assert agg.velocity_human_median_min == 250.0   # median of [200, 300]
+
+
+def test_aggregate_velocity_none_when_no_data():
+    rows = [_timing_row(qodo_min=None, human_min=None, has_human=False)]
+    agg = aggregate(rows)
+    assert agg.velocity_qodo_median_min is None
+    assert agg.velocity_human_median_min is None
+
+
+def test_aggregate_pct_no_human_comment():
+    rows = [
+        _timing_row(has_qodo=True, has_human=False),
+        _timing_row(has_qodo=True, has_human=True),
+        _timing_row(has_qodo=True, has_human=False),
+    ]
+    agg = aggregate(rows)
+    assert agg.pct_no_human_comment == round(200 / 3, 1)
+
+
+def test_aggregate_spotlight_issues_collected():
+    issue = {"title": "API key leak", "category": "bug", "sub_label": "Security"}
+    rows = [
+        _timing_row(repo="api", spotlight=[issue]),
+        _timing_row(repo="web", spotlight=[]),
+    ]
+    agg = aggregate(rows)
+    assert len(agg.spotlight_issues) == 1
+    assert agg.spotlight_issues[0]["repo"] == "api"
+    assert agg.spotlight_issues[0]["title"] == "API key leak"
+    assert agg.spotlight_issues[0]["pr_num"] == 1
+
+
+def test_aggregate_developer_metrics():
+    rows = [
+        _timing_row(creator="alice", has_qodo=True, implemented=3),
+        _timing_row(creator="bob",   has_qodo=True, implemented=0),
+        _timing_row(creator="carol", has_qodo=False, suggestions=0, implemented=0),
+    ]
+    agg = aggregate(rows)
+    assert agg.developers_total == 3
+    assert agg.developers_with_qodo == 2
+    assert agg.developers_engaged == 1   # only alice implemented > 0
+
+
+def test_aggregate_empty_new_fields():
+    agg = aggregate([])
+    assert agg.velocity_qodo_median_min is None
+    assert agg.velocity_human_median_min is None
+    assert agg.pct_no_human_comment == 0.0
+    assert agg.spotlight_issues == []
+    assert agg.developers_total == 0
+    assert agg.developers_with_qodo == 0
+    assert agg.developers_engaged == 0

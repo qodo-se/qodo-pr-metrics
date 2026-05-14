@@ -5,8 +5,10 @@ from html import escape as _h
 from pathlib import Path
 from typing import Optional
 import base64
+import json
 import mimetypes
 import re
+import statistics
 
 
 def _rate(implemented: int, total: int) -> float:
@@ -40,6 +42,13 @@ class ReportData:
     by_developer: list
     top_prs: list
     top_prs_by_implemented: list
+    velocity_qodo_median_min: Optional[float]
+    velocity_human_median_min: Optional[float]
+    pct_no_human_comment: float
+    spotlight_issues: list
+    developers_total: int
+    developers_with_qodo: int
+    developers_engaged: int
 
 
 def aggregate(rows: list) -> ReportData:
@@ -89,6 +98,50 @@ def aggregate(rows: list) -> ReportData:
         key=lambda r: r.get("Total Implemented", 0), reverse=True,
     )[:5]
 
+    # Velocity
+    qodo_times = [
+        r["Time to First Qodo Comment (min)"] for r in rows
+        if r.get("Time to First Qodo Comment (min)") not in ("", None)
+    ]
+    human_times = [
+        r["Time to First Human Comment (min)"] for r in rows
+        if r.get("Time to First Human Comment (min)") not in ("", None)
+    ]
+    no_human_qodo = sum(
+        1 for r in rows
+        if r.get("Has Qodo Review") and not r.get("Has Human Comment")
+    )
+    velocity_qodo_median = _median(qodo_times)
+    velocity_human_median = _median(human_times)
+    pct_no_human = _rate(no_human_qodo, prs_with_qodo) if prs_with_qodo else 0.0
+
+    # Spotlight
+    spotlight_issues = []
+    for r in rows:
+        raw = r.get("Spotlight Issues", "[]")
+        try:
+            issues = json.loads(raw) if isinstance(raw, str) else (raw or [])
+        except (json.JSONDecodeError, TypeError):
+            issues = []
+        for issue in issues:
+            spotlight_issues.append({
+                **issue,
+                "repo": r["Repo Name"],
+                "pr_num": r["PR #"],
+                "pr_url": r.get("PR URL", ""),
+            })
+
+    # Developer metrics
+    all_devs = {r["PR Creator"] for r in rows if r.get("PR Creator")}
+    devs_with_qodo = {
+        r["PR Creator"] for r in rows
+        if r.get("Has Qodo Review") and r.get("PR Creator")
+    }
+    devs_engaged = {
+        r["PR Creator"] for r in rows
+        if r.get("Total Implemented", 0) > 0 and r.get("PR Creator")
+    }
+
     return ReportData(
         total_prs=total_prs,
         prs_with_qodo=prs_with_qodo,
@@ -115,6 +168,13 @@ def aggregate(rows: list) -> ReportData:
         by_developer=by_developer,
         top_prs=top_prs,
         top_prs_by_implemented=top_prs_by_implemented,
+        velocity_qodo_median_min=velocity_qodo_median,
+        velocity_human_median_min=velocity_human_median,
+        pct_no_human_comment=pct_no_human,
+        spotlight_issues=spotlight_issues,
+        developers_total=len(all_devs),
+        developers_with_qodo=len(devs_with_qodo),
+        developers_engaged=len(devs_engaged),
     )
 
 
@@ -221,6 +281,12 @@ def _embed_logo(logo_path: Optional[str]) -> str:
     mime = mime or "image/png"
     b64 = base64.b64encode(p.read_bytes()).decode()
     return f'<img src="data:{mime};base64,{b64}" alt="Qodo" height="48">'
+
+
+def _median(values: list) -> Optional[float]:
+    if not values:
+        return None
+    return statistics.median(float(v) for v in values)
 
 
 def _rate_str(implemented: int, total: int) -> str:
