@@ -74,7 +74,7 @@ The script automatically generates two output files in addition to printing the 
 
 For example, running `python3 github.py --org acme-corp` creates `acme-corp_2025-05-12_2026-05-12.csv` and `acme-corp_2025-05-12_2026-05-12.html`.
 
-Each row in the CSV contains 23 columns with per-PR data:
+Each row in the CSV contains 27 columns with per-PR data:
 
 | Column | Description |
 |---|---|
@@ -101,6 +101,10 @@ Each row in the CSV contains 23 columns with per-PR data:
 | Total Implemented | Sum of all implemented categories |
 | Implementation Rate (%) | `Total Implemented / Total Suggestions × 100`, blank when 0 suggestions |
 | Suggestions per 100 Lines | `Total Suggestions / Lines Changed × 100`, blank when lines = 0 or suggestions = 0 |
+| Time to First Qodo Comment (min) | Minutes from PR creation to Qodo's first comment; blank if no Qodo comment |
+| Time to First Human Comment (min) | Minutes from PR creation to the first non-Qodo comment; blank if none |
+| Has Human Comment | `True` if any non-Qodo comment exists on the PR |
+| Spotlight Issues | JSON array of high-impact Action Required issues (Security or Correctness sub-label) that were implemented |
 
 ### Options
 
