@@ -250,7 +250,7 @@ def _impact_card(title: str, color: str, suggested: int, implemented: int) -> st
 
 def _section_exec_summary(agg: ReportData) -> str:
     cards = "".join([
-        _stat_card("PRs Reviewed by Qodo", str(agg.prs_with_qodo)),
+        _stat_card("Merged PRs Reviewed by Qodo", str(agg.prs_with_qodo)),
         _stat_card("Qodo Coverage", f"{agg.qodo_coverage_pct:.1f}%"),
         _stat_card("Total Issues Caught", str(agg.total_suggestions)),
         _stat_card("Issues Resolved", str(agg.total_implemented)),
@@ -275,8 +275,8 @@ def _section_adoption(agg: ReportData) -> str:
         f"<td>{_rate_str(r['implemented'], r['suggestions'])}</td></tr>"
         for r in agg.by_developer
     )
-    repo_table = _table(["Repository", "PRs", "Issues", "Impl. Rate"], repo_rows)
-    dev_table = _table(["Developer", "PRs", "Issues", "Impl. Rate"], dev_rows)
+    repo_table = _table(["Repository", "Merged PRs", "Issues", "Impl. Rate"], repo_rows)
+    dev_table = _table(["Developer", "Merged PRs", "Issues", "Impl. Rate"], dev_rows)
     return (
         f'<section><h2>Adoption</h2>'
         f'<div class="two-col">'
@@ -320,7 +320,7 @@ def _section_top_prs(agg: ReportData) -> str:
             f'<td>{r.get("Implementation Rate (%)", "—")}</td></tr>'
         )
     table = _table(["Repo", "PR", "Creator", "Issues", "Implemented", "Rate"], pr_rows)
-    return f'<section><h2>Top 5 PRs by Issues Found</h2>{table}</section>'
+    return f'<section><h2>Top 5 Merged PRs by Issues Found</h2>{table}</section>'
 
 
 def _section_top_prs_by_implemented(agg: ReportData) -> str:
@@ -336,7 +336,7 @@ def _section_top_prs_by_implemented(agg: ReportData) -> str:
             f'<td>{r.get("Implementation Rate (%)", "—")}</td></tr>'
         )
     table = _table(["Repo", "PR", "Creator", "Issues", "Implemented", "Rate"], pr_rows)
-    return f'<section><h2>Top 5 PRs by Implemented Suggestions</h2>{table}</section>'
+    return f'<section><h2>Top 5 Merged PRs by Implemented Suggestions</h2>{table}</section>'
 
 
 def generate_html(

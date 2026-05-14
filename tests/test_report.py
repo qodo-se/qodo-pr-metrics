@@ -175,7 +175,7 @@ def test_generate_html_smoke():
     assert "Adoption" in html
     assert "Impact by Severity" in html
     assert "Impact by Category" in html
-    assert "Top 5 PRs" in html
+    assert "Top 5 Merged PRs" in html
     # stat values present
     assert 'class="stat-value">1<' in html   # prs_with_qodo
     assert 'class="stat-value">5<' in html   # total_suggestions
@@ -189,4 +189,4 @@ def test_generate_html_includes_top_prs_by_implemented_section():
         _row(repo="web", creator="bob", suggestions=3, implemented=3),
     ]
     html = generate_html(rows, "acme-corp", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
-    assert "Top 5 PRs by Implemented Suggestions" in html
+    assert "Top 5 Merged PRs by Implemented Suggestions" in html
