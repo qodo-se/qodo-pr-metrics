@@ -1,7 +1,7 @@
 import sys, os, json
 from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from github import fetch_pr_data, parse_qodo_comment
+from github import fetch_pr_data, parse_qodo_comment, _minutes_between, compute_timing, find_qodo_comment
 
 import json
 
@@ -162,3 +162,95 @@ def test_parse_img_both_sections():
     assert s.total_suggestions == 3
     assert s.bugs_suggested == 1
     assert s.rule_violations_suggested == 2
+
+
+# ---------------------------------------------------------------------------
+# _minutes_between and compute_timing
+# ---------------------------------------------------------------------------
+
+QODO_COMMENT = {
+    "body": "Code Review by Qodo — some content",
+    "created_at": "2026-01-01T10:08:00Z",
+    "user": {"login": "qodo-ai"},
+}
+HUMAN_COMMENT = {
+    "body": "LGTM",
+    "created_at": "2026-01-01T14:30:00Z",
+    "user": {"login": "alice"},
+}
+
+def test_minutes_between_basic():
+    assert _minutes_between("2026-01-01T10:00:00Z", "2026-01-01T10:08:00Z") == 8
+
+def test_minutes_between_zero():
+    assert _minutes_between("2026-01-01T10:00:00Z", "2026-01-01T10:00:00Z") == 0
+
+def test_minutes_between_bad_input():
+    assert _minutes_between("", "2026-01-01T10:00:00Z") is None
+
+def test_compute_timing_with_both():
+    pr = {"created_at": "2026-01-01T10:00:00Z"}
+    timing = compute_timing(pr, [QODO_COMMENT, HUMAN_COMMENT])
+    assert timing["qodo_min"] == 8
+    assert timing["human_min"] == 270   # 4h30m = 270 min
+    assert timing["has_human"] is True
+
+def test_compute_timing_no_human():
+    pr = {"created_at": "2026-01-01T10:00:00Z"}
+    timing = compute_timing(pr, [QODO_COMMENT])
+    assert timing["qodo_min"] == 8
+    assert timing["human_min"] is None
+    assert timing["has_human"] is False
+
+def test_compute_timing_no_qodo():
+    pr = {"created_at": "2026-01-01T10:00:00Z"}
+    timing = compute_timing(pr, [HUMAN_COMMENT])
+    assert timing["qodo_min"] is None
+    assert timing["human_min"] == 270
+    assert timing["has_human"] is True
+
+def test_compute_timing_empty_comments():
+    pr = {"created_at": "2026-01-01T10:00:00Z"}
+    timing = compute_timing(pr, [])
+    assert timing["qodo_min"] is None
+    assert timing["human_min"] is None
+    assert timing["has_human"] is False
+
+
+# ---------------------------------------------------------------------------
+# build_csv_row — new timing + spotlight columns
+# ---------------------------------------------------------------------------
+
+def test_build_csv_row_timing_columns_populated():
+    timing = {"qodo_min": 8, "human_min": 270, "has_human": True}
+    row = build_csv_row(_pr(), lines_changed=100, stats=None, timing=timing)
+    assert row["Time to First Qodo Comment (min)"] == 8
+    assert row["Time to First Human Comment (min)"] == 270
+    assert row["Has Human Comment"] is True
+
+def test_build_csv_row_timing_none_becomes_empty():
+    timing = {"qodo_min": None, "human_min": None, "has_human": False}
+    row = build_csv_row(_pr(), lines_changed=100, stats=None, timing=timing)
+    assert row["Time to First Qodo Comment (min)"] == ""
+    assert row["Time to First Human Comment (min)"] == ""
+    assert row["Has Human Comment"] is False
+
+def test_build_csv_row_no_timing_arg():
+    # backward-compatible: timing defaults to None, new columns default to empty
+    row = build_csv_row(_pr(), lines_changed=100, stats=None)
+    assert row["Time to First Qodo Comment (min)"] == ""
+    assert "Spotlight Issues" in row
+
+def test_build_csv_row_spotlight_issues_serialised():
+    stats = QodoStats(
+        total_suggestions=2, total_implemented=1,
+        spotlight_issues=[{"title": "API key leak", "category": "bug", "sub_label": "Security"}],
+    )
+    row = build_csv_row(_pr(), lines_changed=100, stats=stats)
+    issues = json.loads(row["Spotlight Issues"])
+    assert len(issues) == 1
+    assert issues[0]["title"] == "API key leak"
+
+def test_build_csv_row_no_spotlight_issues_empty_json():
+    row = build_csv_row(_pr(), lines_changed=100, stats=None)
+    assert row["Spotlight Issues"] == "[]"

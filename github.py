@@ -380,6 +380,8 @@ CSV_COLUMNS = [
     "Requirement Gaps Suggested", "Requirement Gaps Implemented",
     "Total Suggestions", "Total Implemented",
     "Implementation Rate (%)", "Suggestions per 100 Lines",
+    "Time to First Qodo Comment (min)", "Time to First Human Comment (min)",
+    "Has Human Comment", "Spotlight Issues",
 ]
 
 
@@ -397,6 +399,41 @@ def _hours_between(iso_start: str, iso_end: str) -> int:
         return 0
 
 
+def _minutes_between(iso_start: str, iso_end: str) -> Optional[int]:
+    """Return whole minutes between two ISO-8601 timestamps, or None on error."""
+    try:
+        def _parse(ts):
+            ts = ts.rstrip("Z").split(".")[0]
+            return datetime.strptime(ts, "%Y-%m-%dT%H:%M:%S")
+        delta = _parse(iso_end) - _parse(iso_start)
+        return max(0, int(delta.total_seconds() // 60))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def compute_timing(pr: dict, comments: list) -> dict:
+    """Return timing metrics derived from PR metadata and its comment list.
+
+    Returns {"qodo_min": int|None, "human_min": int|None, "has_human": bool}.
+    """
+    pr_created = pr.get("created_at", "")
+    qodo_comment = find_qodo_comment(comments)
+    qodo_min = (
+        _minutes_between(pr_created, qodo_comment["created_at"])
+        if qodo_comment else None
+    )
+    human_comments = [
+        c for c in comments
+        if not QODO_MARKER.search(c.get("body", "") or "")
+    ]
+    has_human = bool(human_comments)
+    human_min = None
+    if human_comments:
+        first = min(human_comments, key=lambda c: c.get("created_at", ""))
+        human_min = _minutes_between(pr_created, first["created_at"])
+    return {"qodo_min": qodo_min, "human_min": human_min, "has_human": has_human}
+
+
 def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] = None) -> str:
     """Return the base filename (no extension) for output files."""
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
@@ -407,43 +444,52 @@ def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] 
     return f"{safe_org}_{since.isoformat()}_{until.isoformat()}"
 
 
-def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"]) -> dict:
+def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
+                  timing: Optional[dict] = None) -> dict:
     has_qodo = stats is not None
     total = stats.total_suggestions if has_qodo else 0
     implemented = stats.total_implemented if has_qodo else 0
+    timing = timing or {}
 
     impl_rate = f"{100 * implemented / total:.1f}" if total > 0 else ""
     per_100 = (
         f"{100 * total / lines_changed:.1f}" if lines_changed > 0 and total > 0 else ""
     )
 
+    qodo_min = timing.get("qodo_min")
+    human_min = timing.get("human_min")
+
     return {
-        "Repo Name":                        pr["repo"],
-        "PR #":                             pr["number"],
-        "PR URL":                           pr.get("url", ""),
-        "PR Creation Date":                 pr.get("created_at", ""),
-        "PR Merge Date":                    pr.get("merged_at", ""),
-        "Hours to Merge":                   _hours_between(
-                                                pr.get("created_at", ""),
-                                                pr.get("merged_at", ""),
-                                            ),
-        "PR Creator":                       pr.get("creator", ""),
-        "Lines Changed":                    lines_changed,
-        "Has Qodo Review":                  has_qodo,
-        "Action Required Suggestions":      stats.action_required_total if has_qodo else 0,
-        "Action Required Implemented":      stats.action_required_implemented if has_qodo else 0,
-        "Review Recommended Suggestions":   stats.review_recommended_total if has_qodo else 0,
-        "Review Recommended Implemented":   stats.review_recommended_implemented if has_qodo else 0,
-        "Bugs Suggested":                   stats.bugs_suggested if has_qodo else 0,
-        "Bugs Implemented":                 stats.bugs_implemented if has_qodo else 0,
-        "Rule Violations Suggested":        stats.rule_violations_suggested if has_qodo else 0,
-        "Rule Violations Implemented":      stats.rule_violations_implemented if has_qodo else 0,
-        "Requirement Gaps Suggested":       stats.requirement_gaps_suggested if has_qodo else 0,
-        "Requirement Gaps Implemented":     stats.requirement_gaps_implemented if has_qodo else 0,
-        "Total Suggestions":                total,
-        "Total Implemented":                implemented,
-        "Implementation Rate (%)":          impl_rate,
-        "Suggestions per 100 Lines":        per_100,
+        "Repo Name":                            pr["repo"],
+        "PR #":                                 pr["number"],
+        "PR URL":                               pr.get("url", ""),
+        "PR Creation Date":                     pr.get("created_at", ""),
+        "PR Merge Date":                        pr.get("merged_at", ""),
+        "Hours to Merge":                       _hours_between(
+                                                    pr.get("created_at", ""),
+                                                    pr.get("merged_at", ""),
+                                                ),
+        "PR Creator":                           pr.get("creator", ""),
+        "Lines Changed":                        lines_changed,
+        "Has Qodo Review":                      has_qodo,
+        "Action Required Suggestions":          stats.action_required_total if has_qodo else 0,
+        "Action Required Implemented":          stats.action_required_implemented if has_qodo else 0,
+        "Review Recommended Suggestions":       stats.review_recommended_total if has_qodo else 0,
+        "Review Recommended Implemented":       stats.review_recommended_implemented if has_qodo else 0,
+        "Bugs Suggested":                       stats.bugs_suggested if has_qodo else 0,
+        "Bugs Implemented":                     stats.bugs_implemented if has_qodo else 0,
+        "Rule Violations Suggested":            stats.rule_violations_suggested if has_qodo else 0,
+        "Rule Violations Implemented":          stats.rule_violations_implemented if has_qodo else 0,
+        "Requirement Gaps Suggested":           stats.requirement_gaps_suggested if has_qodo else 0,
+        "Requirement Gaps Implemented":         stats.requirement_gaps_implemented if has_qodo else 0,
+        "Total Suggestions":                    total,
+        "Total Implemented":                    implemented,
+        "Implementation Rate (%)":              impl_rate,
+        "Suggestions per 100 Lines":            per_100,
+        "Time to First Qodo Comment (min)":     qodo_min if qodo_min is not None else "",
+        "Time to First Human Comment (min)":    human_min if human_min is not None else "",
+        "Has Human Comment":                    timing.get("has_human", False),
+        "Spotlight Issues":                     json.dumps(stats.spotlight_issues if has_qodo else []),
     }
 
 
@@ -578,11 +624,12 @@ def cmd_count(args):
         comments = pr_data["comments"]
         lines_changed = pr_data["additions"] + pr_data["deletions"]
         qodo = find_qodo_comment(comments)
+        timing = compute_timing(pr, comments)
 
         if not qodo:
             if args.verbose:
                 print(f"{owner}/{repo}#{number}: (no Qodo comment)")
-            rows.append(build_csv_row(pr, lines_changed=0, stats=None))
+            rows.append(build_csv_row(pr, lines_changed=0, stats=None, timing=timing))
             processed.add((owner, repo, str(number)))
             save_checkpoint(args.org, {
                 "since": args.since.isoformat(),
@@ -606,7 +653,7 @@ def cmd_count(args):
                 f"{stats.total_implemented}/{stats.total_suggestions} implemented"
             )
 
-        rows.append(build_csv_row(pr, lines_changed, stats))
+        rows.append(build_csv_row(pr, lines_changed, stats, timing))
 
         processed.add((owner, repo, str(number)))
         save_checkpoint(args.org, {
@@ -628,7 +675,7 @@ def cmd_count(args):
 
     csv_path = base / f"{stem}.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
-        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS)
+        writer = csv.DictWriter(f, fieldnames=CSV_COLUMNS, restval="")
         writer.writeheader()
         writer.writerows(rows)
 
