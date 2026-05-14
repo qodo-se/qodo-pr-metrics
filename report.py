@@ -369,7 +369,8 @@ def _section_velocity(agg: ReportData) -> str:
     human_time = _format_duration(agg.velocity_human_median_min)
 
     multiplier_html = ""
-    if (agg.velocity_qodo_median_min and agg.velocity_human_median_min
+    if (agg.velocity_qodo_median_min is not None
+            and agg.velocity_human_median_min is not None
             and agg.velocity_qodo_median_min > 0):
         mult = agg.velocity_human_median_min / agg.velocity_qodo_median_min
         multiplier_html = (
