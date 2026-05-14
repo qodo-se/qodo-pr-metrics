@@ -39,6 +39,7 @@ class ReportData:
     by_repo: list
     by_developer: list
     top_prs: list
+    top_prs_by_implemented: list
 
 
 def aggregate(rows: list) -> ReportData:
@@ -83,6 +84,10 @@ def aggregate(rows: list) -> ReportData:
         [r for r in rows if r.get("Has Qodo Review")],
         key=lambda r: r.get("Total Suggestions", 0), reverse=True,
     )[:5]
+    top_prs_by_implemented = sorted(
+        [r for r in rows if r.get("Has Qodo Review")],
+        key=lambda r: r.get("Total Implemented", 0), reverse=True,
+    )[:5]
 
     return ReportData(
         total_prs=total_prs,
@@ -109,6 +114,7 @@ def aggregate(rows: list) -> ReportData:
         by_repo=by_repo,
         by_developer=by_developer,
         top_prs=top_prs,
+        top_prs_by_implemented=top_prs_by_implemented,
     )
 
 

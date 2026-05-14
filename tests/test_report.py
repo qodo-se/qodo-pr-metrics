@@ -38,6 +38,7 @@ def test_aggregate_empty():
     assert agg.by_repo == []
     assert agg.by_developer == []
     assert agg.top_prs == []
+    assert agg.top_prs_by_implemented == []
 
 
 def test_aggregate_basic_counts():
@@ -100,6 +101,22 @@ def test_aggregate_top_prs_returns_top_5_by_suggestions():
     agg = aggregate(rows)
     assert len(agg.top_prs) == 5
     assert agg.top_prs[0]["Total Suggestions"] == 10
+
+
+def test_aggregate_top_prs_by_implemented_returns_top_5_by_implemented():
+    rows = [_row(suggestions=10, implemented=i) for i in range(10, 0, -1)]
+    agg = aggregate(rows)
+    assert len(agg.top_prs_by_implemented) == 5
+    assert agg.top_prs_by_implemented[0]["Total Implemented"] == 10
+
+
+def test_aggregate_top_prs_by_implemented_excludes_non_qodo():
+    rows = [
+        _row(has_qodo=True, suggestions=5, implemented=5),
+        _row(has_qodo=False, suggestions=0, implemented=0),
+    ]
+    agg = aggregate(rows)
+    assert len(agg.top_prs_by_implemented) == 1
 
 
 def test_aggregate_severity_totals():
