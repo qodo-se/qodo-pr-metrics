@@ -327,3 +327,26 @@ def test_generate_html_spotlight_links_pr():
     html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
     assert "PR #42" in html
     assert "https://github.com/acme/repo/pull/42" in html
+
+
+def test_generate_html_adoption_developer_breadth():
+    from report import generate_html
+    rows = [
+        _timing_row(creator="alice", has_qodo=True, implemented=2),
+        _timing_row(creator="bob",   has_qodo=True, implemented=0),
+        _timing_row(creator="carol", has_qodo=False, suggestions=0, implemented=0),
+    ]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    # "2 of 3 developers participated"
+    assert "2" in html
+    assert "of 3 developers" in html
+
+
+def test_generate_html_adoption_engagement():
+    from report import generate_html
+    rows = [
+        _timing_row(creator="alice", implemented=3),
+        _timing_row(creator="bob",   implemented=0),
+    ]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "developers implemented" in html

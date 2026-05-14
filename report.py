@@ -499,6 +499,14 @@ def _table(headers: list, rows_html: str) -> str:
 
 
 def _section_adoption(agg: ReportData) -> str:
+    dev_cards = (
+        _stat_card(
+            f"of {agg.developers_total} developers participated",
+            str(agg.developers_with_qodo),
+        ) +
+        _stat_card("developers implemented suggestions", str(agg.developers_engaged))
+    )
+
     repo_rows = "".join(
         f"<tr><td>{_h(r['repo'])}</td><td>{r['prs']}</td><td>{r['suggestions']}</td>"
         f"<td>{_rate_str(r['implemented'], r['suggestions'])}</td></tr>"
@@ -510,9 +518,10 @@ def _section_adoption(agg: ReportData) -> str:
         for r in agg.by_developer
     )
     repo_table = _table(["Repository", "Merged PRs", "Issues", "Impl. Rate"], repo_rows)
-    dev_table = _table(["Developer", "Merged PRs", "Issues", "Impl. Rate"], dev_rows)
+    dev_table  = _table(["Developer", "Merged PRs", "Issues", "Impl. Rate"], dev_rows)
     return (
         f'<section><h2>Adoption</h2>'
+        f'<div class="stat-grid" style="margin-bottom:20px">{dev_cards}</div>'
         f'<div class="two-col">'
         f'<div><p class="subsection">By Repository</p>{repo_table}</div>'
         f'<div><p class="subsection">By Developer (top 10)</p>{dev_table}</div>'
