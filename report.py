@@ -448,22 +448,28 @@ def _section_bug_spotlight(agg: ReportData) -> str:
     for issue in agg.spotlight_issues:
         url = issue.get("pr_url", "")
         safe_url = url if url.startswith(("https://", "http://")) else ""
+        pr_num_safe = _h(str(issue.get("pr_num", "")))
         pr_ref = (
-            f'<a href="{_h(safe_url)}">PR #{issue["pr_num"]} &#8599;</a>'
-            if safe_url else f'PR #{issue["pr_num"]}'
+            f'<a href="{_h(safe_url)}">PR #{pr_num_safe} &#8599;</a>'
+            if safe_url else f'PR #{pr_num_safe}'
         )
         cat_display = _CATEGORY_DISPLAY.get(issue.get("category", ""), "Issue")
         sub_label = issue.get("sub_label", "")
-        sub_class = f'tag-sub-{sub_label.lower()}' if sub_label else "tag-sub-correctness"
+        # Allowlist known sub_labels to prevent CSS class injection from untrusted CSV data
+        safe_sub_class = {"Security": "tag-sub-security", "Correctness": "tag-sub-correctness"}.get(sub_label, "tag-sub-correctness")
         border_class = "spotlight-correctness" if sub_label == "Correctness" else ""
 
+        sub_label_tag = (
+            f'<span class="tag {safe_sub_class}">{_h(sub_label)}</span>'
+            if sub_label else ""
+        )
         cards += (
             f'<div class="spotlight-card {border_class}">'
             f'<div class="spotlight-left">'
             f'<div class="spotlight-title">{_h(issue.get("title", ""))}</div>'
             f'<div class="spotlight-tags">'
             f'<span class="tag tag-cat">{_h(cat_display)}</span>'
-            f'<span class="tag {sub_class}">{_h(sub_label)}</span>'
+            f'{sub_label_tag}'
             f'<span class="tag tag-impl">✓ Implemented</span>'
             f'</div>'
             f'</div>'
