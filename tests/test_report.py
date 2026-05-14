@@ -180,3 +180,13 @@ def test_generate_html_smoke():
     assert 'class="stat-value">1<' in html   # prs_with_qodo
     assert 'class="stat-value">5<' in html   # total_suggestions
     assert 'class="stat-value">3<' in html   # total_implemented
+
+
+def test_generate_html_includes_top_prs_by_implemented_section():
+    from report import generate_html
+    rows = [
+        _row(repo="api", creator="alice", suggestions=5, implemented=3),
+        _row(repo="web", creator="bob", suggestions=3, implemented=3),
+    ]
+    html = generate_html(rows, "acme-corp", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "Top 5 PRs by Implemented Suggestions" in html

@@ -323,6 +323,22 @@ def _section_top_prs(agg: ReportData) -> str:
     return f'<section><h2>Top 5 PRs by Issues Found</h2>{table}</section>'
 
 
+def _section_top_prs_by_implemented(agg: ReportData) -> str:
+    pr_rows = ""
+    for r in agg.top_prs_by_implemented:
+        url = r.get("PR URL", "")
+        safe_url = url if url.startswith(("https://", "http://")) else ""
+        pr_ref = f'<a href="{_h(safe_url)}">#{r["PR #"]}</a>' if safe_url else f'#{r["PR #"]}'
+        pr_rows += (
+            f'<tr><td>{_h(r["Repo Name"])}</td><td>{pr_ref}</td>'
+            f'<td>{_h(r["PR Creator"])}</td>'
+            f'<td>{r["Total Suggestions"]}</td><td>{r["Total Implemented"]}</td>'
+            f'<td>{r.get("Implementation Rate (%)", "—")}</td></tr>'
+        )
+    table = _table(["Repo", "PR", "Creator", "Issues", "Implemented", "Rate"], pr_rows)
+    return f'<section><h2>Top 5 PRs by Implemented Suggestions</h2>{table}</section>'
+
+
 def generate_html(
     rows: list,
     org: str,
@@ -358,6 +374,7 @@ def generate_html(
   {_section_severity(agg)}
   {_section_categories(agg)}
   {_section_top_prs(agg)}
+  {_section_top_prs_by_implemented(agg)}
 </div>
 </body>
 </html>"""
