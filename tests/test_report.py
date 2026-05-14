@@ -270,3 +270,32 @@ def test_aggregate_empty_new_fields():
     assert agg.developers_total == 0
     assert agg.developers_with_qodo == 0
     assert agg.developers_engaged == 0
+
+
+def test_generate_html_includes_velocity_section():
+    from report import generate_html
+    rows = [
+        _timing_row(qodo_min=8, human_min=270, has_human=True),
+        _timing_row(qodo_min=12, human_min=300, has_human=True),
+    ]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "Velocity" in html
+    assert "Time to First Feedback" in html
+    assert "10m" in html    # median of [8, 12] = 10
+
+
+def test_generate_html_velocity_hidden_when_no_data():
+    from report import generate_html
+    rows = [_row()]   # _row() has no timing columns → all empty
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "Time to First Feedback" not in html
+
+
+def test_generate_html_no_human_comment_insight():
+    from report import generate_html
+    rows = [
+        _timing_row(qodo_min=8, human_min=None, has_human=False),
+        _timing_row(qodo_min=8, human_min=None, has_human=False),
+    ]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "sole feedback" in html

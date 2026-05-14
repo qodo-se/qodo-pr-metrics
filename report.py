@@ -261,6 +261,31 @@ tbody td a:hover { text-decoration: underline; }
   .report-header { border: 1px solid #dfdfdf; margin-bottom: 16px; }
   .two-col { grid-template-columns: 1fr 1fr; }
 }
+.vs-block {
+  display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px;
+  align-items: center; margin-bottom: 14px;
+}
+.vs-side {
+  border-radius: 8px; padding: 20px; text-align: center;
+}
+.vs-qodo { background: #dddcff; border: 2px solid #634fd1; }
+.vs-human { background: #f9f9f9; border: 2px solid #d0d0d0; }
+.vs-name {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; margin-bottom: 8px;
+}
+.vs-name-qodo { color: #634fd1; }
+.vs-name-human { color: #666; }
+.vs-time { font-size: 36px; font-weight: 700; line-height: 1; }
+.vs-time-qodo { color: #634fd1; }
+.vs-time-human { color: #555; }
+.vs-sub { font-size: 11px; color: #888; margin-top: 5px; }
+.vs-divider { font-size: 20px; font-weight: 700; color: #bbb; text-align: center; }
+.insight-box {
+  background: #f8f7ff; border-left: 4px solid #634fd1;
+  border-radius: 4px; padding: 12px 16px; font-size: 13px; color: #444;
+  margin-top: 14px;
+}
 """
 
 
@@ -293,6 +318,17 @@ def _rate_str(implemented: int, total: int) -> str:
     return f"{100 * implemented / total:.1f}%" if total > 0 else "—"
 
 
+def _format_duration(minutes: Optional[float]) -> str:
+    if minutes is None:
+        return "&mdash;"
+    if minutes < 60:
+        return f"{int(minutes)}m"
+    hours = minutes / 60
+    if hours < 24:
+        return f"{hours:.1f}h"
+    return f"{hours / 24:.1f}d"
+
+
 def _stat_card(label: str, value: str) -> str:
     return (
         f'<div class="stat-card">'
@@ -323,6 +359,57 @@ def _section_exec_summary(agg: ReportData) -> str:
         _stat_card("Overall Implementation Rate", f"{agg.overall_impl_rate_pct:.1f}%"),
     ])
     return f'<section><h2>Executive Summary</h2><div class="stat-grid">{cards}</div></section>'
+
+
+def _section_velocity(agg: ReportData) -> str:
+    if agg.velocity_qodo_median_min is None and agg.velocity_human_median_min is None:
+        return ""
+
+    qodo_time = _format_duration(agg.velocity_qodo_median_min)
+    human_time = _format_duration(agg.velocity_human_median_min)
+
+    multiplier_html = ""
+    if (agg.velocity_qodo_median_min and agg.velocity_human_median_min
+            and agg.velocity_qodo_median_min > 0):
+        mult = agg.velocity_human_median_min / agg.velocity_qodo_median_min
+        multiplier_html = (
+            f'<div style="text-align:center;margin-top:10px">'
+            f'<span class="rate-pill">{mult:.0f}&times; faster initial feedback</span>'
+            f'</div>'
+        )
+
+    insight_html = ""
+    if agg.pct_no_human_comment > 0:
+        insight_html = (
+            f'<div class="insight-box">'
+            f'<strong>{agg.pct_no_human_comment:.0f}%</strong> of Qodo-reviewed PRs '
+            f'received no human comment &mdash; Qodo provided the sole feedback before merge.'
+            f'</div>'
+        )
+
+    vs_block = (
+        f'<div class="vs-block">'
+        f'<div class="vs-side vs-qodo">'
+        f'<div class="vs-name vs-name-qodo">Qodo</div>'
+        f'<div class="vs-time vs-time-qodo">{qodo_time}</div>'
+        f'<div class="vs-sub">median time to first comment</div>'
+        f'</div>'
+        f'<div class="vs-divider">vs</div>'
+        f'<div class="vs-side vs-human">'
+        f'<div class="vs-name vs-name-human">First human commenter</div>'
+        f'<div class="vs-time vs-time-human">{human_time}</div>'
+        f'<div class="vs-sub">median time to first comment</div>'
+        f'</div>'
+        f'</div>'
+    )
+
+    return (
+        f'<section><h2>Velocity &mdash; Time to First Feedback</h2>'
+        f'{vs_block}'
+        f'{multiplier_html}'
+        f'{insight_html}'
+        f'</section>'
+    )
 
 
 def _table(headers: list, rows_html: str) -> str:
@@ -436,6 +523,7 @@ def generate_html(
     </div>
   </header>
   {_section_exec_summary(agg)}
+  {_section_velocity(agg)}
   {_section_adoption(agg)}
   {_section_severity(agg)}
   {_section_categories(agg)}
