@@ -286,6 +286,25 @@ tbody td a:hover { text-decoration: underline; }
   border-radius: 4px; padding: 12px 16px; font-size: 13px; color: #444;
   margin-top: 14px;
 }
+.spotlight-card {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px; border-radius: 6px; padding: 14px 16px; margin-bottom: 10px;
+  border: 1px solid #eee; border-left: 4px solid #e55c83;
+}
+.spotlight-correctness { border-left-color: #634fd1; }
+.spotlight-left { flex: 1; }
+.spotlight-title { font-size: 13px; font-weight: 500; color: #1c1c1c; margin-bottom: 6px; }
+.spotlight-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.spotlight-right { text-align: right; flex-shrink: 0; }
+.spotlight-repo { font-size: 12px; color: #666; margin-bottom: 3px; }
+.spotlight-pr { font-size: 12px; }
+.spotlight-pr a { color: #634fd1; text-decoration: none; }
+.spotlight-pr a:hover { text-decoration: underline; }
+.tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.tag-cat { background: #fdeef3; color: #a02040; }
+.tag-sub-security { background: #fff0d6; color: #8a5a00; }
+.tag-sub-correctness { background: #e8f4ff; color: #1a5a8a; }
+.tag-impl { background: #c7f5ea; color: #206b58; }
 """
 
 
@@ -413,6 +432,61 @@ def _section_velocity(agg: ReportData) -> str:
     )
 
 
+_CATEGORY_DISPLAY = {
+    "bug": "Bug",
+    "rule_violation": "Rule Violation",
+    "requirement_gap": "Requirement Gap",
+    "unknown": "Issue",
+}
+
+
+def _section_bug_spotlight(agg: ReportData) -> str:
+    if not agg.spotlight_issues:
+        return ""
+
+    cards = ""
+    for issue in agg.spotlight_issues:
+        url = issue.get("pr_url", "")
+        safe_url = url if url.startswith(("https://", "http://")) else ""
+        pr_ref = (
+            f'<a href="{_h(safe_url)}">PR #{issue["pr_num"]} &#8599;</a>'
+            if safe_url else f'PR #{issue["pr_num"]}'
+        )
+        cat_display = _CATEGORY_DISPLAY.get(issue.get("category", ""), "Issue")
+        sub_label = issue.get("sub_label", "")
+        sub_class = f'tag-sub-{sub_label.lower()}' if sub_label else "tag-sub-correctness"
+        border_class = "spotlight-correctness" if sub_label == "Correctness" else ""
+
+        cards += (
+            f'<div class="spotlight-card {border_class}">'
+            f'<div class="spotlight-left">'
+            f'<div class="spotlight-title">{_h(issue.get("title", ""))}</div>'
+            f'<div class="spotlight-tags">'
+            f'<span class="tag tag-cat">{_h(cat_display)}</span>'
+            f'<span class="tag {sub_class}">{_h(sub_label)}</span>'
+            f'<span class="tag tag-impl">✓ Implemented</span>'
+            f'</div>'
+            f'</div>'
+            f'<div class="spotlight-right">'
+            f'<div class="spotlight-repo">{_h(issue.get("repo", ""))}</div>'
+            f'<div class="spotlight-pr">{pr_ref}</div>'
+            f'</div>'
+            f'</div>'
+        )
+
+    count = len(agg.spotlight_issues)
+    plural = "s" if count != 1 else ""
+    return (
+        f'<section>'
+        f'<h2>High-Impact Issues Caught &amp; Resolved</h2>'
+        f'<p style="font-size:13px;color:#555;margin-bottom:14px">'
+        f'<strong>{count}</strong> Action Required issue{plural} '
+        f'flagged as Security or Correctness &mdash; all implemented before merge.</p>'
+        f'{cards}'
+        f'</section>'
+    )
+
+
 def _table(headers: list, rows_html: str) -> str:
     ths = "".join(f"<th>{h}</th>" for h in headers)
     return f"<table><thead><tr>{ths}</tr></thead><tbody>{rows_html}</tbody></table>"
@@ -525,6 +599,7 @@ def generate_html(
   </header>
   {_section_exec_summary(agg)}
   {_section_velocity(agg)}
+  {_section_bug_spotlight(agg)}
   {_section_adoption(agg)}
   {_section_severity(agg)}
   {_section_categories(agg)}

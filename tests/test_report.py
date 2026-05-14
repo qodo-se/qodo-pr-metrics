@@ -299,3 +299,31 @@ def test_generate_html_no_human_comment_insight():
     ]
     html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
     assert "sole feedback" in html
+
+
+def test_generate_html_includes_spotlight_section():
+    from report import generate_html
+    issue = {"title": "Hardcoded API key", "category": "bug", "sub_label": "Security"}
+    rows = [_timing_row(spotlight=[issue])]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "High-Impact Issues" in html
+    assert "Hardcoded API key" in html
+    assert "Security" in html
+
+
+def test_generate_html_spotlight_hidden_when_empty():
+    from report import generate_html
+    rows = [_timing_row(spotlight=[])]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "High-Impact Issues" not in html
+
+
+def test_generate_html_spotlight_links_pr():
+    from report import generate_html
+    issue = {"title": "SQL injection risk", "category": "bug", "sub_label": "Security"}
+    rows = [_timing_row(spotlight=[issue])]
+    rows[0]["PR URL"] = "https://github.com/acme/repo/pull/42"
+    rows[0]["PR #"] = 42
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "PR #42" in html
+    assert "https://github.com/acme/repo/pull/42" in html
