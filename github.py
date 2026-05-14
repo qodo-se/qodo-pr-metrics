@@ -214,29 +214,44 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
         cursor = chunk_end + timedelta(days=1)
 
 
-def fetch_comments(owner, repo, number):
-    """All issue comments on a PR. (PRs use the issues comments endpoint.)"""
-    out = run_gh([
-        "api", f"repos/{owner}/{repo}/issues/{number}/comments",
-        "--paginate", "--jq", ".[]",
-    ])
-    comments = []
-    for line in filter(None, out.split("\n")):
-        comments.append(json.loads(line))
-    return comments
 
+def fetch_pr_data(owner: str, repo: str, number: int) -> dict:
+    """Fetch PR comments and line counts via a single GraphQL query.
 
-def fetch_pr_lines(owner: str, repo: str, number: int) -> int:
-    """Return additions + deletions for a PR. Returns 0 on any error."""
+    Returns {"comments": [...], "additions": int, "deletions": int}.
+    Each comment: {"body": str, "created_at": str, "user": {"login": str}}.
+    Caps comments at 100 (sufficient — Qodo reviews are always among the first).
+    """
+    query = (
+        "query($owner:String!,$repo:String!,$number:Int!){"
+        "repository(owner:$owner,name:$repo){"
+        "pullRequest(number:$number){"
+        "additions deletions "
+        "comments(first:100){nodes{body createdAt author{login}}}"
+        "}}}"
+    )
     out = run_gh([
-        "api", f"repos/{owner}/{repo}/pulls/{number}",
-        "--jq", "{additions: .additions, deletions: .deletions}",
+        "api", "graphql",
+        "-f", f"query={query}",
+        "-f", f"owner={owner}",
+        "-f", f"repo={repo}",
+        "-F", f"number={number}",
     ])
-    try:
-        data = json.loads(out.strip())
-        return (data.get("additions") or 0) + (data.get("deletions") or 0)
-    except (json.JSONDecodeError, ValueError):
-        return 0
+    data = json.loads(out)
+    pr = data["data"]["repository"]["pullRequest"]
+    comments = [
+        {
+            "body": node["body"] or "",
+            "created_at": node["createdAt"],
+            "user": {"login": (node["author"] or {}).get("login", "")},
+        }
+        for node in pr["comments"]["nodes"]
+    ]
+    return {
+        "comments": comments,
+        "additions": pr["additions"] or 0,
+        "deletions": pr["deletions"] or 0,
+    }
 
 
 def find_qodo_comment(comments):
@@ -437,7 +452,8 @@ def cmd_inspect(args):
     for pr in search_merged_prs(args.org, args.since, repos=args.repos):
         owner, repo, number = pr["owner"], pr["repo"], pr["number"]
         print(f"\r  Checking {owner}/{repo}#{number}...{' ' * 20}", end="", file=sys.stderr, flush=True)
-        comments = fetch_comments(owner, repo, number)
+        pr_data = fetch_pr_data(owner, repo, number)
+        comments = pr_data["comments"]
         qodo = find_qodo_comment(comments)
         if not qodo:
             continue
@@ -558,7 +574,9 @@ def cmd_count(args):
                 end="", file=sys.stderr, flush=True,
             )
 
-        comments = fetch_comments(owner, repo, number)
+        pr_data = fetch_pr_data(owner, repo, number)
+        comments = pr_data["comments"]
+        lines_changed = pr_data["additions"] + pr_data["deletions"]
         qodo = find_qodo_comment(comments)
 
         if not qodo:
@@ -588,7 +606,6 @@ def cmd_count(args):
                 f"{stats.total_implemented}/{stats.total_suggestions} implemented"
             )
 
-        lines_changed = fetch_pr_lines(owner, repo, number)
         rows.append(build_csv_row(pr, lines_changed, stats))
 
         processed.add((owner, repo, str(number)))
