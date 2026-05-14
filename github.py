@@ -34,7 +34,7 @@ import re
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 from typing import List, Optional
@@ -80,6 +80,10 @@ _SECTION_REVIEW = re.compile(
 _CAT_BUG  = re.compile(r"\bBug\b", re.IGNORECASE)
 _CAT_RULE = re.compile(r"\bRule\s+violation", re.IGNORECASE)
 _CAT_REQ  = re.compile(r"\bRequirement\s+gap", re.IGNORECASE)
+_CAT_SECURITY    = re.compile(r"\bSecurity\b",    re.IGNORECASE)
+_CAT_CORRECTNESS = re.compile(r"\bCorrectness\b", re.IGNORECASE)
+_HTML_TAG        = re.compile(r"<[^>]+>")
+_STRIKETHROUGH   = re.compile(r"~~(.+?)~~")
 
 
 @dataclass
@@ -98,6 +102,11 @@ class QodoStats:
     # no section headers still produce correct Total Suggestions counts.
     total_suggestions: int = 0
     total_implemented: int = 0
+    security_suggested: int = 0
+    security_implemented: int = 0
+    correctness_suggested: int = 0
+    correctness_implemented: int = 0
+    spotlight_issues: list = field(default_factory=list)
 
 
 def _rate_limit_reset_epoch():
@@ -292,6 +301,25 @@ def parse_qodo_comment(body: str) -> "QodoStats":
                 if is_implemented:
                     stats.requirement_gaps_implemented += 1
 
+            # Sub-label counts (Security / Correctness)
+            sub_label = _classify_sublabel(title)
+
+            if sub_label == "Security":
+                stats.security_suggested += 1
+                if is_implemented:
+                    stats.security_implemented += 1
+            elif sub_label == "Correctness":
+                stats.correctness_suggested += 1
+                if is_implemented:
+                    stats.correctness_implemented += 1
+
+            if section == "action_required" and is_implemented and sub_label == "Security":
+                stats.spotlight_issues.append({
+                    "title": _clean_title(title),
+                    "category": cat,
+                    "sub_label": sub_label,
+                })
+
     return stats
 
 
@@ -304,6 +332,27 @@ def _classify_category(title: str) -> str:
     if _CAT_BUG.search(title):
         return "bug"
     return "unknown"
+
+
+def _classify_sublabel(title: str) -> Optional[str]:
+    """Return 'Security', 'Correctness', or None."""
+    if _CAT_SECURITY.search(title):
+        return "Security"
+    if _CAT_CORRECTNESS.search(title):
+        return "Correctness"
+    return None
+
+
+def _clean_title(title: str) -> str:
+    """Strip HTML tags and normalise whitespace for display."""
+    text = _HTML_TAG.sub("", title)
+    m = _STRIKETHROUGH.search(text)
+    if m:
+        return m.group(1).strip()
+    # No strikethrough — strip emoji/label suffixes
+    text = re.sub(r'\s*[☑✓].*$', '', text)       # strip ☑ and after
+    text = re.sub(r'\s*[^\x00-\x7F].*$', '', text)  # strip emoji and after
+    return text.strip()
 
 
 CSV_COLUMNS = [

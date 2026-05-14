@@ -91,3 +91,78 @@ def test_two_suggestions_on_one_line():
     assert stats.bugs_suggested == 1
     assert stats.rule_violations_suggested == 1
     assert stats.rule_violations_implemented == 1
+
+
+# Uses real-world Qodo HTML format (code tags with emoji)
+_SECURITY_BODY = """
+<h3>Code Review by Qodo</h3>
+<img src="https://www.qodo.ai/wp-content/uploads/2026/01/action-required.png" height="20" alt="Action required">
+<details>
+<summary>  1.  Hardcoded OpenAI API key <code>🐞 Bug</code> <code>🛡 Security</code></summary>
+</details>
+<details>
+<summary>  2.  ~~Logs API key to console~~ ☑ <code>🐞 Bug</code> <code>🛡 Security</code></summary>
+</details>
+"""
+
+_CORRECTNESS_BODY = """
+<h3>Code Review by Qodo</h3>
+<img src="https://www.qodo.ai/wp-content/uploads/2026/01/action-required.png" height="20" alt="Action required">
+<details>
+<summary>  1.  ~~Wrong variant appended in stream~~ ☑ <code>📎 Requirement gap</code> <code>≡ Correctness</code></summary>
+</details>
+<details>
+<summary>  2.  Old prompt name remains <code>📎 Requirement gap</code> <code>≡ Correctness</code></summary>
+</details>
+"""
+
+def test_security_label_detected():
+    stats = parse_qodo_comment(_SECURITY_BODY)
+    assert stats.security_suggested == 2
+
+def test_security_implemented_counted():
+    stats = parse_qodo_comment(_SECURITY_BODY)
+    assert stats.security_implemented == 1
+
+def test_correctness_label_detected():
+    stats = parse_qodo_comment(_CORRECTNESS_BODY)
+    assert stats.correctness_suggested == 2
+
+def test_correctness_implemented_counted():
+    stats = parse_qodo_comment(_CORRECTNESS_BODY)
+    assert stats.correctness_implemented == 1
+
+
+_SPOTLIGHT_BODY = """
+<h3>Code Review by Qodo</h3>
+<img src="https://www.qodo.ai/wp-content/uploads/2026/01/action-required.png" height="20" alt="Action required">
+<details>
+<summary>  1.  ~~Hardcoded API key~~ ☑ <code>🐞 Bug</code> <code>🛡 Security</code></summary>
+</details>
+<details>
+<summary>  2.  Missing null check <code>🐞 Bug</code> <code>🛡 Security</code></summary>
+</details>
+<img src="https://www.qodo.ai/wp-content/uploads/2026/01/review-recommended.png" height="20" alt="Remediation recommended">
+<details>
+<summary>  3.  ~~Style cleanup~~ ☑ <code>🐞 Bug</code> <code>🛡 Security</code></summary>
+</details>
+"""
+
+def test_spotlight_only_action_required_implemented():
+    # item 1: action required + security + implemented → spotlight
+    # item 2: action required + security + NOT implemented → not spotlight
+    # item 3: review recommended + security + implemented → not spotlight (wrong section)
+    stats = parse_qodo_comment(_SPOTLIGHT_BODY)
+    assert len(stats.spotlight_issues) == 1
+
+def test_spotlight_entry_shape():
+    stats = parse_qodo_comment(_SPOTLIGHT_BODY)
+    issue = stats.spotlight_issues[0]
+    assert issue["title"] == "Hardcoded API key"   # HTML tags stripped
+    assert issue["category"] == "bug"
+    assert issue["sub_label"] == "Security"
+
+def test_spotlight_empty_when_no_match():
+    stats = parse_qodo_comment(_CORRECTNESS_BODY)
+    # Correctness items present but none implemented → no spotlight
+    assert stats.spotlight_issues == []
