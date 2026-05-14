@@ -337,8 +337,7 @@ def test_generate_html_adoption_developer_breadth():
         _timing_row(creator="carol", has_qodo=False, suggestions=0, implemented=0),
     ]
     html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
-    # "2 of 3 developers participated"
-    assert "2" in html
+    assert 'class="stat-value">2<' in html
     assert "of 3 developers" in html
 
 
