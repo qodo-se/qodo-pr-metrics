@@ -39,6 +39,7 @@ class ReportData:
     by_repo: list
     by_developer: list
     top_prs: list
+    top_prs_by_implemented: list
 
 
 def aggregate(rows: list) -> ReportData:
@@ -83,6 +84,10 @@ def aggregate(rows: list) -> ReportData:
         [r for r in rows if r.get("Has Qodo Review")],
         key=lambda r: r.get("Total Suggestions", 0), reverse=True,
     )[:5]
+    top_prs_by_implemented = sorted(
+        [r for r in rows if r.get("Has Qodo Review")],
+        key=lambda r: r.get("Total Implemented", 0), reverse=True,
+    )[:5]
 
     return ReportData(
         total_prs=total_prs,
@@ -109,6 +114,7 @@ def aggregate(rows: list) -> ReportData:
         by_repo=by_repo,
         by_developer=by_developer,
         top_prs=top_prs,
+        top_prs_by_implemented=top_prs_by_implemented,
     )
 
 
@@ -244,7 +250,7 @@ def _impact_card(title: str, color: str, suggested: int, implemented: int) -> st
 
 def _section_exec_summary(agg: ReportData) -> str:
     cards = "".join([
-        _stat_card("PRs Reviewed by Qodo", str(agg.prs_with_qodo)),
+        _stat_card("Merged PRs Reviewed by Qodo", str(agg.prs_with_qodo)),
         _stat_card("Qodo Coverage", f"{agg.qodo_coverage_pct:.1f}%"),
         _stat_card("Total Issues Caught", str(agg.total_suggestions)),
         _stat_card("Issues Resolved", str(agg.total_implemented)),
@@ -269,8 +275,8 @@ def _section_adoption(agg: ReportData) -> str:
         f"<td>{_rate_str(r['implemented'], r['suggestions'])}</td></tr>"
         for r in agg.by_developer
     )
-    repo_table = _table(["Repository", "PRs", "Issues", "Impl. Rate"], repo_rows)
-    dev_table = _table(["Developer", "PRs", "Issues", "Impl. Rate"], dev_rows)
+    repo_table = _table(["Repository", "Merged PRs", "Issues", "Impl. Rate"], repo_rows)
+    dev_table = _table(["Developer", "Merged PRs", "Issues", "Impl. Rate"], dev_rows)
     return (
         f'<section><h2>Adoption</h2>'
         f'<div class="two-col">'
@@ -314,7 +320,23 @@ def _section_top_prs(agg: ReportData) -> str:
             f'<td>{r.get("Implementation Rate (%)", "—")}</td></tr>'
         )
     table = _table(["Repo", "PR", "Creator", "Issues", "Implemented", "Rate"], pr_rows)
-    return f'<section><h2>Top 5 PRs by Issues Found</h2>{table}</section>'
+    return f'<section><h2>Top 5 Merged PRs by Issues Found</h2>{table}</section>'
+
+
+def _section_top_prs_by_implemented(agg: ReportData) -> str:
+    pr_rows = ""
+    for r in agg.top_prs_by_implemented:
+        url = r.get("PR URL", "")
+        safe_url = url if url.startswith(("https://", "http://")) else ""
+        pr_ref = f'<a href="{_h(safe_url)}">#{r["PR #"]}</a>' if safe_url else f'#{r["PR #"]}'
+        pr_rows += (
+            f'<tr><td>{_h(r["Repo Name"])}</td><td>{pr_ref}</td>'
+            f'<td>{_h(r["PR Creator"])}</td>'
+            f'<td>{r["Total Suggestions"]}</td><td>{r["Total Implemented"]}</td>'
+            f'<td>{r.get("Implementation Rate (%)", "—")}</td></tr>'
+        )
+    table = _table(["Repo", "PR", "Creator", "Issues", "Implemented", "Rate"], pr_rows)
+    return f'<section><h2>Top 5 Merged PRs by Implemented Suggestions</h2>{table}</section>'
 
 
 def generate_html(
@@ -352,6 +374,7 @@ def generate_html(
   {_section_severity(agg)}
   {_section_categories(agg)}
   {_section_top_prs(agg)}
+  {_section_top_prs_by_implemented(agg)}
 </div>
 </body>
 </html>"""

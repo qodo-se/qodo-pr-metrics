@@ -38,6 +38,7 @@ def test_aggregate_empty():
     assert agg.by_repo == []
     assert agg.by_developer == []
     assert agg.top_prs == []
+    assert agg.top_prs_by_implemented == []
 
 
 def test_aggregate_basic_counts():
@@ -102,6 +103,22 @@ def test_aggregate_top_prs_returns_top_5_by_suggestions():
     assert agg.top_prs[0]["Total Suggestions"] == 10
 
 
+def test_aggregate_top_prs_by_implemented_returns_top_5_by_implemented():
+    rows = [_row(suggestions=10, implemented=i) for i in range(10, 0, -1)]
+    agg = aggregate(rows)
+    assert len(agg.top_prs_by_implemented) == 5
+    assert agg.top_prs_by_implemented[0]["Total Implemented"] == 10
+
+
+def test_aggregate_top_prs_by_implemented_excludes_non_qodo():
+    rows = [
+        _row(has_qodo=True, suggestions=5, implemented=5),
+        _row(has_qodo=False, suggestions=0, implemented=0),
+    ]
+    agg = aggregate(rows)
+    assert len(agg.top_prs_by_implemented) == 1
+
+
 def test_aggregate_severity_totals():
     rows = [
         _row(ar_sug=3, ar_imp=2, rr_sug=1, rr_imp=1),
@@ -158,8 +175,18 @@ def test_generate_html_smoke():
     assert "Adoption" in html
     assert "Impact by Severity" in html
     assert "Impact by Category" in html
-    assert "Top 5 PRs" in html
+    assert "Top 5 Merged PRs" in html
     # stat values present
     assert 'class="stat-value">1<' in html   # prs_with_qodo
     assert 'class="stat-value">5<' in html   # total_suggestions
     assert 'class="stat-value">3<' in html   # total_implemented
+
+
+def test_generate_html_includes_top_prs_by_implemented_section():
+    from report import generate_html
+    rows = [
+        _row(repo="api", creator="alice", suggestions=5, implemented=3),
+        _row(repo="web", creator="bob", suggestions=3, implemented=3),
+    ]
+    html = generate_html(rows, "acme-corp", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "Top 5 Merged PRs by Implemented Suggestions" in html
