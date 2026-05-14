@@ -313,7 +313,7 @@ def parse_qodo_comment(body: str) -> "QodoStats":
                 if is_implemented:
                     stats.correctness_implemented += 1
 
-            if section == "action_required" and is_implemented and sub_label == "Security":
+            if section == "action_required" and is_implemented and sub_label:
                 stats.spotlight_issues.append({
                     "title": _clean_title(title),
                     "category": cat,

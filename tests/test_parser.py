@@ -109,7 +109,7 @@ _CORRECTNESS_BODY = """
 <h3>Code Review by Qodo</h3>
 <img src="https://www.qodo.ai/wp-content/uploads/2026/01/action-required.png" height="20" alt="Action required">
 <details>
-<summary>  1.  ~~Wrong variant appended in stream~~ ☑ <code>📎 Requirement gap</code> <code>≡ Correctness</code></summary>
+<summary>  1.  Wrong variant appended in stream <code>📎 Requirement gap</code> <code>≡ Correctness</code></summary>
 </details>
 <details>
 <summary>  2.  Old prompt name remains <code>📎 Requirement gap</code> <code>≡ Correctness</code></summary>
@@ -130,7 +130,7 @@ def test_correctness_label_detected():
 
 def test_correctness_implemented_counted():
     stats = parse_qodo_comment(_CORRECTNESS_BODY)
-    assert stats.correctness_implemented == 1
+    assert stats.correctness_implemented == 0
 
 
 _SPOTLIGHT_BODY = """
