@@ -736,6 +736,7 @@ def cmd_count(args):
     cp_path = checkpoint_path(args.org)
     processed = set()
     pr_total = 0
+    skipped_prs = 0
     suggestions_total = 0
     suggestions_implemented = 0
     graphql_nodes = 0
@@ -796,6 +797,12 @@ def cmd_count(args):
 
             pr_data = pr_data_map.get(pr.get("node_id", ""))
             if not pr_data:
+                print(
+                    f"\n  Warning: no GraphQL data for {owner}/{repo}#{number} "
+                    f"(node_id={pr.get('node_id', '')!r}) — skipping",
+                    file=sys.stderr,
+                )
+                skipped_prs += 1
                 continue
 
             comments = pr_data["comments"]
@@ -876,7 +883,9 @@ def cmd_count(args):
     if args.repos:
         print(f"Repos in scope:              {' '.join(args.repos)}")
     print(f"Window:                      {args.since} → {today}")
-    print(f"Merged PRs in window:        {pr_total}")
+    print(f"Merged PRs in window:        {pr_total - skipped_prs}")
+    if skipped_prs:
+        print(f"Skipped (no GraphQL data):   {skipped_prs}")
     print(f"GraphQL nodes requested:     {graphql_nodes:,}")
     print(f"Total Qodo suggestions:      {suggestions_total}")
     print(f"Implemented suggestions:     {suggestions_implemented}")
