@@ -115,7 +115,8 @@ ROWS = [
 if __name__ == "__main__":
     out = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "sample_report.html")
     logo = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logo.svg")
-    html = generate_html(ROWS, ORG, SINCE, UNTIL, logo_path=logo)
+    html = generate_html(ROWS, ORG, SINCE, UNTIL, logo_path=logo,
+                         org_pr_count=142, org_author_count=34)
     with open(out, "w", encoding="utf-8") as f:
         f.write(html)
         f.write("\n")

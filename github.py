@@ -45,6 +45,8 @@ import report
 # Stable marker in Qodo Merge's review comment, independent of bot account name.
 QODO_MARKER = re.compile(r"Code Review by Qodo", re.IGNORECASE)
 
+_TRANSIENT_HTTP = re.compile(r"HTTP 5\d\d")
+
 # A numbered suggestion line. Qodo wraps each in <details><summary>...</summary>,
 # but we also match raw "N. ..." lines as a fallback in case the format changes.
 # The captured group is the suggestion title + trailing labels.
@@ -110,10 +112,10 @@ class QodoStats:
 
 
 def _rate_limit_reset_epoch():
-    """Return the Unix timestamp when the primary GitHub rate limit resets."""
+    """Return the Unix timestamp when the GitHub search rate limit resets."""
     try:
         out = subprocess.run(
-            ["gh", "api", "rate_limit", "--jq", ".rate.reset"],
+            ["gh", "api", "rate_limit", "--jq", ".resources.search.reset"],
             capture_output=True, text=True, timeout=15,
         )
         return int(out.stdout.strip())
@@ -122,28 +124,40 @@ def _rate_limit_reset_epoch():
 
 
 def run_gh(args, paginate=False):
-    """Run `gh` and return stdout. Retries once after waiting on rate limit."""
+    """Run `gh` and return stdout. Retries on rate limits and transient HTTP 5xx errors."""
     cmd = ["gh"] + args
     if paginate and "--paginate" not in cmd:
         cmd.append("--paginate")
-    for attempt in range(2):
+    rate_retried = False
+    http_retries = 0
+    max_http_retries = 3
+    while True:
         result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8")
         if result.returncode == 0:
             return result.stdout
-        if "rate limit" in result.stderr.lower() and attempt == 0:
+        stderr = result.stderr
+        if "rate limit" in stderr.lower() and not rate_retried:
+            rate_retried = True
             reset = _rate_limit_reset_epoch()
-            if reset:
-                wait = max(0, reset - int(time.time())) + 5
-            else:
-                wait = 60
+            wait = max(0, reset - int(time.time())) + 5 if reset else 60
             print(
                 f"\n  Rate limit hit — waiting {wait}s before retry...",
                 file=sys.stderr, flush=True,
             )
             time.sleep(wait)
             continue
-        sys.exit(f"`{' '.join(cmd)}` failed:\n{result.stderr}")
-    sys.exit(f"`{' '.join(cmd)}` failed after rate-limit retry:\n{result.stderr}")
+        m = _TRANSIENT_HTTP.search(stderr)
+        if m and http_retries < max_http_retries:
+            http_retries += 1
+            wait = 5 * (3 ** (http_retries - 1))  # 5s, 15s, 45s
+            print(
+                f"\n  {m.group()} — retrying in {wait}s"
+                f" ({http_retries}/{max_http_retries})...",
+                file=sys.stderr, flush=True,
+            )
+            time.sleep(wait)
+            continue
+        sys.exit(f"`{' '.join(cmd)}` failed:\n{stderr}")
 
 
 def search_merged_prs(org, since, chunk_days=30, repos=None):
@@ -167,8 +181,9 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
         for qual in qualifiers:
             call_num += 1
             qual_label = qual.split(":", 1)[1]
+            chunk_prefix = f"[{call_num}/{total_chunks}] " if total_chunks > 1 else ""
             print(
-                f"  [{call_num}/{total_chunks}] Searching {cursor} .. {chunk_end}"
+                f"  {chunk_prefix}Searching {cursor} .. {chunk_end}"
                 f" ({qual_label}) ...",
                 end="", file=sys.stderr, flush=True,
             )
@@ -218,19 +233,21 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
 
 
 
-def fetch_pr_data(owner: str, repo: str, number: int) -> dict:
+def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) -> dict:
     """Fetch PR comments and line counts via a single GraphQL query.
 
     Returns {"comments": [...], "additions": int, "deletions": int}.
     Each comment: {"body": str, "created_at": str, "user": {"login": str}}.
-    Caps comments at 100 (sufficient — Qodo reviews are always among the first).
     """
     query = (
         "query($owner:String!,$repo:String!,$number:Int!){"
         "repository(owner:$owner,name:$repo){"
         "pullRequest(number:$number){"
         "additions deletions "
-        "comments(first:100){nodes{body createdAt author{login __typename}}}"
+        f"comments(first:{comments_limit})"
+        "{nodes{body createdAt "
+        "userContentEdits(last:2){nodes{editedAt}} "
+        "author{login __typename}}}"
         "}}}"
     )
     out = run_gh([
@@ -246,6 +263,10 @@ def fetch_pr_data(owner: str, repo: str, number: int) -> dict:
         {
             "body": node["body"] or "",
             "created_at": node["createdAt"],
+            "user_content_edits": [
+                {"edited_at": e["editedAt"]}
+                for e in node.get("userContentEdits", {}).get("nodes", [])
+            ],
             "user": {
                 "login": (node["author"] or {}).get("login", ""),
                 "type": (node["author"] or {}).get("__typename", "User"),
@@ -260,7 +281,7 @@ def fetch_pr_data(owner: str, repo: str, number: int) -> dict:
     }
 
 
-def fetch_pr_data_batch(prs: list, batch_size: int = 20) -> dict:
+def fetch_pr_data_batch(prs: list, batch_size: int = 50) -> dict:
     """Fetch PR data for multiple PRs in batched GraphQL calls.
 
     prs: list of dicts with a "node_id" key (from search_merged_prs).
@@ -275,9 +296,11 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 20) -> dict:
             f"nodes(ids:[{ids_str}]){{"
             "... on PullRequest{"
             "id additions deletions "
-            "comments(first:100){nodes{body createdAt author{login __typename}}}"
+            "comments(first:20){nodes{body createdAt "
+            "userContentEdits(last:2){nodes{editedAt}} "
+            "author{login __typename}}}"
             "}}"
-            "}}"
+            "}"
         )
         out = run_gh(["api", "graphql", "-f", f"query={query}"])
         data = json.loads(out)
@@ -289,6 +312,10 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 20) -> dict:
                 {
                     "body": n["body"] or "",
                     "created_at": n["createdAt"],
+                    "user_content_edits": [
+                        {"edited_at": e["editedAt"]}
+                        for e in n.get("userContentEdits", {}).get("nodes", [])
+                    ],
                     "user": {
                         "login": (n["author"] or {}).get("login", ""),
                         "type": (n["author"] or {}).get("__typename", "User"),
@@ -320,6 +347,7 @@ def parse_qodo_comment(body: str) -> "QodoStats":
 
     # Track which section we're currently in (None = preamble/unknown)
     section = None  # "action_required" | "review_recommended" | None
+    seen_spotlight: set = set()
 
     for line in body.splitlines():
         # Detect section transitions — check before suggestion matching so
@@ -379,11 +407,14 @@ def parse_qodo_comment(body: str) -> "QodoStats":
                     stats.correctness_implemented += 1
 
             if section == "action_required" and is_implemented and sub_label:
-                stats.spotlight_issues.append({
-                    "title": _clean_title(title),
-                    "category": cat,
-                    "sub_label": sub_label,
-                })
+                key = (_clean_title(title), sub_label)
+                if key not in seen_spotlight:
+                    seen_spotlight.add(key)
+                    stats.spotlight_issues.append({
+                        "title": key[0],
+                        "category": cat,
+                        "sub_label": sub_label,
+                    })
 
     return stats
 
@@ -468,10 +499,14 @@ def compute_timing(pr: dict, comments: list) -> dict:
     """
     pr_created = pr.get("created_at", "")
     qodo_comment = find_qodo_comment(comments)
-    qodo_min = (
-        _minutes_between(pr_created, qodo_comment["created_at"])
-        if qodo_comment else None
-    )
+    if qodo_comment:
+        # GitHub logs creation as an edit; last:2 gives [first_real_edit, creation].
+        # When 2 edits exist, edit[0] is when the placeholder was replaced with real content.
+        edits = qodo_comment.get("user_content_edits", [])
+        qodo_ts = edits[0]["edited_at"] if len(edits) >= 2 else qodo_comment["created_at"]
+        qodo_min = _minutes_between(pr_created, qodo_ts)
+    else:
+        qodo_min = None
     qodo_login = qodo_comment.get("user", {}).get("login") if qodo_comment else None
     human_comments = [
         c for c in comments
@@ -583,6 +618,82 @@ def save_checkpoint(org, state):
     checkpoint_path(org).write_text(json.dumps(state, indent=2))
 
 
+def get_org_author_count(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: int = 30) -> Optional[int]:
+    """Return count of unique PR authors who merged a PR in the window (Qodo or not).
+
+    Uses date chunking to stay under GitHub Search API's 1000-result cap,
+    matching the approach used by search_merged_prs.
+    """
+    today = date.today()
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
+    authors: set = set()
+    cursor = since
+    while cursor <= today:
+        chunk_end = min(cursor + timedelta(days=chunk_days), today)
+        for qual in qualifiers:
+            q = (
+                f"{qual} is:pr is:merged "
+                f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
+            )
+            try:
+                out = run_gh([
+                    "api", "-X", "GET", "search/issues",
+                    "-f", f"q={q}",
+                    "--paginate",
+                    "--jq", ".items[].user.login",
+                ])
+                for line in filter(None, out.split("\n")):
+                    authors.add(line.strip().strip('"'))
+            except Exception:
+                return None
+        cursor = chunk_end + timedelta(days=1)
+    return len(authors)
+
+
+def get_org_repo_count(org: str) -> Optional[int]:
+    """Return total repository count for the org (public + private)."""
+    try:
+        out = run_gh(["api", f"orgs/{org}", "--jq", ".public_repos + .total_private_repos"])
+        return int(out.strip())
+    except Exception:
+        return None
+
+
+def get_org_pr_count(org: str, since: date, repos: Optional[List[str]] = None) -> Optional[int]:
+    """Return count of all merged PRs in the window (Qodo or not)."""
+    today = date.today()
+    if repos:
+        total = 0
+        for repo in repos:
+            q = (
+                f"repo:{org}/{repo} is:pr is:merged "
+                f"merged:{since.isoformat()}..{today.isoformat()}"
+            )
+            out = run_gh([
+                "api", "-X", "GET", "search/issues",
+                "-f", f"q={q}",
+                "--jq", ".total_count",
+            ])
+            try:
+                total += int(out.strip())
+            except ValueError:
+                return None
+        return total
+    q = (
+        f"org:{org} is:pr is:merged "
+        f"merged:{since.isoformat()}..{today.isoformat()}"
+    )
+    out = run_gh([
+        "api", "-X", "GET", "search/issues",
+        "-f", f"q={q}",
+        "--jq", ".total_count",
+    ])
+    try:
+        return int(out.strip())
+    except ValueError:
+        return None
+
+
 def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) -> Optional[int]:
     """Return count of merged PRs with a Qodo review comment in the window."""
     today = date.today()
@@ -621,11 +732,13 @@ def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) 
 
 
 def cmd_count(args):
+    start_time = time.monotonic()
     cp_path = checkpoint_path(args.org)
     processed = set()
     pr_total = 0
     suggestions_total = 0
     suggestions_implemented = 0
+    graphql_nodes = 0
     rows: List[dict] = []
 
     if args.resume:
@@ -655,28 +768,29 @@ def cmd_count(args):
         else:
             print("  No checkpoint found — starting fresh.", file=sys.stderr)
 
-    print("  Fetching Qodo PR count...", end="", file=sys.stderr, flush=True)
-    qodo_total = get_qodo_pr_count(args.org, args.since, repos=args.repos)
-    print(f" {qodo_total}" if qodo_total is not None else " (unavailable)", file=sys.stderr)
+    print("  Fetching total org PR count...", end="", file=sys.stderr, flush=True)
+    org_pr_count = get_org_pr_count(args.org, args.since, repos=args.repos)
+    print(f" {org_pr_count}" if org_pr_count is not None else " (unavailable)", file=sys.stderr)
 
     pending = [
         pr for pr in search_merged_prs(args.org, args.since, repos=args.repos)
         if (pr["owner"], pr["repo"], str(pr["number"])) not in processed
         and (pr["owner"], pr["repo"], pr["number"]) not in processed
     ]
+    qodo_total = len(pending)
+    org_author_count = len({pr["creator"] for pr in pending if pr.get("creator")})
 
-    for i in range(0, len(pending), 20):
-        batch = pending[i:i + 20]
+    for i in range(0, len(pending), 25):
+        batch = pending[i:i + 25]
         pr_data_map = fetch_pr_data_batch(batch)
+        graphql_nodes += len(batch) * 20
         for pr in batch:
             owner, repo, number = pr["owner"], pr["repo"], pr["number"]
             pr_total += 1
             if not args.verbose:
-                total_str = f"/{qodo_total}" if qodo_total is not None else ""
                 print(
-                    f"\r  [{pr_total}{total_str} PRs | "
-                    f"{suggestions_implemented}/{suggestions_total} suggestions] "
-                    f"{owner}/{repo}#{number}{' ' * 10}",
+                    f"\r  [{pr_total}/{qodo_total} PRs] "
+                    f"{owner}/{repo}#{number}\033[K",
                     end="", file=sys.stderr, flush=True,
                 )
 
@@ -690,7 +804,19 @@ def cmd_count(args):
             timing = compute_timing(pr, comments)
 
             if not qodo:
-                continue  # rare false positive from in:comments search; skip
+                # Qodo comment not in first 20 — re-fetch with higher limit before giving up.
+                pr_data = fetch_pr_data(owner, repo, number, comments_limit=100)
+                graphql_nodes += 100
+                comments = pr_data["comments"]
+                lines_changed = pr_data["additions"] + pr_data["deletions"]
+                qodo = find_qodo_comment(comments)
+                timing = compute_timing(pr, comments)
+                if not qodo:
+                    print(
+                        f"\n  Warning: Qodo comment not found for {owner}/{repo}#{number} — skipping",
+                        file=sys.stderr,
+                    )
+                    continue
 
             stats = parse_qodo_comment(qodo["body"])
             suggestions_total += stats.total_suggestions
@@ -730,7 +856,11 @@ def cmd_count(args):
     try:
         html_path = base / f"{stem}.html"
         html_path.write_text(
-            report.generate_html(rows, args.org, args.since, today, "logo.svg"),
+            report.generate_html(
+                rows, args.org, args.since, today, "logo.svg",
+                org_pr_count=org_pr_count,
+                org_author_count=org_author_count,
+            ),
             encoding="utf-8",
         )
     except Exception as exc:
@@ -740,21 +870,33 @@ def cmd_count(args):
     if cp_path.exists():
         cp_path.unlink()
 
+    repos_in_results = sorted({r["Repo Name"] for r in rows})
+
     print()
     if args.repos:
         print(f"Repos in scope:              {' '.join(args.repos)}")
     print(f"Window:                      {args.since} → {today}")
     print(f"Merged PRs in window:        {pr_total}")
+    print(f"GraphQL nodes requested:     {graphql_nodes:,}")
     print(f"Total Qodo suggestions:      {suggestions_total}")
     print(f"Implemented suggestions:     {suggestions_implemented}")
     if suggestions_total:
         rate = 100 * suggestions_implemented / suggestions_total
         print(f"Implementation rate:         {rate:.1f}%")
 
+    elapsed = time.monotonic() - start_time
+    minutes, seconds = divmod(int(elapsed), 60)
+    elapsed_str = f"{minutes}m {seconds}s" if minutes else f"{seconds}s"
+
+    print(f"\nRepos in results ({len(repos_in_results)}):")
+    for repo in repos_in_results:
+        print(f"  {repo}")
+
     print(f"\nReports written:")
     print(f"  CSV:  {csv_path}")
     if html_path:
         print(f"  HTML: {html_path}")
+    print(f"\nCompleted in {elapsed_str}")
 
 
 def main():

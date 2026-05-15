@@ -30,6 +30,29 @@ It produces an HTML report and a raw CSV — see [Output files](#output-files) b
 gh auth status   # should show you logged in
 ```
 
+### GitHub token permissions
+
+The script uses the GitHub Search API and GraphQL API. The `gh` CLI handles authentication — no manual token management is required, but your token must have the right scopes:
+
+| Scope | Required for |
+| --- | --- |
+| `repo` | Searching and reading private repos. Without this, only public repos are visible and private repos are silently omitted from results. |
+| `read:org` | Org membership visibility. Optional — only needed if the `org:` search qualifier returns no results for your org. |
+
+To check your current scopes:
+
+```bash
+gh auth status
+```
+
+To add a missing scope:
+
+```bash
+gh auth refresh -s repo
+```
+
+> **Note:** Results are always scoped to repos the authenticated token can access. If you suspect missing repos, compare the "Repos in results" list printed at the end of a run against your expected scope, or use `--repos` to declare the repos explicitly.
+
 ## Usage
 
 **Mac/Linux:**
@@ -41,12 +64,6 @@ python3 github.py --org acme-corp
 # Custom date window
 python3 github.py --org acme-corp --since 2025-05-12
 python3 github.py --org acme-corp --days 90
-
-# Per-PR detail in console output
-python3 github.py --org acme-corp --verbose
-
-# Inspect mode — prints the first Qodo comment found (useful for verifying the parser)
-python3 github.py --org acme-corp --inspect
 
 # Scope to specific repos
 python3 github.py --org acme-corp --repos frontend-app backend-api

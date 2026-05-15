@@ -216,6 +216,68 @@ def test_compute_timing_empty_comments():
     assert timing["human_min"] is None
     assert timing["has_human"] is False
 
+def test_compute_timing_bot_comment_excluded():
+    bot_comment = {
+        "body": "CI passed",
+        "created_at": "2026-01-01T10:00:30Z",
+        "user": {"login": "github-actions[bot]", "type": "Bot"},
+    }
+    pr = {"created_at": "2026-01-01T10:00:00Z"}
+    timing = compute_timing(pr, [QODO_COMMENT, bot_comment])
+    assert timing["human_min"] is None
+    assert timing["has_human"] is False
+
+def test_compute_timing_bot_excluded_human_still_counted():
+    bot_comment = {
+        "body": "CI passed",
+        "created_at": "2026-01-01T10:00:30Z",
+        "user": {"login": "github-actions[bot]", "type": "Bot"},
+    }
+    pr = {"created_at": "2026-01-01T10:00:00Z"}
+    timing = compute_timing(pr, [QODO_COMMENT, bot_comment, HUMAN_COMMENT])
+    assert timing["human_min"] == 270
+    assert timing["has_human"] is True
+
+def test_compute_timing_qodo_summary_comment_excluded_from_human():
+    qodo_summary = {
+        "body": "Here's a summary of the changes in this PR...",
+        "created_at": "2026-01-01T10:00:05Z",
+        "user": {"login": "qodo-ai"},
+    }
+    pr = {"created_at": "2026-01-01T10:00:00Z"}
+    timing = compute_timing(pr, [qodo_summary, QODO_COMMENT, HUMAN_COMMENT])
+    assert timing["human_min"] == 270   # summary must not set human_min to 0
+    assert timing["has_human"] is True
+
+def test_compute_timing_uses_first_real_edit_when_available():
+    # last:2 gives [first_real_edit, creation]; edit[0] is when review content arrived
+    qodo_with_edits = {
+        "body": "Code Review by Qodo — some content",
+        "created_at": "2026-01-01T10:00:30Z",
+        "user_content_edits": [
+            {"edited_at": "2026-01-01T10:06:00Z"},  # first real edit (5m30s after creation)
+            {"edited_at": "2026-01-01T10:00:30Z"},  # creation record
+        ],
+        "user": {"login": "qodo-ai"},
+    }
+    pr = {"created_at": "2026-01-01T10:00:00Z"}
+    timing = compute_timing(pr, [qodo_with_edits])
+    assert timing["qodo_min"] == 6   # measured to first real edit, not placeholder creation
+
+def test_compute_timing_falls_back_to_created_at_when_no_real_edit():
+    # Only creation edit present (comment was never edited)
+    qodo_no_real_edit = {
+        "body": "Code Review by Qodo — some content",
+        "created_at": "2026-01-01T10:08:00Z",
+        "user_content_edits": [
+            {"edited_at": "2026-01-01T10:08:00Z"},  # creation only
+        ],
+        "user": {"login": "qodo-ai"},
+    }
+    pr = {"created_at": "2026-01-01T10:00:00Z"}
+    timing = compute_timing(pr, [qodo_no_real_edit])
+    assert timing["qodo_min"] == 8   # falls back to created_at
+
 
 # ---------------------------------------------------------------------------
 # build_csv_row — new timing + spotlight columns
