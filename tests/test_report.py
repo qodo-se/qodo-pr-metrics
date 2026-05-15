@@ -12,7 +12,6 @@ def _row(repo="backend", creator="alice",
         "Repo Name": repo, "PR #": 1,
         "PR URL": "https://github.com/acme/backend/pull/1",
         "PR Creator": creator,
-        "Has Qodo Review": True,
         "Total Suggestions": suggestions,
         "Total Implemented": implemented,
         "Action Required Suggestions": ar_sug,
@@ -544,3 +543,33 @@ def test_generate_html_requirement_gaps_shown_when_nonzero():
     rows = [_row(req_sug=1, req_imp=0)]
     html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
     assert "Requirement gaps" in html
+
+
+def test_aggregate_rows_without_qodo_flag_treated_as_reviewed():
+    # Matches production input shape: github.py no longer emits Has Qodo Review
+    rows = [
+        _row(repo="api", creator="alice", suggestions=5, implemented=3),
+        _row(repo="web", creator="bob",   suggestions=2, implemented=1),
+    ]
+    assert "Has Qodo Review" not in rows[0]
+    agg = aggregate(rows)
+    assert agg.prs_with_qodo == 2
+    assert len(agg.by_repo) == 2
+    assert len(agg.by_developer) == 2
+    assert len(agg.top_prs) == 2
+    assert len(agg.top_prs_by_implemented) == 2
+    assert agg.developers_with_qodo == 2
+
+
+def test_aggregate_explicit_false_qodo_flag_excludes_row():
+    # Explicit False excludes the row from breakdowns; absent key is treated as True
+    rows = [
+        _row(repo="api", creator="alice", suggestions=5, implemented=3),
+        {**_row(repo="web", creator="bob"), "Has Qodo Review": False},
+    ]
+    agg = aggregate(rows)
+    assert agg.prs_with_qodo == 1
+    assert len(agg.by_repo) == 1
+    assert agg.by_repo[0]["repo"] == "api"
+    assert agg.developers_with_qodo == 1
+    assert len(agg.top_prs) == 1
