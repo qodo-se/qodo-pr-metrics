@@ -537,6 +537,42 @@ def save_checkpoint(org, state):
     checkpoint_path(org).write_text(json.dumps(state, indent=2))
 
 
+def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) -> Optional[int]:
+    """Return count of merged PRs with a Qodo review comment in the window."""
+    today = date.today()
+    if repos:
+        total = 0
+        for repo in repos:
+            q = (
+                f"repo:{org}/{repo} is:pr is:merged "
+                f'"Code Review by Qodo" in:comments '
+                f"merged:{since.isoformat()}..{today.isoformat()}"
+            )
+            out = run_gh([
+                "api", "-X", "GET", "search/issues",
+                "-f", f"q={q}",
+                "--jq", ".total_count",
+            ])
+            try:
+                total += int(out.strip())
+            except ValueError:
+                return None
+        return total
+    q = (
+        f"org:{org} is:pr is:merged "
+        f'"Code Review by Qodo" in:comments '
+        f"merged:{since.isoformat()}..{today.isoformat()}"
+    )
+    out = run_gh([
+        "api", "-X", "GET", "search/issues",
+        "-f", f"q={q}",
+        "--jq", ".total_count",
+    ])
+    try:
+        return int(out.strip())
+    except ValueError:
+        return None
+
 
 def cmd_count(args):
     cp_path = checkpoint_path(args.org)
@@ -573,14 +609,19 @@ def cmd_count(args):
         else:
             print("  No checkpoint found — starting fresh.", file=sys.stderr)
 
+    print("  Fetching Qodo PR count...", end="", file=sys.stderr, flush=True)
+    qodo_total = get_qodo_pr_count(args.org, args.since, repos=args.repos)
+    print(f" {qodo_total}" if qodo_total is not None else " (unavailable)", file=sys.stderr)
+
     for pr in search_merged_prs(args.org, args.since, repos=args.repos):
         owner, repo, number = pr["owner"], pr["repo"], pr["number"]
         if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
             continue
         pr_total += 1
         if not args.verbose:
+            total_str = f"/{qodo_total}" if qodo_total is not None else ""
             print(
-                f"\r  [{pr_total} PRs | "
+                f"\r  [{pr_total}{total_str} PRs | "
                 f"{suggestions_implemented}/{suggestions_total} suggestions] "
                 f"{owner}/{repo}#{number}{' ' * 10}",
                 end="", file=sys.stderr, flush=True,

@@ -31,6 +31,39 @@ def test_output_stem_empty_list_treated_as_no_repos():
 
 
 
+from github import get_qodo_pr_count
+
+
+def test_get_qodo_pr_count_uses_qodo_filter(monkeypatch):
+    captured = []
+    def fake_run_gh(args, **kw):
+        captured.extend(args)
+        return "42\n"
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    result = get_qodo_pr_count("acme", date(2025, 1, 1))
+    assert result == 42
+    q_arg = next(a for a in captured if a.startswith("q="))
+    assert '"Code Review by Qodo" in:comments' in q_arg
+    assert "org:acme" in q_arg
+
+
+def test_get_qodo_pr_count_with_repos_sums_per_repo(monkeypatch):
+    call_count = [0]
+    def fake_run_gh(args, **kw):
+        call_count[0] += 1
+        return "5\n"
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    result = get_qodo_pr_count("acme", date(2025, 1, 1), repos=["frontend", "backend"])
+    assert result == 10
+    assert call_count[0] == 2
+
+
+def test_get_qodo_pr_count_returns_none_on_bad_response(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: "not-a-number\n")
+    result = get_qodo_pr_count("acme", date(2025, 1, 1))
+    assert result is None
+
+
 from datetime import timedelta
 from github import search_merged_prs
 
