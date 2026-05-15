@@ -343,3 +343,103 @@ def test_generate_html_adoption_engagement():
     ]
     html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
     assert "developers implemented" in html
+
+
+def test_spotlight_security_sorted_before_correctness():
+    from report import generate_html
+    issues = [
+        {"title": "Correctness Issue", "category": "bug", "sub_label": "Correctness"},
+        {"title": "Security Issue",    "category": "bug", "sub_label": "Security"},
+    ]
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.index("Security Issue") < html.index("Correctness Issue")
+
+
+def test_spotlight_other_sub_label_sorted_last():
+    from report import generate_html
+    issues = [
+        {"title": "Unknown Issue",     "category": "bug", "sub_label": "Performance"},
+        {"title": "Correctness Issue", "category": "bug", "sub_label": "Correctness"},
+        {"title": "Security Issue",    "category": "bug", "sub_label": "Security"},
+    ]
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.index("Security Issue") < html.index("Correctness Issue") < html.index("Unknown Issue")
+
+
+def test_spotlight_truncated_at_limit():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    issues = [
+        {"title": f"Issue {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(SPOTLIGHT_LIMIT + 3)
+    ]
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.count('class="spotlight-card') == SPOTLIGHT_LIMIT
+
+
+def test_spotlight_no_footer_when_at_or_below_limit():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    issues = [
+        {"title": f"Issue {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(SPOTLIGHT_LIMIT)
+    ]
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert 'class="spotlight-more"' not in html
+
+
+def test_spotlight_footer_shows_remainder_count():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    issues = [
+        {"title": f"Issue {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(SPOTLIGHT_LIMIT + 4)
+    ]
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert 'class="spotlight-more"' in html
+    assert "+ 4 more" in html
+
+
+def test_spotlight_footer_breakdown_omits_zero_count_categories():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    # 6 Security + 6 Correctness = 12 total
+    # After sort+slice(10): 6 Security + 4 Correctness shown; 2 Correctness hidden
+    # Footer must NOT mention Security (0 hidden), must mention 2 Correctness
+    issues = (
+        [{"title": f"Sec {i}", "category": "bug", "sub_label": "Security"}     for i in range(6)] +
+        [{"title": f"Cor {i}", "category": "bug", "sub_label": "Correctness"}  for i in range(6)]
+    )
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    more_start = html.index('class="spotlight-more"')
+    more_end   = html.index("</p>", more_start)
+    footer_html = html[more_start:more_end]
+    assert "2 Correctness" in footer_html
+    assert "Security" not in footer_html
+
+
+def test_spotlight_footer_other_sub_label():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    # 10 Security + 1 unknown = 11 total; 1 "Performance" hidden → "1 Other" in footer
+    issues = (
+        [{"title": f"Sec {i}", "category": "bug", "sub_label": "Security"}      for i in range(10)] +
+        [{"title": "Perf Issue", "category": "bug", "sub_label": "Performance"}]
+    )
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "1 Other" in html
+
+
+def test_spotlight_section_at_end_of_report():
+    from report import generate_html
+    issue = {"title": "Security issue", "category": "bug", "sub_label": "Security"}
+    rows = [
+        _timing_row(spotlight=[issue], suggestions=5, implemented=3),
+        _timing_row(spotlight=[],      suggestions=3, implemented=3),
+    ]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    spotlight_pos      = html.index("High-Impact Issues")
+    top_prs_impl_pos   = html.index("Top 5 Merged PRs by Implemented")
+    assert spotlight_pos > top_prs_impl_pos

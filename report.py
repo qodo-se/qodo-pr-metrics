@@ -10,6 +10,9 @@ import mimetypes
 import re
 import statistics
 
+SPOTLIGHT_LIMIT = 10
+_SPOTLIGHT_PRIORITY = {"Security": 0, "Correctness": 1}
+
 
 def _rate(implemented: int, total: int) -> float:
     return round(100 * implemented / total, 1) if total > 0 else 0.0
@@ -295,6 +298,10 @@ tbody td a:hover { text-decoration: underline; }
 .spotlight-pr { font-size: 12px; }
 .spotlight-pr a { color: #634fd1; text-decoration: none; }
 .spotlight-pr a:hover { text-decoration: underline; }
+.spotlight-more {
+  font-size: 13px; color: #666; text-align: center;
+  padding: 10px 0 4px; border-top: 1px solid #efefef; margin-top: 6px;
+}
 .tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; }
 .tag-cat { background: #fdeef3; color: #a02040; }
 .tag-sub-security { background: #fff0d6; color: #8a5a00; }
@@ -440,8 +447,15 @@ def _section_bug_spotlight(agg: ReportData) -> str:
     if not agg.spotlight_issues:
         return ""
 
+    sorted_issues = sorted(
+        agg.spotlight_issues,
+        key=lambda i: _SPOTLIGHT_PRIORITY.get(i.get("sub_label", ""), 2)
+    )
+    displayed = sorted_issues[:SPOTLIGHT_LIMIT]
+    hidden    = sorted_issues[SPOTLIGHT_LIMIT:]
+
     cards = ""
-    for issue in agg.spotlight_issues:
+    for issue in displayed:
         url = issue.get("pr_url", "")
         safe_url = url if url.startswith(("https://", "http://")) else ""
         pr_num_safe = _h(str(issue.get("pr_num", "")))
@@ -454,7 +468,6 @@ def _section_bug_spotlight(agg: ReportData) -> str:
         # Allowlist known sub_labels to prevent CSS class injection from untrusted CSV data
         safe_sub_class = {"Security": "tag-sub-security", "Correctness": "tag-sub-correctness"}.get(sub_label, "tag-sub-correctness")
         border_class = "spotlight-correctness" if sub_label == "Correctness" else ""
-
         sub_label_tag = (
             f'<span class="tag {safe_sub_class}">{_h(sub_label)}</span>'
             if sub_label else ""
@@ -476,15 +489,36 @@ def _section_bug_spotlight(agg: ReportData) -> str:
             f'</div>'
         )
 
+    footer = ""
+    if hidden:
+        sec_count   = sum(1 for i in hidden if i.get("sub_label") == "Security")
+        cor_count   = sum(1 for i in hidden if i.get("sub_label") == "Correctness")
+        other_count = sum(1 for i in hidden if i.get("sub_label") not in ("Security", "Correctness"))
+        parts = []
+        if sec_count:
+            parts.append(f"{sec_count} {_h('Security')}")
+        if cor_count:
+            parts.append(f"{cor_count} {_h('Correctness')}")
+        if other_count:
+            parts.append(f"{other_count} {_h('Other')}")
+        breakdown = " &middot; ".join(parts)
+        footer = (
+            f'<p class="spotlight-more">'
+            f'+ {len(hidden)} more &mdash; {breakdown} &mdash; all implemented before merge'
+            f'</p>'
+        )
+
     count = len(agg.spotlight_issues)
     plural = "s" if count != 1 else ""
+    preview_note = f" Top {SPOTLIGHT_LIMIT} shown below." if hidden else ""
     return (
         f'<section>'
         f'<h2>High-Impact Issues Caught &amp; Resolved</h2>'
         f'<p style="font-size:13px;color:#555;margin-bottom:14px">'
         f'<strong>{count}</strong> Action Required issue{plural} '
-        f'flagged as Security or Correctness &mdash; all implemented before merge.</p>'
+        f'flagged as Security or Correctness &mdash; all implemented before merge.{preview_note}</p>'
         f'{cards}'
+        f'{footer}'
         f'</section>'
     )
 
@@ -610,12 +644,12 @@ def generate_html(
   </header>
   {_section_exec_summary(agg)}
   {_section_velocity(agg)}
-  {_section_bug_spotlight(agg)}
   {_section_adoption(agg)}
   {_section_severity(agg)}
   {_section_categories(agg)}
   {_section_top_prs(agg)}
   {_section_top_prs_by_implemented(agg)}
+  {_section_bug_spotlight(agg)}
 </div>
 </body>
 </html>"""
