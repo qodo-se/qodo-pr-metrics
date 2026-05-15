@@ -184,6 +184,7 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
                 "--jq", (
                     ".items[] | {"
                     "number: .number, "
+                    "node_id: .node_id, "
                     "repo: .repository_url, "
                     "url: .html_url, "
                     "creator: .user.login, "
@@ -206,6 +207,7 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
                     "owner": owner,
                     "repo": repo,
                     "number": item["number"],
+                    "node_id": item.get("node_id", ""),
                     "url": item.get("url", ""),
                     "creator": item.get("creator", ""),
                     "created_at": item.get("created_at", ""),
@@ -256,6 +258,50 @@ def fetch_pr_data(owner: str, repo: str, number: int) -> dict:
         "additions": pr["additions"] or 0,
         "deletions": pr["deletions"] or 0,
     }
+
+
+def fetch_pr_data_batch(prs: list, batch_size: int = 20) -> dict:
+    """Fetch PR data for multiple PRs in batched GraphQL calls.
+
+    prs: list of dicts with a "node_id" key (from search_merged_prs).
+    Returns: dict mapping node_id -> {"comments": [...], "additions": int, "deletions": int}.
+    """
+    results = {}
+    for i in range(0, len(prs), batch_size):
+        batch = prs[i:i + batch_size]
+        ids_str = ", ".join(f'"{pr["node_id"]}"' for pr in batch)
+        query = (
+            "{"
+            f"nodes(ids:[{ids_str}]){{"
+            "... on PullRequest{"
+            "id additions deletions "
+            "comments(first:100){nodes{body createdAt author{login __typename}}}"
+            "}}"
+            "}}"
+        )
+        out = run_gh(["api", "graphql", "-f", f"query={query}"])
+        data = json.loads(out)
+        for node in data["data"]["nodes"]:
+            if not node:
+                continue
+            node_id = node["id"]
+            comments = [
+                {
+                    "body": n["body"] or "",
+                    "created_at": n["createdAt"],
+                    "user": {
+                        "login": (n["author"] or {}).get("login", ""),
+                        "type": (n["author"] or {}).get("__typename", "User"),
+                    },
+                }
+                for n in node["comments"]["nodes"]
+            ]
+            results[node_id] = {
+                "comments": comments,
+                "additions": node["additions"] or 0,
+                "deletions": node["deletions"] or 0,
+            }
+    return results
 
 
 def find_qodo_comment(comments):
@@ -613,50 +659,60 @@ def cmd_count(args):
     qodo_total = get_qodo_pr_count(args.org, args.since, repos=args.repos)
     print(f" {qodo_total}" if qodo_total is not None else " (unavailable)", file=sys.stderr)
 
-    for pr in search_merged_prs(args.org, args.since, repos=args.repos):
-        owner, repo, number = pr["owner"], pr["repo"], pr["number"]
-        if (owner, repo, str(number)) in processed or (owner, repo, number) in processed:
-            continue
-        pr_total += 1
-        if not args.verbose:
-            total_str = f"/{qodo_total}" if qodo_total is not None else ""
-            print(
-                f"\r  [{pr_total}{total_str} PRs | "
-                f"{suggestions_implemented}/{suggestions_total} suggestions] "
-                f"{owner}/{repo}#{number}{' ' * 10}",
-                end="", file=sys.stderr, flush=True,
-            )
+    pending = [
+        pr for pr in search_merged_prs(args.org, args.since, repos=args.repos)
+        if (pr["owner"], pr["repo"], str(pr["number"])) not in processed
+        and (pr["owner"], pr["repo"], pr["number"]) not in processed
+    ]
 
-        pr_data = fetch_pr_data(owner, repo, number)
-        comments = pr_data["comments"]
-        lines_changed = pr_data["additions"] + pr_data["deletions"]
-        qodo = find_qodo_comment(comments)
-        timing = compute_timing(pr, comments)
+    for i in range(0, len(pending), 20):
+        batch = pending[i:i + 20]
+        pr_data_map = fetch_pr_data_batch(batch)
+        for pr in batch:
+            owner, repo, number = pr["owner"], pr["repo"], pr["number"]
+            pr_total += 1
+            if not args.verbose:
+                total_str = f"/{qodo_total}" if qodo_total is not None else ""
+                print(
+                    f"\r  [{pr_total}{total_str} PRs | "
+                    f"{suggestions_implemented}/{suggestions_total} suggestions] "
+                    f"{owner}/{repo}#{number}{' ' * 10}",
+                    end="", file=sys.stderr, flush=True,
+                )
 
-        if not qodo:
-            continue  # rare false positive from in:comments search; skip
+            pr_data = pr_data_map.get(pr.get("node_id", ""))
+            if not pr_data:
+                continue
 
-        stats = parse_qodo_comment(qodo["body"])
-        suggestions_total += stats.total_suggestions
-        suggestions_implemented += stats.total_implemented
-        if args.verbose:
-            print(
-                f"{owner}/{repo}#{number}: "
-                f"{stats.total_implemented}/{stats.total_suggestions} implemented"
-            )
+            comments = pr_data["comments"]
+            lines_changed = pr_data["additions"] + pr_data["deletions"]
+            qodo = find_qodo_comment(comments)
+            timing = compute_timing(pr, comments)
 
-        rows.append(build_csv_row(pr, lines_changed, stats, timing))
+            if not qodo:
+                continue  # rare false positive from in:comments search; skip
 
-        processed.add((owner, repo, str(number)))
-        save_checkpoint(args.org, {
-            "since": args.since.isoformat(),
-            "pr_total": pr_total,
-            "suggestions_total": suggestions_total,
-            "suggestions_implemented": suggestions_implemented,
-            "processed": list(processed),
-            "rows": rows,
-            "repos": sorted(args.repos) if args.repos else None,
-        })
+            stats = parse_qodo_comment(qodo["body"])
+            suggestions_total += stats.total_suggestions
+            suggestions_implemented += stats.total_implemented
+            if args.verbose:
+                print(
+                    f"{owner}/{repo}#{number}: "
+                    f"{stats.total_implemented}/{stats.total_suggestions} implemented"
+                )
+
+            rows.append(build_csv_row(pr, lines_changed, stats, timing))
+
+            processed.add((owner, repo, str(number)))
+            save_checkpoint(args.org, {
+                "since": args.since.isoformat(),
+                "pr_total": pr_total,
+                "suggestions_total": suggestions_total,
+                "suggestions_implemented": suggestions_implemented,
+                "processed": list(processed),
+                "rows": rows,
+                "repos": sorted(args.repos) if args.repos else None,
+            })
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
 
