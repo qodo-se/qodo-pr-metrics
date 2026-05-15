@@ -453,7 +453,7 @@ def _clean_title(title: str) -> str:
 
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
-    "Hours to Merge", "PR Creator", "Lines Changed", "Has Qodo Review",
+    "Hours to Merge", "PR Creator", "Lines Changed",
     "Action Required Suggestions", "Action Required Implemented",
     "Review Recommended Suggestions", "Review Recommended Implemented",
     "Bugs Suggested", "Bugs Implemented",
@@ -559,7 +559,6 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
                                                 ),
         "PR Creator":                           pr.get("creator", ""),
         "Lines Changed":                        lines_changed,
-        "Has Qodo Review":                      has_qodo,
         "Action Required Suggestions":          stats.action_required_total if has_qodo else 0,
         "Action Required Implemented":          stats.action_required_implemented if has_qodo else 0,
         "Review Recommended Suggestions":       stats.review_recommended_total if has_qodo else 0,

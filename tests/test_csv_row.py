@@ -78,7 +78,6 @@ def test_build_csv_row_no_qodo():
     assert row["PR Creator"] == "alice"
     assert row["Lines Changed"] == 200
     assert row["Hours to Merge"] == 48
-    assert row["Has Qodo Review"] is False
     assert row["Total Suggestions"] == 0
     assert row["Implementation Rate (%)"] == ""
     assert row["Suggestions per 100 Lines"] == ""
@@ -92,7 +91,6 @@ def test_build_csv_row_with_qodo():
         total_suggestions=4, total_implemented=3,
     )
     row = build_csv_row(_pr(), lines_changed=400, stats=stats)
-    assert row["Has Qodo Review"] is True
     assert row["Total Suggestions"] == 4
     assert row["Total Implemented"] == 3
     assert row["Implementation Rate (%)"] == "75.0"
