@@ -89,7 +89,7 @@ class ReportData:
 
 def aggregate(rows: list, org_prs_total: Optional[int] = None,
               org_pr_authors_total: Optional[int] = None) -> ReportData:
-    prs_with_qodo = len(rows)
+    prs_with_qodo = sum(1 for r in rows if r.get("Has Qodo Review", True))
 
     total_sug = sum(r.get("Total Suggestions", 0) for r in rows)
     total_imp = sum(r.get("Total Implemented", 0) for r in rows)
@@ -108,7 +108,7 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
     repo_acc: dict = defaultdict(lambda: {"prs": 0, "suggestions": 0, "implemented": 0})
     dev_acc: dict = defaultdict(lambda: {"prs": 0, "suggestions": 0, "implemented": 0})
     for r in rows:
-        if not r.get("Has Qodo Review"):
+        if not r.get("Has Qodo Review", True):
             continue
         repo_acc[r["Repo Name"]]["prs"] += 1
         repo_acc[r["Repo Name"]]["suggestions"] += r.get("Total Suggestions", 0)
@@ -126,11 +126,11 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
         key=lambda x: x["prs"], reverse=True,
     )[:10]
     top_prs = sorted(
-        [r for r in rows if r.get("Has Qodo Review")],
+        [r for r in rows if r.get("Has Qodo Review", True)],
         key=lambda r: r.get("Total Suggestions", 0), reverse=True,
     )[:5]
     top_prs_by_implemented = sorted(
-        [r for r in rows if r.get("Has Qodo Review")],
+        [r for r in rows if r.get("Has Qodo Review", True)],
         key=lambda r: r.get("Total Implemented", 0), reverse=True,
     )[:5]
 
@@ -139,7 +139,7 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
     human_times = [r["Time to First Human Comment (min)"] for r in rows
                    if r.get("Time to First Human Comment (min)") not in ("", None)]
     no_human_qodo = sum(1 for r in rows
-                       if r.get("Has Qodo Review") and not r.get("Has Human Comment"))
+                       if r.get("Has Qodo Review", True) and not r.get("Has Human Comment"))
     velocity_qodo_median = _median(qodo_times)
     velocity_human_median = _median(human_times)
     pct_no_human = _rate(no_human_qodo, prs_with_qodo) if prs_with_qodo else 0.0
@@ -162,7 +162,7 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
     repos_with_qodo = len({r["Repo Name"] for r in rows if r.get("Repo Name")})
     all_devs = {r["PR Creator"] for r in rows if r.get("PR Creator")}
     devs_with_qodo = {r["PR Creator"] for r in rows
-                      if r.get("Has Qodo Review") and r.get("PR Creator")}
+                      if r.get("Has Qodo Review", True) and r.get("PR Creator")}
     devs_engaged = {r["PR Creator"] for r in rows
                     if r.get("Total Implemented", 0) > 0 and r.get("PR Creator")}
 
