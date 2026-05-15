@@ -31,9 +31,7 @@ def _row(repo="backend", creator="alice", has_qodo=True,
 
 def test_aggregate_empty():
     agg = aggregate([])
-    assert agg.total_prs == 0
     assert agg.prs_with_qodo == 0
-    assert agg.qodo_coverage_pct == 0.0
     assert agg.total_suggestions == 0
     assert agg.by_repo == []
     assert agg.by_developer == []
@@ -48,23 +46,11 @@ def test_aggregate_basic_counts():
         _row(repo="web", creator="alice", suggestions=1, implemented=0),
     ]
     agg = aggregate(rows)
-    assert agg.total_prs == 3
     assert agg.prs_with_qodo == 3
     assert agg.total_suggestions == 8
     assert agg.total_implemented == 5
     assert agg.overall_impl_rate_pct == 62.5
 
-
-def test_aggregate_coverage_excludes_non_qodo():
-    rows = [
-        _row(has_qodo=True),
-        _row(has_qodo=False, suggestions=0, implemented=0),
-        _row(has_qodo=False, suggestions=0, implemented=0),
-    ]
-    agg = aggregate(rows)
-    assert agg.total_prs == 3
-    assert agg.prs_with_qodo == 1
-    assert agg.qodo_coverage_pct == round(100 / 3, 1)
 
 
 def test_aggregate_non_qodo_excluded_from_repo_and_dev_stats():
@@ -282,6 +268,14 @@ def test_generate_html_includes_velocity_section():
     assert "Velocity" in html
     assert "Time to First Feedback" in html
     assert "10m" in html    # median of [8, 12] = 10
+
+
+def test_generate_html_velocity_sub_minute_shows_lt1m():
+    from report import generate_html
+    rows = [_timing_row(qodo_min=0, human_min=0, has_human=True)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "&lt;1m" in html
+    assert ">0m<" not in html
 
 
 def test_generate_html_velocity_hidden_when_no_data():

@@ -17,9 +17,7 @@ def _rate(implemented: int, total: int) -> float:
 
 @dataclass
 class ReportData:
-    total_prs: int
     prs_with_qodo: int
-    qodo_coverage_pct: float
     total_suggestions: int
     total_implemented: int
     overall_impl_rate_pct: float
@@ -52,8 +50,7 @@ class ReportData:
 
 
 def aggregate(rows: list) -> ReportData:
-    total_prs = len(rows)
-    prs_with_qodo = sum(1 for r in rows if r.get("Has Qodo Review"))
+    prs_with_qodo = len(rows)
 
     total_sug = sum(r.get("Total Suggestions", 0) for r in rows)
     total_imp = sum(r.get("Total Implemented", 0) for r in rows)
@@ -143,9 +140,7 @@ def aggregate(rows: list) -> ReportData:
     }
 
     return ReportData(
-        total_prs=total_prs,
         prs_with_qodo=prs_with_qodo,
-        qodo_coverage_pct=_rate(prs_with_qodo, total_prs),
         total_suggestions=total_sug,
         total_implemented=total_imp,
         overall_impl_rate_pct=_rate(total_imp, total_sug),
@@ -340,6 +335,8 @@ def _rate_str(implemented: int, total: int) -> str:
 def _format_duration(minutes: Optional[float]) -> str:
     if minutes is None:
         return "&mdash;"
+    if minutes == 0:
+        return "&lt;1m"
     if minutes < 60:
         return f"{int(minutes)}m"
     hours = minutes / 60
@@ -372,7 +369,6 @@ def _impact_card(title: str, color: str, suggested: int, implemented: int) -> st
 def _section_exec_summary(agg: ReportData) -> str:
     cards = "".join([
         _stat_card("Merged PRs Reviewed by Qodo", str(agg.prs_with_qodo)),
-        _stat_card("Qodo Coverage", f"{agg.qodo_coverage_pct:.1f}%"),
         _stat_card("Total Issues Caught", str(agg.total_suggestions)),
         _stat_card("Issues Resolved", str(agg.total_implemented)),
         _stat_card("Overall Implementation Rate", f"{agg.overall_impl_rate_pct:.1f}%"),
