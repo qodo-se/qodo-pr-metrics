@@ -97,7 +97,6 @@ def test_checkpoint_stores_and_loads_repos(monkeypatch, tmp_path):
     save_checkpoint("acme", {
         "since": "2025-01-01",
         "pr_total": 0,
-        "prs_with_qodo": 0,
         "suggestions_total": 0,
         "suggestions_implemented": 0,
         "processed": [],
@@ -113,7 +112,6 @@ def test_checkpoint_repos_none_when_not_filtered(monkeypatch, tmp_path):
     save_checkpoint("acme", {
         "since": "2025-01-01",
         "pr_total": 0,
-        "prs_with_qodo": 0,
         "suggestions_total": 0,
         "suggestions_implemented": 0,
         "processed": [],
