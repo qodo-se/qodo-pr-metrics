@@ -542,7 +542,6 @@ def cmd_count(args):
     cp_path = checkpoint_path(args.org)
     processed = set()
     pr_total = 0
-    prs_with_qodo = 0
     suggestions_total = 0
     suggestions_implemented = 0
     rows: List[dict] = []
@@ -561,7 +560,6 @@ def cmd_count(args):
                 )
             else:
                 pr_total = data["pr_total"]
-                prs_with_qodo = data["prs_with_qodo"]
                 suggestions_total = data["suggestions_total"]
                 suggestions_implemented = data["suggestions_implemented"]
                 processed = {tuple(x) for x in data["processed"]}
@@ -582,7 +580,7 @@ def cmd_count(args):
         pr_total += 1
         if not args.verbose:
             print(
-                f"\r  [{pr_total} PRs | {prs_with_qodo} with Qodo | "
+                f"\r  [{pr_total} PRs | "
                 f"{suggestions_implemented}/{suggestions_total} suggestions] "
                 f"{owner}/{repo}#{number}{' ' * 10}",
                 end="", file=sys.stderr, flush=True,
@@ -595,23 +593,8 @@ def cmd_count(args):
         timing = compute_timing(pr, comments)
 
         if not qodo:
-            if args.verbose:
-                print(f"{owner}/{repo}#{number}: (no Qodo comment)")
-            rows.append(build_csv_row(pr, lines_changed=0, stats=None, timing=timing))
-            processed.add((owner, repo, str(number)))
-            save_checkpoint(args.org, {
-                "since": args.since.isoformat(),
-                "pr_total": pr_total,
-                "prs_with_qodo": prs_with_qodo,
-                "suggestions_total": suggestions_total,
-                "suggestions_implemented": suggestions_implemented,
-                "processed": list(processed),
-                "rows": rows,
-                "repos": sorted(args.repos) if args.repos else None,
-            })
-            continue
+            continue  # rare false positive from in:comments search; skip
 
-        prs_with_qodo += 1
         stats = parse_qodo_comment(qodo["body"])
         suggestions_total += stats.total_suggestions
         suggestions_implemented += stats.total_implemented
@@ -627,7 +610,6 @@ def cmd_count(args):
         save_checkpoint(args.org, {
             "since": args.since.isoformat(),
             "pr_total": pr_total,
-            "prs_with_qodo": prs_with_qodo,
             "suggestions_total": suggestions_total,
             "suggestions_implemented": suggestions_implemented,
             "processed": list(processed),
@@ -666,7 +648,6 @@ def cmd_count(args):
         print(f"Repos in scope:              {' '.join(args.repos)}")
     print(f"Window:                      {args.since} → {today}")
     print(f"Merged PRs in window:        {pr_total}")
-    print(f"PRs with a Qodo review:      {prs_with_qodo}")
     print(f"Total Qodo suggestions:      {suggestions_total}")
     print(f"Implemented suggestions:     {suggestions_implemented}")
     if suggestions_total:
