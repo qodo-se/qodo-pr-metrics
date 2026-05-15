@@ -11,7 +11,10 @@ import re
 import statistics
 
 SPOTLIGHT_LIMIT = 10
-_SPOTLIGHT_PRIORITY = {"Security": 0, "Correctness": 1}
+SPOTLIGHT_PRIORITY_KEYWORDS = [
+    "injection", "bypass", "unauthenticated", "hardcoded", "exfiltrat",  # stem matches exfiltrate/exfiltration
+    "csrf", "silent", "crash", "discard", "corrupt",
+]
 
 
 def _rate(implemented: int, total: int) -> float:
@@ -50,9 +53,16 @@ class ReportData:
     developers_total: int
     developers_with_qodo: int
     developers_engaged: int
+    org_prs_total: Optional[int]
+    org_pr_authors_total: Optional[int]
+    repos_with_qodo: int
 
 
-def aggregate(rows: list) -> ReportData:
+def aggregate(
+    rows: list,
+    org_prs_total: Optional[int] = None,
+    org_pr_authors_total: Optional[int] = None,
+) -> ReportData:
     prs_with_qodo = len(rows)
 
     total_sug = sum(r.get("Total Suggestions", 0) for r in rows)
@@ -131,7 +141,8 @@ def aggregate(rows: list) -> ReportData:
                 "pr_url": r.get("PR URL", ""),
             })
 
-    # Developer metrics
+    # Developer / repo metrics
+    repos_with_qodo = len({r["Repo Name"] for r in rows if r.get("Repo Name")})
     all_devs = {r["PR Creator"] for r in rows if r.get("PR Creator")}
     devs_with_qodo = {
         r["PR Creator"] for r in rows
@@ -173,6 +184,9 @@ def aggregate(rows: list) -> ReportData:
         developers_total=len(all_devs),
         developers_with_qodo=len(devs_with_qodo),
         developers_engaged=len(devs_engaged),
+        org_prs_total=org_prs_total,
+        org_pr_authors_total=org_pr_authors_total,
+        repos_with_qodo=repos_with_qodo,
     )
 
 
@@ -366,9 +380,9 @@ def _impact_card(title: str, color: str, suggested: int, implemented: int) -> st
     return (
         f'<div class="impact-card {color}">'
         f'<h3>{title}</h3>'
-        f'<div class="impact-row"><span>Suggested</span><span class="val">{suggested}</span></div>'
+        f'<div class="impact-row"><span>Findings</span><span class="val">{suggested}</span></div>'
         f'<div class="impact-row"><span>Implemented</span><span class="val">{implemented}</span></div>'
-        f'<div><span class="rate-pill">{rate} implemented</span></div>'
+        f'<div><span class="rate-pill">{rate} of findings implemented</span></div>'
         f'</div>'
     )
 
@@ -376,8 +390,8 @@ def _impact_card(title: str, color: str, suggested: int, implemented: int) -> st
 def _section_exec_summary(agg: ReportData) -> str:
     cards = "".join([
         _stat_card("Merged PRs Reviewed by Qodo", str(agg.prs_with_qodo)),
-        _stat_card("Total Issues Caught", str(agg.total_suggestions)),
-        _stat_card("Issues Resolved", str(agg.total_implemented)),
+        _stat_card("Qodo Findings", str(agg.total_suggestions)),
+        _stat_card("Qodo Findings Implemented", str(agg.total_implemented)),
         _stat_card("Overall Implementation Rate", f"{agg.overall_impl_rate_pct:.1f}%"),
     ])
     return f'<section><h2>Executive Summary</h2><div class="stat-grid">{cards}</div></section>'
@@ -435,6 +449,45 @@ def _section_velocity(agg: ReportData) -> str:
     )
 
 
+def _keyword_score(issue: dict) -> int:
+    title = issue.get("title", "").lower()
+    return 0 if any(kw in title for kw in SPOTLIGHT_PRIORITY_KEYWORDS) else 1
+
+
+def _select_spotlight(issues: list, limit: int) -> tuple:
+    half = limit // 2
+    security    = sorted([i for i in issues if i.get("sub_label") == "Security"],    key=_keyword_score)
+    correctness = sorted([i for i in issues if i.get("sub_label") == "Correctness"], key=_keyword_score)
+    other       = sorted([i for i in issues if i.get("sub_label") not in ("Security", "Correctness")], key=_keyword_score)
+
+    sec_take = min(half, len(security))
+    cor_take = min(half, len(correctness))
+    remaining = limit - sec_take - cor_take
+
+    sec_avail = len(security) - sec_take
+    cor_avail = len(correctness) - cor_take
+    # tie goes to security (higher-priority bucket)
+    if sec_avail >= cor_avail:
+        extra = min(remaining, sec_avail)
+        sec_take += extra
+        remaining -= extra
+        extra = min(remaining, cor_avail)
+        cor_take += extra
+        remaining -= extra
+    else:
+        extra = min(remaining, cor_avail)
+        cor_take += extra
+        remaining -= extra
+        extra = min(remaining, sec_avail)
+        sec_take += extra
+        remaining -= extra
+
+    other_take = min(remaining, len(other))
+    displayed = security[:sec_take] + correctness[:cor_take] + other[:other_take]
+    hidden    = security[sec_take:] + correctness[cor_take:] + other[other_take:]
+    return displayed, hidden
+
+
 _CATEGORY_DISPLAY = {
     "bug": "Bug",
     "rule_violation": "Rule Violation",
@@ -447,12 +500,7 @@ def _section_bug_spotlight(agg: ReportData) -> str:
     if not agg.spotlight_issues:
         return ""
 
-    sorted_issues = sorted(
-        agg.spotlight_issues,
-        key=lambda i: _SPOTLIGHT_PRIORITY.get(i.get("sub_label", ""), 2)
-    )
-    displayed = sorted_issues[:SPOTLIGHT_LIMIT]
-    hidden    = sorted_issues[SPOTLIGHT_LIMIT:]
+    displayed, hidden = _select_spotlight(agg.spotlight_issues, SPOTLIGHT_LIMIT)
 
     cards = ""
     for issue in displayed:
@@ -513,7 +561,7 @@ def _section_bug_spotlight(agg: ReportData) -> str:
     preview_note = f" Top {SPOTLIGHT_LIMIT} shown below." if hidden else ""
     return (
         f'<section>'
-        f'<h2>High-Impact Issues Caught &amp; Resolved</h2>'
+        f'<h2>High-Impact Issues</h2>'
         f'<p style="font-size:13px;color:#555;margin-bottom:14px">'
         f'<strong>{count}</strong> Action Required issue{plural} '
         f'flagged as Security or Correctness &mdash; all implemented before merge.{preview_note}</p>'
@@ -529,12 +577,20 @@ def _table(headers: list, rows_html: str) -> str:
 
 
 def _section_adoption(agg: ReportData) -> str:
-    dev_cards = (
-        _stat_card(
-            f"of {agg.developers_total} developers participated",
-            str(agg.developers_with_qodo),
-        ) +
-        _stat_card("developers implemented suggestions", str(agg.developers_engaged))
+    if agg.org_prs_total is not None:
+        pr_label = f"of {agg.org_prs_total} PRs merged in this period reviewed by Qodo"
+    else:
+        pr_label = "PRs reviewed by Qodo"
+
+    dev_label = f"of {agg.developers_total} developers used Qodo in this period"
+
+    repo_label = "Qodo-enabled repos had PRs in this period"
+
+    summary_cards = (
+        _stat_card(repo_label, str(agg.repos_with_qodo)) +
+        _stat_card(pr_label, str(agg.prs_with_qodo)) +
+        _stat_card(dev_label, str(agg.developers_with_qodo)) +
+        _stat_card("developers implemented Qodo findings", str(agg.developers_engaged))
     )
 
     repo_rows = "".join(
@@ -547,11 +603,11 @@ def _section_adoption(agg: ReportData) -> str:
         f"<td>{_rate_str(r['implemented'], r['suggestions'])}</td></tr>"
         for r in agg.by_developer
     )
-    repo_table = _table(["Repository", "Merged PRs", "Issues", "Impl. Rate"], repo_rows)
-    dev_table  = _table(["Developer", "Merged PRs", "Issues", "Impl. Rate"], dev_rows)
+    repo_table = _table(["Repository", "Merged PRs", "Findings", "Impl. Rate"], repo_rows)
+    dev_table  = _table(["Developer", "Merged PRs", "Findings", "Impl. Rate"], dev_rows)
     return (
         f'<section><h2>Adoption</h2>'
-        f'<div class="stat-grid" style="margin-bottom:20px">{dev_cards}</div>'
+        f'<div class="stat-grid" style="margin-bottom:20px">{summary_cards}</div>'
         f'<div class="two-col">'
         f'<div><p class="subsection">By Repository</p>{repo_table}</div>'
         f'<div><p class="subsection">By Developer (top 10)</p>{dev_table}</div>'
@@ -580,22 +636,6 @@ def _section_categories(agg: ReportData) -> str:
     return f'<section><h2>Impact by Category</h2><div class="impact-grid">{cards}</div></section>'
 
 
-def _section_top_prs(agg: ReportData) -> str:
-    pr_rows = ""
-    for r in agg.top_prs:
-        url = r.get("PR URL", "")
-        safe_url = url if url.startswith(("https://", "http://")) else ""
-        pr_ref = f'<a href="{_h(safe_url)}">#{r["PR #"]}</a>' if safe_url else f'#{r["PR #"]}'
-        pr_rows += (
-            f'<tr><td>{_h(r["Repo Name"])}</td><td>{pr_ref}</td>'
-            f'<td>{_h(r["PR Creator"])}</td>'
-            f'<td>{r["Total Suggestions"]}</td><td>{r["Total Implemented"]}</td>'
-            f'<td>{r.get("Implementation Rate (%)", "—")}</td></tr>'
-        )
-    table = _table(["Repo", "PR", "Creator", "Issues", "Implemented", "Rate"], pr_rows)
-    return f'<section><h2>Top 5 Merged PRs by Issues Found</h2>{table}</section>'
-
-
 def _section_top_prs_by_implemented(agg: ReportData) -> str:
     pr_rows = ""
     for r in agg.top_prs_by_implemented:
@@ -608,7 +648,7 @@ def _section_top_prs_by_implemented(agg: ReportData) -> str:
             f'<td>{r["Total Suggestions"]}</td><td>{r["Total Implemented"]}</td>'
             f'<td>{r.get("Implementation Rate (%)", "—")}</td></tr>'
         )
-    table = _table(["Repo", "PR", "Creator", "Issues", "Implemented", "Rate"], pr_rows)
+    table = _table(["Repo", "PR", "Creator", "Findings", "Implemented", "Impl. Rate"], pr_rows)
     return f'<section><h2>Top 5 Merged PRs by Implemented Suggestions</h2>{table}</section>'
 
 
@@ -618,8 +658,14 @@ def generate_html(
     since: "date",
     until: "date",
     logo_path: Optional[str] = "logo.svg",
+    org_pr_count: Optional[int] = None,
+    org_author_count: Optional[int] = None,
 ) -> str:
-    agg = aggregate(rows)
+    agg = aggregate(
+        rows,
+        org_prs_total=org_pr_count,
+        org_pr_authors_total=org_author_count,
+    )
     logo_tag = _embed_logo(logo_path)
     since_fmt = since.strftime("%b %d, %Y")
     until_fmt = until.strftime("%b %d, %Y")
@@ -647,7 +693,6 @@ def generate_html(
   {_section_adoption(agg)}
   {_section_severity(agg)}
   {_section_categories(agg)}
-  {_section_top_prs(agg)}
   {_section_top_prs_by_implemented(agg)}
   {_section_bug_spotlight(agg)}
 </div>

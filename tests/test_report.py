@@ -356,6 +356,97 @@ def test_spotlight_security_sorted_before_correctness():
     assert html.index("Security Issue") < html.index("Correctness Issue")
 
 
+def test_spotlight_50_50_split():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    # 20 Security + 20 Correctness = 40 total; expect 5 of each shown (10 total)
+    issues = (
+        [{"title": f"Sec {i}",  "category": "bug", "sub_label": "Security"}    for i in range(20)] +
+        [{"title": f"Cor {i}",  "category": "bug", "sub_label": "Correctness"} for i in range(20)]
+    )
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.count('class="spotlight-card') == SPOTLIGHT_LIMIT
+    assert html.count('<span class="tag tag-sub-security">Security</span>') == 5
+    assert html.count('<span class="tag tag-sub-correctness">Correctness</span>') == 5
+
+
+def test_spotlight_spare_slots_to_correctness_when_security_short():
+    from report import generate_html
+    # 2 Security + 20 Correctness: Security gets 2 slots, remaining 8 go to Correctness
+    issues = (
+        [{"title": f"Sec {i}",  "category": "bug", "sub_label": "Security"}    for i in range(2)] +
+        [{"title": f"Cor {i}",  "category": "bug", "sub_label": "Correctness"} for i in range(20)]
+    )
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.count('<span class="tag tag-sub-security">Security</span>') == 2
+    assert html.count('<span class="tag tag-sub-correctness">Correctness</span>') == 8
+
+
+def test_spotlight_spare_slots_to_security_when_correctness_short():
+    from report import generate_html
+    # 20 Security + 2 Correctness: Correctness gets 2 slots, remaining 8 go to Security
+    issues = (
+        [{"title": f"Sec {i}",  "category": "bug", "sub_label": "Security"}    for i in range(20)] +
+        [{"title": f"Cor {i}",  "category": "bug", "sub_label": "Correctness"} for i in range(2)]
+    )
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.count('<span class="tag tag-sub-security">Security</span>') == 8
+    assert html.count('<span class="tag tag-sub-correctness">Correctness</span>') == 2
+
+
+def test_spotlight_keyword_promoted_within_security_bucket():
+    from report import generate_html
+    # 3 keyword Security + 5 plain Security + 6 Correctness = 14 total
+    # Security gets 5 slots; keyword issues rank first → all 3 appear, plain 2-4 are cut
+    keyword_issues = [
+        {"title": f"bypass vuln {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(3)
+    ]
+    plain_issues = [
+        {"title": f"plain sec {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(5)
+    ]
+    correctness_issues = [
+        {"title": f"cor issue {i}", "category": "bug", "sub_label": "Correctness"}
+        for i in range(6)
+    ]
+    rows = [_timing_row(spotlight=keyword_issues + plain_issues + correctness_issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    for i in range(3):
+        assert f"bypass vuln {i}" in html
+    assert "plain sec 0" in html
+    assert "plain sec 1" in html
+    for i in range(2, 5):
+        assert f"plain sec {i}" not in html
+
+
+def test_spotlight_keyword_promoted_within_correctness_bucket():
+    from report import generate_html
+    # 6 Security + 2 keyword Correctness + 4 plain Correctness = 12 total
+    # Correctness gets 5 slots; keyword issues rank first → both appear, plain 3 is cut
+    security_issues = [
+        {"title": f"sec {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(6)
+    ]
+    keyword_issues = [
+        {"title": f"crash fix {i}", "category": "bug", "sub_label": "Correctness"}
+        for i in range(2)
+    ]
+    plain_issues = [
+        {"title": f"plain cor {i}", "category": "bug", "sub_label": "Correctness"}
+        for i in range(4)
+    ]
+    rows = [_timing_row(spotlight=security_issues + keyword_issues + plain_issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    for i in range(2):
+        assert f"crash fix {i}" in html
+    for i in range(3):
+        assert f"plain cor {i}" in html
+    assert "plain cor 3" not in html
+
+
 def test_spotlight_other_sub_label_sorted_last():
     from report import generate_html
     issues = [
@@ -402,22 +493,21 @@ def test_spotlight_footer_shows_remainder_count():
     assert "+ 4 more" in html
 
 
-def test_spotlight_footer_breakdown_omits_zero_count_categories():
+def test_spotlight_footer_breakdown_by_sublabel():
     from report import generate_html, SPOTLIGHT_LIMIT
-    # 6 Security + 6 Correctness = 12 total
-    # After sort+slice(10): 6 Security + 4 Correctness shown; 2 Correctness hidden
-    # Footer must NOT mention Security (0 hidden), must mention 2 Correctness
+    # 6 Security + 6 Correctness = 12 total, limit=10
+    # 50-50 logic: 5 Security + 5 Correctness shown; 1 Security + 1 Correctness hidden
     issues = (
-        [{"title": f"Sec {i}", "category": "bug", "sub_label": "Security"}     for i in range(6)] +
-        [{"title": f"Cor {i}", "category": "bug", "sub_label": "Correctness"}  for i in range(6)]
+        [{"title": f"Sec {i}", "category": "bug", "sub_label": "Security"}    for i in range(6)] +
+        [{"title": f"Cor {i}", "category": "bug", "sub_label": "Correctness"} for i in range(6)]
     )
     rows = [_timing_row(spotlight=issues)]
     html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
     more_start = html.index('class="spotlight-more"')
     more_end   = html.index("</p>", more_start)
     footer_html = html[more_start:more_end]
-    assert "2 Correctness" in footer_html
-    assert "Security" not in footer_html
+    assert "1 Security" in footer_html
+    assert "1 Correctness" in footer_html
 
 
 def test_spotlight_footer_other_sub_label():
