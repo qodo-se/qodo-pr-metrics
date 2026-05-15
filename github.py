@@ -174,6 +174,7 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
             )
             q = (
                 f"{qual} is:pr is:merged "
+                f'"Code Review by Qodo" in:comments '
                 f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
             )
             out = run_gh([
@@ -227,7 +228,7 @@ def fetch_pr_data(owner: str, repo: str, number: int) -> dict:
         "repository(owner:$owner,name:$repo){"
         "pullRequest(number:$number){"
         "additions deletions "
-        "comments(first:100){nodes{body createdAt author{login}}}"
+        "comments(first:100){nodes{body createdAt author{login __typename}}}"
         "}}}"
     )
     out = run_gh([
@@ -243,7 +244,10 @@ def fetch_pr_data(owner: str, repo: str, number: int) -> dict:
         {
             "body": node["body"] or "",
             "created_at": node["createdAt"],
-            "user": {"login": (node["author"] or {}).get("login", "")},
+            "user": {
+                "login": (node["author"] or {}).get("login", ""),
+                "type": (node["author"] or {}).get("__typename", "User"),
+            },
         }
         for node in pr["comments"]["nodes"]
     ]
@@ -422,9 +426,12 @@ def compute_timing(pr: dict, comments: list) -> dict:
         _minutes_between(pr_created, qodo_comment["created_at"])
         if qodo_comment else None
     )
+    qodo_login = qodo_comment.get("user", {}).get("login") if qodo_comment else None
     human_comments = [
         c for c in comments
         if not QODO_MARKER.search(c.get("body", "") or "")
+        and c.get("user", {}).get("type") != "Bot"
+        and c.get("user", {}).get("login") != qodo_login
     ]
     has_human = bool(human_comments)
     human_min = None

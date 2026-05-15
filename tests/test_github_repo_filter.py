@@ -107,6 +107,13 @@ def test_search_merged_prs_with_repos_uses_repo_qualifiers(monkeypatch):
     assert not any("org:acme" in q for q in captured)
 
 
+def test_search_merged_prs_includes_qodo_comment_filter(monkeypatch):
+    captured = []
+    monkeypatch.setattr("github.run_gh", _make_fake_run_gh(captured))
+    list(search_merged_prs("acme", date.today() - timedelta(days=1)))
+    assert any('"Code Review by Qodo" in:comments' in q for q in captured)
+
+
 def test_search_merged_prs_deduplicates_when_same_repo_listed_twice(monkeypatch):
     import json
     pr_json = json.dumps({
