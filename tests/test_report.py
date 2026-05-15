@@ -31,9 +31,7 @@ def _row(repo="backend", creator="alice", has_qodo=True,
 
 def test_aggregate_empty():
     agg = aggregate([])
-    assert agg.total_prs == 0
     assert agg.prs_with_qodo == 0
-    assert agg.qodo_coverage_pct == 0.0
     assert agg.total_suggestions == 0
     assert agg.by_repo == []
     assert agg.by_developer == []
@@ -48,23 +46,11 @@ def test_aggregate_basic_counts():
         _row(repo="web", creator="alice", suggestions=1, implemented=0),
     ]
     agg = aggregate(rows)
-    assert agg.total_prs == 3
     assert agg.prs_with_qodo == 3
     assert agg.total_suggestions == 8
     assert agg.total_implemented == 5
     assert agg.overall_impl_rate_pct == 62.5
 
-
-def test_aggregate_coverage_excludes_non_qodo():
-    rows = [
-        _row(has_qodo=True),
-        _row(has_qodo=False, suggestions=0, implemented=0),
-        _row(has_qodo=False, suggestions=0, implemented=0),
-    ]
-    agg = aggregate(rows)
-    assert agg.total_prs == 3
-    assert agg.prs_with_qodo == 1
-    assert agg.qodo_coverage_pct == round(100 / 3, 1)
 
 
 def test_aggregate_non_qodo_excluded_from_repo_and_dev_stats():
@@ -190,3 +176,360 @@ def test_generate_html_includes_top_prs_by_implemented_section():
     ]
     html = generate_html(rows, "acme-corp", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
     assert "Top 5 Merged PRs by Implemented Suggestions" in html
+
+
+import json as _json
+
+
+def _timing_row(repo="backend", creator="alice", has_qodo=True,
+                suggestions=4, implemented=2,
+                qodo_min=8, human_min=270, has_human=True,
+                spotlight=None):
+    base = _row(repo=repo, creator=creator, has_qodo=has_qodo,
+                suggestions=suggestions, implemented=implemented)
+    base["Time to First Qodo Comment (min)"] = qodo_min if qodo_min is not None else ""
+    base["Time to First Human Comment (min)"] = human_min if human_min is not None else ""
+    base["Has Human Comment"] = has_human
+    base["Spotlight Issues"] = _json.dumps(spotlight or [])
+    return base
+
+
+def test_aggregate_velocity_median():
+    rows = [
+        _timing_row(qodo_min=6, human_min=200),
+        _timing_row(qodo_min=10, human_min=300),
+        _timing_row(qodo_min=8, human_min=None, has_human=False),
+    ]
+    agg = aggregate(rows)
+    assert agg.velocity_qodo_median_min == 8.0      # median of [6, 8, 10]
+    assert agg.velocity_human_median_min == 250.0   # median of [200, 300]
+
+
+def test_aggregate_velocity_none_when_no_data():
+    rows = [_timing_row(qodo_min=None, human_min=None, has_human=False)]
+    agg = aggregate(rows)
+    assert agg.velocity_qodo_median_min is None
+    assert agg.velocity_human_median_min is None
+
+
+def test_aggregate_pct_no_human_comment():
+    rows = [
+        _timing_row(has_qodo=True, has_human=False),
+        _timing_row(has_qodo=True, has_human=True),
+        _timing_row(has_qodo=True, has_human=False),
+    ]
+    agg = aggregate(rows)
+    assert agg.pct_no_human_comment == round(200 / 3, 1)
+
+
+def test_aggregate_spotlight_issues_collected():
+    issue = {"title": "API key leak", "category": "bug", "sub_label": "Security"}
+    rows = [
+        _timing_row(repo="api", spotlight=[issue]),
+        _timing_row(repo="web", spotlight=[]),
+    ]
+    agg = aggregate(rows)
+    assert len(agg.spotlight_issues) == 1
+    assert agg.spotlight_issues[0]["repo"] == "api"
+    assert agg.spotlight_issues[0]["title"] == "API key leak"
+    assert agg.spotlight_issues[0]["pr_num"] == 1
+
+
+def test_aggregate_developer_metrics():
+    rows = [
+        _timing_row(creator="alice", has_qodo=True, implemented=3),
+        _timing_row(creator="bob",   has_qodo=True, implemented=0),
+        _timing_row(creator="carol", has_qodo=False, suggestions=0, implemented=0),
+    ]
+    agg = aggregate(rows)
+    assert agg.developers_total == 3
+    assert agg.developers_with_qodo == 2
+    assert agg.developers_engaged == 1   # only alice implemented > 0
+
+
+def test_aggregate_empty_new_fields():
+    agg = aggregate([])
+    assert agg.velocity_qodo_median_min is None
+    assert agg.velocity_human_median_min is None
+    assert agg.pct_no_human_comment == 0.0
+    assert agg.spotlight_issues == []
+    assert agg.developers_total == 0
+    assert agg.developers_with_qodo == 0
+    assert agg.developers_engaged == 0
+
+
+def test_generate_html_includes_velocity_section():
+    from report import generate_html
+    rows = [
+        _timing_row(qodo_min=8, human_min=270, has_human=True),
+        _timing_row(qodo_min=12, human_min=300, has_human=True),
+    ]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "Velocity" in html
+    assert "Time to First Feedback" in html
+    assert "10m" in html    # median of [8, 12] = 10
+
+
+def test_generate_html_velocity_sub_minute_shows_lt1m():
+    from report import generate_html
+    rows = [_timing_row(qodo_min=0, human_min=0, has_human=True)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "&lt;1m" in html
+    assert ">0m<" not in html
+
+
+def test_generate_html_velocity_hidden_when_no_data():
+    from report import generate_html
+    rows = [_row()]   # _row() has no timing columns → all empty
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "Time to First Feedback" not in html
+
+
+def test_generate_html_no_human_comment_insight():
+    from report import generate_html
+    rows = [
+        _timing_row(qodo_min=8, human_min=None, has_human=False),
+        _timing_row(qodo_min=8, human_min=None, has_human=False),
+    ]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "sole feedback" in html
+
+
+def test_generate_html_includes_spotlight_section():
+    from report import generate_html
+    issue = {"title": "Hardcoded API key", "category": "bug", "sub_label": "Security"}
+    rows = [_timing_row(spotlight=[issue])]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "High-Impact Issues" in html
+    assert "Hardcoded API key" in html
+    assert "Security" in html
+
+
+def test_generate_html_spotlight_hidden_when_empty():
+    from report import generate_html
+    rows = [_timing_row(spotlight=[])]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "High-Impact Issues" not in html
+
+
+def test_generate_html_spotlight_links_pr():
+    from report import generate_html
+    issue = {"title": "SQL injection risk", "category": "bug", "sub_label": "Security"}
+    rows = [_timing_row(spotlight=[issue])]
+    rows[0]["PR URL"] = "https://github.com/acme/repo/pull/42"
+    rows[0]["PR #"] = 42
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "PR #42" in html
+    assert "https://github.com/acme/repo/pull/42" in html
+
+
+def test_generate_html_adoption_developer_breadth():
+    from report import generate_html
+    rows = [
+        _timing_row(creator="alice", has_qodo=True, implemented=2),
+        _timing_row(creator="bob",   has_qodo=True, implemented=0),
+        _timing_row(creator="carol", has_qodo=False, suggestions=0, implemented=0),
+    ]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert 'class="stat-value">2<' in html
+    assert "of 3 developers" in html
+
+
+def test_generate_html_adoption_engagement():
+    from report import generate_html
+    rows = [
+        _timing_row(creator="alice", implemented=3),
+        _timing_row(creator="bob",   implemented=0),
+    ]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "developers implemented" in html
+
+
+def test_spotlight_security_sorted_before_correctness():
+    from report import generate_html
+    issues = [
+        {"title": "Correctness Issue", "category": "bug", "sub_label": "Correctness"},
+        {"title": "Security Issue",    "category": "bug", "sub_label": "Security"},
+    ]
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.index("Security Issue") < html.index("Correctness Issue")
+
+
+def test_spotlight_50_50_split():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    # 20 Security + 20 Correctness = 40 total; expect 5 of each shown (10 total)
+    issues = (
+        [{"title": f"Sec {i}",  "category": "bug", "sub_label": "Security"}    for i in range(20)] +
+        [{"title": f"Cor {i}",  "category": "bug", "sub_label": "Correctness"} for i in range(20)]
+    )
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.count('class="spotlight-card') == SPOTLIGHT_LIMIT
+    assert html.count('<span class="tag tag-sub-security">Security</span>') == 5
+    assert html.count('<span class="tag tag-sub-correctness">Correctness</span>') == 5
+
+
+def test_spotlight_spare_slots_to_correctness_when_security_short():
+    from report import generate_html
+    # 2 Security + 20 Correctness: Security gets 2 slots, remaining 8 go to Correctness
+    issues = (
+        [{"title": f"Sec {i}",  "category": "bug", "sub_label": "Security"}    for i in range(2)] +
+        [{"title": f"Cor {i}",  "category": "bug", "sub_label": "Correctness"} for i in range(20)]
+    )
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.count('<span class="tag tag-sub-security">Security</span>') == 2
+    assert html.count('<span class="tag tag-sub-correctness">Correctness</span>') == 8
+
+
+def test_spotlight_spare_slots_to_security_when_correctness_short():
+    from report import generate_html
+    # 20 Security + 2 Correctness: Correctness gets 2 slots, remaining 8 go to Security
+    issues = (
+        [{"title": f"Sec {i}",  "category": "bug", "sub_label": "Security"}    for i in range(20)] +
+        [{"title": f"Cor {i}",  "category": "bug", "sub_label": "Correctness"} for i in range(2)]
+    )
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.count('<span class="tag tag-sub-security">Security</span>') == 8
+    assert html.count('<span class="tag tag-sub-correctness">Correctness</span>') == 2
+
+
+def test_spotlight_keyword_promoted_within_security_bucket():
+    from report import generate_html
+    # 3 keyword Security + 5 plain Security + 6 Correctness = 14 total
+    # Security gets 5 slots; keyword issues rank first → all 3 appear, plain 2-4 are cut
+    keyword_issues = [
+        {"title": f"bypass vuln {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(3)
+    ]
+    plain_issues = [
+        {"title": f"plain sec {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(5)
+    ]
+    correctness_issues = [
+        {"title": f"cor issue {i}", "category": "bug", "sub_label": "Correctness"}
+        for i in range(6)
+    ]
+    rows = [_timing_row(spotlight=keyword_issues + plain_issues + correctness_issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    for i in range(3):
+        assert f"bypass vuln {i}" in html
+    assert "plain sec 0" in html
+    assert "plain sec 1" in html
+    for i in range(2, 5):
+        assert f"plain sec {i}" not in html
+
+
+def test_spotlight_keyword_promoted_within_correctness_bucket():
+    from report import generate_html
+    # 6 Security + 2 keyword Correctness + 4 plain Correctness = 12 total
+    # Correctness gets 5 slots; keyword issues rank first → both appear, plain 3 is cut
+    security_issues = [
+        {"title": f"sec {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(6)
+    ]
+    keyword_issues = [
+        {"title": f"crash fix {i}", "category": "bug", "sub_label": "Correctness"}
+        for i in range(2)
+    ]
+    plain_issues = [
+        {"title": f"plain cor {i}", "category": "bug", "sub_label": "Correctness"}
+        for i in range(4)
+    ]
+    rows = [_timing_row(spotlight=security_issues + keyword_issues + plain_issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    for i in range(2):
+        assert f"crash fix {i}" in html
+    for i in range(3):
+        assert f"plain cor {i}" in html
+    assert "plain cor 3" not in html
+
+
+def test_spotlight_other_sub_label_sorted_last():
+    from report import generate_html
+    issues = [
+        {"title": "Unknown Issue",     "category": "bug", "sub_label": "Performance"},
+        {"title": "Correctness Issue", "category": "bug", "sub_label": "Correctness"},
+        {"title": "Security Issue",    "category": "bug", "sub_label": "Security"},
+    ]
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.index("Security Issue") < html.index("Correctness Issue") < html.index("Unknown Issue")
+
+
+def test_spotlight_truncated_at_limit():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    issues = [
+        {"title": f"Issue {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(SPOTLIGHT_LIMIT + 3)
+    ]
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert html.count('class="spotlight-card') == SPOTLIGHT_LIMIT
+
+
+def test_spotlight_no_footer_when_at_or_below_limit():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    issues = [
+        {"title": f"Issue {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(SPOTLIGHT_LIMIT)
+    ]
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert 'class="spotlight-more"' not in html
+
+
+def test_spotlight_footer_shows_remainder_count():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    issues = [
+        {"title": f"Issue {i}", "category": "bug", "sub_label": "Security"}
+        for i in range(SPOTLIGHT_LIMIT + 4)
+    ]
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert 'class="spotlight-more"' in html
+    assert "+ 4 more" in html
+
+
+def test_spotlight_footer_breakdown_by_sublabel():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    # 6 Security + 6 Correctness = 12 total, limit=10
+    # 50-50 logic: 5 Security + 5 Correctness shown; 1 Security + 1 Correctness hidden
+    issues = (
+        [{"title": f"Sec {i}", "category": "bug", "sub_label": "Security"}    for i in range(6)] +
+        [{"title": f"Cor {i}", "category": "bug", "sub_label": "Correctness"} for i in range(6)]
+    )
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    more_start = html.index('class="spotlight-more"')
+    more_end   = html.index("</p>", more_start)
+    footer_html = html[more_start:more_end]
+    assert "1 Security" in footer_html
+    assert "1 Correctness" in footer_html
+
+
+def test_spotlight_footer_other_sub_label():
+    from report import generate_html, SPOTLIGHT_LIMIT
+    # 10 Security + 1 unknown = 11 total; 1 "Performance" hidden → "1 Other" in footer
+    issues = (
+        [{"title": f"Sec {i}", "category": "bug", "sub_label": "Security"}      for i in range(10)] +
+        [{"title": "Perf Issue", "category": "bug", "sub_label": "Performance"}]
+    )
+    rows = [_timing_row(spotlight=issues)]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    assert "1 Other" in html
+
+
+def test_spotlight_section_at_end_of_report():
+    from report import generate_html
+    issue = {"title": "Security issue", "category": "bug", "sub_label": "Security"}
+    rows = [
+        _timing_row(spotlight=[issue], suggestions=5, implemented=3),
+        _timing_row(spotlight=[],      suggestions=3, implemented=3),
+    ]
+    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
+    spotlight_pos      = html.index("High-Impact Issues")
+    top_prs_impl_pos   = html.index("Top 5 Merged PRs by Implemented")
+    assert spotlight_pos > top_prs_impl_pos

@@ -1,25 +1,18 @@
 # qodo-pr-metrics
 
-Counts Qodo code-review suggestions and their implementation rate across merged PRs in a GitHub org.
+Generates an HTML report measuring Qodo code-review impact across merged PRs in a GitHub org — covering suggestion volume, implementation rates, reviewer velocity, and developer adoption.
+
+[View sample report](examples/sample_report.html)
 
 ## What it does
 
 For each merged PR in a configurable lookback window, the script:
 
 1. Finds Qodo's review comment (identified by the "Code Review by Qodo" marker)
-2. Counts the total number of suggestions Qodo made
-3. Counts how many suggestions were implemented (detected via strikethrough formatting on the suggestion title)
+2. Counts suggestions made and how many were implemented (detected via strikethrough formatting)
+3. Records timing, spotlight issues (Security/Correctness), and per-developer activity
 
-It outputs a summary like:
-
-```
-Window:                      2025-05-12 → 2026-05-12
-Merged PRs in window:        243
-PRs with a Qodo review:      187
-Total Qodo suggestions:      512
-Implemented suggestions:     341
-Implementation rate:         66.6%
-```
+It produces an HTML report and a raw CSV — see [Output files](#output-files) below.
 
 ## How it works
 
@@ -37,6 +30,29 @@ Implementation rate:         66.6%
 gh auth status   # should show you logged in
 ```
 
+### GitHub token permissions
+
+The script uses the GitHub Search API and GraphQL API. The `gh` CLI handles authentication — no manual token management is required, but your token must have the right scopes:
+
+| Scope | Required for |
+| --- | --- |
+| `repo` | Searching and reading private repos. Without this, only public repos are visible and private repos are silently omitted from results. |
+| `read:org` | Org membership visibility. Optional — only needed if the `org:` search qualifier returns no results for your org. |
+
+To check your current scopes:
+
+```bash
+gh auth status
+```
+
+To add a missing scope:
+
+```bash
+gh auth refresh -s repo
+```
+
+> **Note:** Results are always scoped to repos the authenticated token can access. If you suspect missing repos, compare the "Repos in results" list printed at the end of a run against your expected scope, or use `--repos` to declare the repos explicitly.
+
 ## Usage
 
 **Mac/Linux:**
@@ -48,12 +64,6 @@ python3 github.py --org acme-corp
 # Custom date window
 python3 github.py --org acme-corp --since 2025-05-12
 python3 github.py --org acme-corp --days 90
-
-# Per-PR detail (prints each PR's suggestion counts)
-python3 github.py --org acme-corp --verbose
-
-# Inspect mode — prints the first Qodo comment found (useful for verifying the parser)
-python3 github.py --org acme-corp --inspect
 
 # Scope to specific repos
 python3 github.py --org acme-corp --repos frontend-app backend-api
@@ -67,14 +77,14 @@ python github.py --org acme-corp
 
 ### Output files
 
-The script automatically generates two output files in addition to printing the console summary:
+The script generates two output files:
 
 - `{org}_{since_date}_{until_date}.csv` — raw per-PR data
 - `{org}_{since_date}_{until_date}.html` — visual summary report
 
 For example, running `python3 github.py --org acme-corp` creates `acme-corp_2025-05-12_2026-05-12.csv` and `acme-corp_2025-05-12_2026-05-12.html`.
 
-Each row in the CSV contains 23 columns with per-PR data:
+Each row in the CSV contains 27 columns with per-PR data:
 
 | Column | Description |
 |---|---|
@@ -101,6 +111,27 @@ Each row in the CSV contains 23 columns with per-PR data:
 | Total Implemented | Sum of all implemented categories |
 | Implementation Rate (%) | `Total Implemented / Total Suggestions × 100`, blank when 0 suggestions |
 | Suggestions per 100 Lines | `Total Suggestions / Lines Changed × 100`, blank when lines = 0 or suggestions = 0 |
+| Time to First Qodo Comment (min) | Minutes from PR creation to Qodo's first comment; blank if no Qodo comment |
+| Time to First Human Comment (min) | Minutes from PR creation to the first non-Qodo comment; blank if none |
+| Has Human Comment | `True` if any non-Qodo comment exists on the PR |
+| Spotlight Issues | JSON array of high-impact Action Required issues (Security or Correctness sub-label) that were implemented |
+
+### HTML report sections
+
+The HTML report is organized into the following sections:
+
+| Section | What it shows |
+|---|---|
+| Executive Summary | At-a-glance stat cards: PRs reviewed by Qodo, total issues caught, issues resolved, overall implementation rate |
+| Velocity — Time to First Feedback | Median time for Qodo vs the first human reviewer to leave a comment; speed multiplier; % of PRs where Qodo was the sole reviewer before merge |
+| High-Impact Issues Caught & Resolved | Cards for every Action Required issue flagged as Security or Correctness that was implemented before merge |
+| Adoption | Developer breadth stats (how many developers had PRs reviewed, how many implemented suggestions); per-repository and per-developer (top 10) breakdown tables |
+| Impact by Severity | Action Required vs Review Recommended suggestion counts and implementation rates |
+| Impact by Category | Bugs, Rule Violations, and Requirement Gaps counts and implementation rates |
+| Top 5 PRs by Issues Found | The PRs with the most Qodo suggestions |
+| Top 5 PRs by Implemented Suggestions | The PRs with the most implemented suggestions |
+
+The Velocity and High-Impact sections are omitted from the report if no relevant data is present.
 
 ### Options
 

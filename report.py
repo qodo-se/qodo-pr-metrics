@@ -5,8 +5,16 @@ from html import escape as _h
 from pathlib import Path
 from typing import Optional
 import base64
+import json
 import mimetypes
 import re
+import statistics
+
+SPOTLIGHT_LIMIT = 10
+SPOTLIGHT_PRIORITY_KEYWORDS = [
+    "injection", "bypass", "unauthenticated", "hardcoded", "exfiltrat",  # stem matches exfiltrate/exfiltration
+    "csrf", "silent", "crash", "discard", "corrupt",
+]
 
 
 def _rate(implemented: int, total: int) -> float:
@@ -15,9 +23,7 @@ def _rate(implemented: int, total: int) -> float:
 
 @dataclass
 class ReportData:
-    total_prs: int
     prs_with_qodo: int
-    qodo_coverage_pct: float
     total_suggestions: int
     total_implemented: int
     overall_impl_rate_pct: float
@@ -40,11 +46,24 @@ class ReportData:
     by_developer: list
     top_prs: list
     top_prs_by_implemented: list
+    velocity_qodo_median_min: Optional[float]
+    velocity_human_median_min: Optional[float]
+    pct_no_human_comment: float
+    spotlight_issues: list
+    developers_total: int
+    developers_with_qodo: int
+    developers_engaged: int
+    org_prs_total: Optional[int]
+    org_pr_authors_total: Optional[int]
+    repos_with_qodo: int
 
 
-def aggregate(rows: list) -> ReportData:
-    total_prs = len(rows)
-    prs_with_qodo = sum(1 for r in rows if r.get("Has Qodo Review"))
+def aggregate(
+    rows: list,
+    org_prs_total: Optional[int] = None,
+    org_pr_authors_total: Optional[int] = None,
+) -> ReportData:
+    prs_with_qodo = len(rows)
 
     total_sug = sum(r.get("Total Suggestions", 0) for r in rows)
     total_imp = sum(r.get("Total Implemented", 0) for r in rows)
@@ -89,10 +108,53 @@ def aggregate(rows: list) -> ReportData:
         key=lambda r: r.get("Total Implemented", 0), reverse=True,
     )[:5]
 
+    # Velocity
+    qodo_times = [
+        r["Time to First Qodo Comment (min)"] for r in rows
+        if r.get("Time to First Qodo Comment (min)") not in ("", None)
+    ]
+    human_times = [
+        r["Time to First Human Comment (min)"] for r in rows
+        if r.get("Time to First Human Comment (min)") not in ("", None)
+    ]
+    no_human_qodo = sum(
+        1 for r in rows
+        if r.get("Has Qodo Review") and not r.get("Has Human Comment")
+    )
+    velocity_qodo_median = _median(qodo_times)
+    velocity_human_median = _median(human_times)
+    pct_no_human = _rate(no_human_qodo, prs_with_qodo) if prs_with_qodo else 0.0
+
+    # Spotlight
+    spotlight_issues = []
+    for r in rows:
+        raw = r.get("Spotlight Issues", "[]")
+        try:
+            issues = json.loads(raw) if isinstance(raw, str) else (raw or [])
+        except (json.JSONDecodeError, TypeError):
+            issues = []
+        for issue in issues:
+            spotlight_issues.append({
+                **issue,
+                "repo": r["Repo Name"],
+                "pr_num": r["PR #"],
+                "pr_url": r.get("PR URL", ""),
+            })
+
+    # Developer / repo metrics
+    repos_with_qodo = len({r["Repo Name"] for r in rows if r.get("Repo Name")})
+    all_devs = {r["PR Creator"] for r in rows if r.get("PR Creator")}
+    devs_with_qodo = {
+        r["PR Creator"] for r in rows
+        if r.get("Has Qodo Review") and r.get("PR Creator")
+    }
+    devs_engaged = {
+        r["PR Creator"] for r in rows
+        if r.get("Total Implemented", 0) > 0 and r.get("PR Creator")
+    }
+
     return ReportData(
-        total_prs=total_prs,
         prs_with_qodo=prs_with_qodo,
-        qodo_coverage_pct=_rate(prs_with_qodo, total_prs),
         total_suggestions=total_sug,
         total_implemented=total_imp,
         overall_impl_rate_pct=_rate(total_imp, total_sug),
@@ -115,6 +177,16 @@ def aggregate(rows: list) -> ReportData:
         by_developer=by_developer,
         top_prs=top_prs,
         top_prs_by_implemented=top_prs_by_implemented,
+        velocity_qodo_median_min=velocity_qodo_median,
+        velocity_human_median_min=velocity_human_median,
+        pct_no_human_comment=pct_no_human,
+        spotlight_issues=spotlight_issues,
+        developers_total=len(all_devs),
+        developers_with_qodo=len(devs_with_qodo),
+        developers_engaged=len(devs_engaged),
+        org_prs_total=org_prs_total,
+        org_pr_authors_total=org_pr_authors_total,
+        repos_with_qodo=repos_with_qodo,
     )
 
 
@@ -201,6 +273,54 @@ tbody td a:hover { text-decoration: underline; }
   .report-header { border: 1px solid #dfdfdf; margin-bottom: 16px; }
   .two-col { grid-template-columns: 1fr 1fr; }
 }
+.vs-block {
+  display: grid; grid-template-columns: 1fr auto 1fr; gap: 16px;
+  align-items: center; margin-bottom: 14px;
+}
+.vs-side {
+  border-radius: 8px; padding: 20px; text-align: center;
+}
+.vs-qodo { background: #dddcff; border: 2px solid #634fd1; }
+.vs-human { background: #f9f9f9; border: 2px solid #d0d0d0; }
+.vs-name {
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .06em; margin-bottom: 8px;
+}
+.vs-name-qodo { color: #634fd1; }
+.vs-name-human { color: #666; }
+.vs-time { font-size: 36px; font-weight: 700; line-height: 1; }
+.vs-time-qodo { color: #634fd1; }
+.vs-time-human { color: #555; }
+.vs-sub { font-size: 11px; color: #888; margin-top: 5px; }
+.vs-divider { font-size: 20px; font-weight: 700; color: #bbb; text-align: center; }
+.insight-box {
+  background: #f8f7ff; border-left: 4px solid #634fd1;
+  border-radius: 4px; padding: 12px 16px; font-size: 13px; color: #444;
+  margin-top: 14px;
+}
+.spotlight-card {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 12px; border-radius: 6px; padding: 14px 16px; margin-bottom: 10px;
+  border: 1px solid #eee; border-left: 4px solid #e55c83;
+}
+.spotlight-correctness { border-left-color: #634fd1; }
+.spotlight-left { flex: 1; }
+.spotlight-title { font-size: 13px; font-weight: 500; color: #1c1c1c; margin-bottom: 6px; }
+.spotlight-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.spotlight-right { text-align: right; flex-shrink: 0; }
+.spotlight-repo { font-size: 12px; color: #666; margin-bottom: 3px; }
+.spotlight-pr { font-size: 12px; }
+.spotlight-pr a { color: #634fd1; text-decoration: none; }
+.spotlight-pr a:hover { text-decoration: underline; }
+.spotlight-more {
+  font-size: 13px; color: #666; text-align: center;
+  padding: 10px 0 4px; border-top: 1px solid #efefef; margin-top: 6px;
+}
+.tag { display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.tag-cat { background: #fdeef3; color: #a02040; }
+.tag-sub-security { background: #fff0d6; color: #8a5a00; }
+.tag-sub-correctness { background: #e8f4ff; color: #1a5a8a; }
+.tag-impl { background: #c7f5ea; color: #206b58; }
 """
 
 
@@ -223,8 +343,27 @@ def _embed_logo(logo_path: Optional[str]) -> str:
     return f'<img src="data:{mime};base64,{b64}" alt="Qodo" height="48">'
 
 
+def _median(values: list) -> Optional[float]:
+    if not values:
+        return None
+    return statistics.median(float(v) for v in values)
+
+
 def _rate_str(implemented: int, total: int) -> str:
     return f"{100 * implemented / total:.1f}%" if total > 0 else "—"
+
+
+def _format_duration(minutes: Optional[float]) -> str:
+    if minutes is None:
+        return "&mdash;"
+    if minutes == 0:
+        return "&lt;1m"
+    if minutes < 60:
+        return f"{int(minutes)}m"
+    hours = minutes / 60
+    if hours < 24:
+        return f"{hours:.1f}h"
+    return f"{hours / 24:.1f}d"
 
 
 def _stat_card(label: str, value: str) -> str:
@@ -241,9 +380,9 @@ def _impact_card(title: str, color: str, suggested: int, implemented: int) -> st
     return (
         f'<div class="impact-card {color}">'
         f'<h3>{title}</h3>'
-        f'<div class="impact-row"><span>Suggested</span><span class="val">{suggested}</span></div>'
+        f'<div class="impact-row"><span>Findings</span><span class="val">{suggested}</span></div>'
         f'<div class="impact-row"><span>Implemented</span><span class="val">{implemented}</span></div>'
-        f'<div><span class="rate-pill">{rate} implemented</span></div>'
+        f'<div><span class="rate-pill">{rate} of findings implemented</span></div>'
         f'</div>'
     )
 
@@ -251,12 +390,185 @@ def _impact_card(title: str, color: str, suggested: int, implemented: int) -> st
 def _section_exec_summary(agg: ReportData) -> str:
     cards = "".join([
         _stat_card("Merged PRs Reviewed by Qodo", str(agg.prs_with_qodo)),
-        _stat_card("Qodo Coverage", f"{agg.qodo_coverage_pct:.1f}%"),
-        _stat_card("Total Issues Caught", str(agg.total_suggestions)),
-        _stat_card("Issues Resolved", str(agg.total_implemented)),
+        _stat_card("Qodo Findings", str(agg.total_suggestions)),
+        _stat_card("Qodo Findings Implemented", str(agg.total_implemented)),
         _stat_card("Overall Implementation Rate", f"{agg.overall_impl_rate_pct:.1f}%"),
     ])
     return f'<section><h2>Executive Summary</h2><div class="stat-grid">{cards}</div></section>'
+
+
+def _section_velocity(agg: ReportData) -> str:
+    if agg.velocity_qodo_median_min is None and agg.velocity_human_median_min is None:
+        return ""
+
+    qodo_time = _format_duration(agg.velocity_qodo_median_min)
+    human_time = _format_duration(agg.velocity_human_median_min)
+
+    multiplier_html = ""
+    if (agg.velocity_qodo_median_min is not None
+            and agg.velocity_human_median_min is not None
+            and agg.velocity_qodo_median_min > 0):
+        mult = agg.velocity_human_median_min / agg.velocity_qodo_median_min
+        multiplier_html = (
+            f'<div style="text-align:center;margin-top:10px">'
+            f'<span class="rate-pill">{mult:.0f}&times; faster initial feedback</span>'
+            f'</div>'
+        )
+
+    insight_html = ""
+    if agg.pct_no_human_comment > 0:
+        insight_html = (
+            f'<div class="insight-box">'
+            f'<strong>{agg.pct_no_human_comment:.0f}%</strong> of Qodo-reviewed PRs '
+            f'received no human comment &mdash; Qodo provided the sole feedback before merge.'
+            f'</div>'
+        )
+
+    vs_block = (
+        f'<div class="vs-block">'
+        f'<div class="vs-side vs-qodo">'
+        f'<div class="vs-name vs-name-qodo">Qodo</div>'
+        f'<div class="vs-time vs-time-qodo">{qodo_time}</div>'
+        f'<div class="vs-sub">median time to first comment</div>'
+        f'</div>'
+        f'<div class="vs-divider">vs</div>'
+        f'<div class="vs-side vs-human">'
+        f'<div class="vs-name vs-name-human">First human commenter</div>'
+        f'<div class="vs-time vs-time-human">{human_time}</div>'
+        f'<div class="vs-sub">median time to first comment</div>'
+        f'</div>'
+        f'</div>'
+    )
+
+    return (
+        f'<section><h2>Velocity &mdash; Time to First Feedback</h2>'
+        f'{vs_block}'
+        f'{multiplier_html}'
+        f'{insight_html}'
+        f'</section>'
+    )
+
+
+def _keyword_score(issue: dict) -> int:
+    title = issue.get("title", "").lower()
+    return 0 if any(kw in title for kw in SPOTLIGHT_PRIORITY_KEYWORDS) else 1
+
+
+def _select_spotlight(issues: list, limit: int) -> tuple:
+    half = limit // 2
+    security    = sorted([i for i in issues if i.get("sub_label") == "Security"],    key=_keyword_score)
+    correctness = sorted([i for i in issues if i.get("sub_label") == "Correctness"], key=_keyword_score)
+    other       = sorted([i for i in issues if i.get("sub_label") not in ("Security", "Correctness")], key=_keyword_score)
+
+    sec_take = min(half, len(security))
+    cor_take = min(half, len(correctness))
+    remaining = limit - sec_take - cor_take
+
+    sec_avail = len(security) - sec_take
+    cor_avail = len(correctness) - cor_take
+    # tie goes to security (higher-priority bucket)
+    if sec_avail >= cor_avail:
+        extra = min(remaining, sec_avail)
+        sec_take += extra
+        remaining -= extra
+        extra = min(remaining, cor_avail)
+        cor_take += extra
+        remaining -= extra
+    else:
+        extra = min(remaining, cor_avail)
+        cor_take += extra
+        remaining -= extra
+        extra = min(remaining, sec_avail)
+        sec_take += extra
+        remaining -= extra
+
+    other_take = min(remaining, len(other))
+    displayed = security[:sec_take] + correctness[:cor_take] + other[:other_take]
+    hidden    = security[sec_take:] + correctness[cor_take:] + other[other_take:]
+    return displayed, hidden
+
+
+_CATEGORY_DISPLAY = {
+    "bug": "Bug",
+    "rule_violation": "Rule Violation",
+    "requirement_gap": "Requirement Gap",
+    "unknown": "Issue",
+}
+
+
+def _section_bug_spotlight(agg: ReportData) -> str:
+    if not agg.spotlight_issues:
+        return ""
+
+    displayed, hidden = _select_spotlight(agg.spotlight_issues, SPOTLIGHT_LIMIT)
+
+    cards = ""
+    for issue in displayed:
+        url = issue.get("pr_url", "")
+        safe_url = url if url.startswith(("https://", "http://")) else ""
+        pr_num_safe = _h(str(issue.get("pr_num", "")))
+        pr_ref = (
+            f'<a href="{_h(safe_url)}">PR #{pr_num_safe} &#8599;</a>'
+            if safe_url else f'PR #{pr_num_safe}'
+        )
+        cat_display = _CATEGORY_DISPLAY.get(issue.get("category", ""), "Issue")
+        sub_label = issue.get("sub_label", "")
+        # Allowlist known sub_labels to prevent CSS class injection from untrusted CSV data
+        safe_sub_class = {"Security": "tag-sub-security", "Correctness": "tag-sub-correctness"}.get(sub_label, "tag-sub-correctness")
+        border_class = "spotlight-correctness" if sub_label == "Correctness" else ""
+        sub_label_tag = (
+            f'<span class="tag {safe_sub_class}">{_h(sub_label)}</span>'
+            if sub_label else ""
+        )
+        cards += (
+            f'<div class="spotlight-card {border_class}">'
+            f'<div class="spotlight-left">'
+            f'<div class="spotlight-title">{_h(issue.get("title", ""))}</div>'
+            f'<div class="spotlight-tags">'
+            f'<span class="tag tag-cat">{_h(cat_display)}</span>'
+            f'{sub_label_tag}'
+            f'<span class="tag tag-impl">✓ Implemented</span>'
+            f'</div>'
+            f'</div>'
+            f'<div class="spotlight-right">'
+            f'<div class="spotlight-repo">{_h(issue.get("repo", ""))}</div>'
+            f'<div class="spotlight-pr">{pr_ref}</div>'
+            f'</div>'
+            f'</div>'
+        )
+
+    footer = ""
+    if hidden:
+        sec_count   = sum(1 for i in hidden if i.get("sub_label") == "Security")
+        cor_count   = sum(1 for i in hidden if i.get("sub_label") == "Correctness")
+        other_count = sum(1 for i in hidden if i.get("sub_label") not in ("Security", "Correctness"))
+        parts = []
+        if sec_count:
+            parts.append(f"{sec_count} {_h('Security')}")
+        if cor_count:
+            parts.append(f"{cor_count} {_h('Correctness')}")
+        if other_count:
+            parts.append(f"{other_count} {_h('Other')}")
+        breakdown = " &middot; ".join(parts)
+        footer = (
+            f'<p class="spotlight-more">'
+            f'+ {len(hidden)} more &mdash; {breakdown} &mdash; all implemented before merge'
+            f'</p>'
+        )
+
+    count = len(agg.spotlight_issues)
+    plural = "s" if count != 1 else ""
+    preview_note = f" Top {SPOTLIGHT_LIMIT} shown below." if hidden else ""
+    return (
+        f'<section>'
+        f'<h2>High-Impact Issues</h2>'
+        f'<p style="font-size:13px;color:#555;margin-bottom:14px">'
+        f'<strong>{count}</strong> Action Required issue{plural} '
+        f'flagged as Security or Correctness &mdash; all implemented before merge.{preview_note}</p>'
+        f'{cards}'
+        f'{footer}'
+        f'</section>'
+    )
 
 
 def _table(headers: list, rows_html: str) -> str:
@@ -265,6 +577,22 @@ def _table(headers: list, rows_html: str) -> str:
 
 
 def _section_adoption(agg: ReportData) -> str:
+    if agg.org_prs_total is not None:
+        pr_label = f"of {agg.org_prs_total} PRs merged in this period reviewed by Qodo"
+    else:
+        pr_label = "PRs reviewed by Qodo"
+
+    dev_label = f"of {agg.developers_total} developers used Qodo in this period"
+
+    repo_label = "Qodo-enabled repos had PRs in this period"
+
+    summary_cards = (
+        _stat_card(repo_label, str(agg.repos_with_qodo)) +
+        _stat_card(pr_label, str(agg.prs_with_qodo)) +
+        _stat_card(dev_label, str(agg.developers_with_qodo)) +
+        _stat_card("developers implemented Qodo findings", str(agg.developers_engaged))
+    )
+
     repo_rows = "".join(
         f"<tr><td>{_h(r['repo'])}</td><td>{r['prs']}</td><td>{r['suggestions']}</td>"
         f"<td>{_rate_str(r['implemented'], r['suggestions'])}</td></tr>"
@@ -275,10 +603,11 @@ def _section_adoption(agg: ReportData) -> str:
         f"<td>{_rate_str(r['implemented'], r['suggestions'])}</td></tr>"
         for r in agg.by_developer
     )
-    repo_table = _table(["Repository", "Merged PRs", "Issues", "Impl. Rate"], repo_rows)
-    dev_table = _table(["Developer", "Merged PRs", "Issues", "Impl. Rate"], dev_rows)
+    repo_table = _table(["Repository", "Merged PRs", "Findings", "Impl. Rate"], repo_rows)
+    dev_table  = _table(["Developer", "Merged PRs", "Findings", "Impl. Rate"], dev_rows)
     return (
         f'<section><h2>Adoption</h2>'
+        f'<div class="stat-grid" style="margin-bottom:20px">{summary_cards}</div>'
         f'<div class="two-col">'
         f'<div><p class="subsection">By Repository</p>{repo_table}</div>'
         f'<div><p class="subsection">By Developer (top 10)</p>{dev_table}</div>'
@@ -307,22 +636,6 @@ def _section_categories(agg: ReportData) -> str:
     return f'<section><h2>Impact by Category</h2><div class="impact-grid">{cards}</div></section>'
 
 
-def _section_top_prs(agg: ReportData) -> str:
-    pr_rows = ""
-    for r in agg.top_prs:
-        url = r.get("PR URL", "")
-        safe_url = url if url.startswith(("https://", "http://")) else ""
-        pr_ref = f'<a href="{_h(safe_url)}">#{r["PR #"]}</a>' if safe_url else f'#{r["PR #"]}'
-        pr_rows += (
-            f'<tr><td>{_h(r["Repo Name"])}</td><td>{pr_ref}</td>'
-            f'<td>{_h(r["PR Creator"])}</td>'
-            f'<td>{r["Total Suggestions"]}</td><td>{r["Total Implemented"]}</td>'
-            f'<td>{r.get("Implementation Rate (%)", "—")}</td></tr>'
-        )
-    table = _table(["Repo", "PR", "Creator", "Issues", "Implemented", "Rate"], pr_rows)
-    return f'<section><h2>Top 5 Merged PRs by Issues Found</h2>{table}</section>'
-
-
 def _section_top_prs_by_implemented(agg: ReportData) -> str:
     pr_rows = ""
     for r in agg.top_prs_by_implemented:
@@ -335,7 +648,7 @@ def _section_top_prs_by_implemented(agg: ReportData) -> str:
             f'<td>{r["Total Suggestions"]}</td><td>{r["Total Implemented"]}</td>'
             f'<td>{r.get("Implementation Rate (%)", "—")}</td></tr>'
         )
-    table = _table(["Repo", "PR", "Creator", "Issues", "Implemented", "Rate"], pr_rows)
+    table = _table(["Repo", "PR", "Creator", "Findings", "Implemented", "Impl. Rate"], pr_rows)
     return f'<section><h2>Top 5 Merged PRs by Implemented Suggestions</h2>{table}</section>'
 
 
@@ -345,8 +658,14 @@ def generate_html(
     since: "date",
     until: "date",
     logo_path: Optional[str] = "logo.svg",
+    org_pr_count: Optional[int] = None,
+    org_author_count: Optional[int] = None,
 ) -> str:
-    agg = aggregate(rows)
+    agg = aggregate(
+        rows,
+        org_prs_total=org_pr_count,
+        org_pr_authors_total=org_author_count,
+    )
     logo_tag = _embed_logo(logo_path)
     since_fmt = since.strftime("%b %d, %Y")
     until_fmt = until.strftime("%b %d, %Y")
@@ -370,11 +689,12 @@ def generate_html(
     </div>
   </header>
   {_section_exec_summary(agg)}
+  {_section_velocity(agg)}
   {_section_adoption(agg)}
   {_section_severity(agg)}
   {_section_categories(agg)}
-  {_section_top_prs(agg)}
   {_section_top_prs_by_implemented(agg)}
+  {_section_bug_spotlight(agg)}
 </div>
 </body>
 </html>"""
