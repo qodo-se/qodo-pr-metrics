@@ -978,6 +978,7 @@ def get_weekly_pr_counts(org: str, since: date,
             print(f"  Warning: failed to fetch PR count for week {cursor}", file=sys.stderr)
         results.append({"week_start": cursor.isoformat(), "total": total, "qodo": 0})
         cursor += timedelta(days=7)
+        time.sleep(2)  # pace to ~20 req/min, well under the Search API 30 req/min limit
     return results
 
 
