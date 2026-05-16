@@ -441,9 +441,11 @@ def test_get_weekly_pr_counts_calls_search_once_per_week(monkeypatch):
         call_count[0] += 1
         return "3\n"
     monkeypatch.setattr("github.run_gh", fake_run_gh)
-    # Force exactly one week by passing since = today - 1 day
     from datetime import date as d, timedelta
-    result = get_weekly_pr_counts("acme", d.today() - timedelta(days=1))
+    # Use Monday of current week so rewind is a no-op regardless of day-of-week
+    today = d.today()
+    monday = today - timedelta(days=today.weekday())
+    result = get_weekly_pr_counts("acme", monday)
     # One week → 1 call (total only; qodo counts come from _qodo_counts_by_week)
     assert call_count[0] == 1
 
