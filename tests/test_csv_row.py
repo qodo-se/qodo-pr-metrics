@@ -437,3 +437,47 @@ def test_detect_ai_empty_inputs():
     is_ai, ai_type = detect_ai_authored("", [])
     assert is_ai is False
     assert ai_type == ""
+
+
+# ---------------------------------------------------------------------------
+# parse_reviews — reviewer count, request-changes flag, and approver
+# ---------------------------------------------------------------------------
+
+from github import parse_reviews
+
+def test_parse_reviews_approved():
+    reviews = [{"author": {"login": "alice"}, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"}]
+    result = parse_reviews(reviews)
+    assert result["reviewer_count"] == 1
+    assert result["had_request_changes"] is False
+    assert result["approver"] == "alice"
+
+def test_parse_reviews_request_changes():
+    reviews = [
+        {"author": {"login": "bob"}, "state": "CHANGES_REQUESTED", "submittedAt": "2026-01-01T10:00:00Z"},
+        {"author": {"login": "bob"}, "state": "APPROVED", "submittedAt": "2026-01-01T11:00:00Z"},
+    ]
+    result = parse_reviews(reviews)
+    assert result["had_request_changes"] is True
+    assert result["reviewer_count"] == 1
+    assert result["approver"] == "bob"
+
+def test_parse_reviews_multiple_reviewers():
+    reviews = [
+        {"author": {"login": "alice"}, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"},
+        {"author": {"login": "bob"}, "state": "COMMENTED", "submittedAt": "2026-01-01T11:00:00Z"},
+    ]
+    result = parse_reviews(reviews)
+    assert result["reviewer_count"] == 2
+
+def test_parse_reviews_empty():
+    result = parse_reviews([])
+    assert result["reviewer_count"] == 0
+    assert result["had_request_changes"] is False
+    assert result["approver"] == ""
+
+def test_parse_reviews_null_author_skipped():
+    reviews = [{"author": None, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"}]
+    result = parse_reviews(reviews)
+    assert result["reviewer_count"] == 0
+    assert result["approver"] == ""

@@ -522,6 +522,31 @@ def detect_ai_authored(body: str, labels: list) -> tuple:
     return False, ""
 
 
+def parse_reviews(reviews: list) -> dict:
+    """Extract reviewer count, request-changes flag, and final approver.
+
+    reviewer_count: unique authors across all reviews.
+    had_request_changes: True if any review has state CHANGES_REQUESTED.
+    approver: login of the last reviewer to submit an APPROVED state.
+    """
+    reviewers: set = set()
+    had_changes = False
+    approver = ""
+    for r in reviews:
+        login = (r.get("author") or {}).get("login", "")
+        if login:
+            reviewers.add(login)
+        if r.get("state") == "CHANGES_REQUESTED":
+            had_changes = True
+        if r.get("state") == "APPROVED" and login:
+            approver = login
+    return {
+        "reviewer_count": len(reviewers),
+        "had_request_changes": had_changes,
+        "approver": approver,
+    }
+
+
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
     "Hours to Merge", "PR Creator", "Lines Changed",
