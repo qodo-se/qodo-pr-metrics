@@ -922,14 +922,12 @@ def get_hotfix_pr_count(org: str, since: date,
 
 
 def _search_pr_count_range(org: str, from_date: date, to_date: date,
-                            repos: Optional[List[str]] = None,
-                            qodo_only: bool = False) -> int:
-    """Count merged PRs in [from_date, to_date], optionally restricted to Qodo PRs."""
+                            repos: Optional[List[str]] = None) -> int:
+    """Count merged PRs in [from_date, to_date]."""
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
-    qodo_filter = '"Code Review by Qodo" in:comments ' if qodo_only else ""
     total = 0
     for qual in qualifiers:
-        q = (f"{qual} is:pr is:merged {qodo_filter}"
+        q = (f"{qual} is:pr is:merged "
              f"merged:{from_date.isoformat()}..{to_date.isoformat()}")
         try:
             out = run_gh(["api", "-X", "GET", "search/issues",
@@ -971,7 +969,7 @@ def get_weekly_pr_counts(org: str, since: date,
     cursor = start
     while cursor <= today:
         week_end = min(cursor + timedelta(days=6), today)
-        total = _search_pr_count_range(org, cursor, week_end, repos, qodo_only=False)
+        total = _search_pr_count_range(org, cursor, week_end, repos)
         results.append({"week_start": cursor.isoformat(), "total": total, "qodo": 0})
         cursor += timedelta(days=7)
     return results
@@ -1028,16 +1026,15 @@ def cmd_count(args):
     hotfix_count = get_hotfix_pr_count(args.org, args.since, repos=args.repos)
     print(f" {revert_count} reverts, {hotfix_count} hotfixes", file=sys.stderr)
 
+    all_qodo_prs = list(search_merged_prs(args.org, args.since, repos=args.repos))
     pending = [
-        pr for pr in search_merged_prs(args.org, args.since, repos=args.repos)
+        pr for pr in all_qodo_prs
         if (pr["owner"], pr["repo"], str(pr["number"])) not in processed
         and (pr["owner"], pr["repo"], pr["number"]) not in processed
     ]
     qodo_total = len(pending)
-    org_author_count = len({pr["creator"] for pr in pending if pr.get("creator")})
-    # Note: on --resume runs, already-processed PRs are absent from pending,
-    # so qodo weekly counts may be understated for weeks partially done in a prior run.
-    qodo_by_week = _qodo_counts_by_week(pending)
+    org_author_count = len({pr["creator"] for pr in all_qodo_prs if pr.get("creator")})
+    qodo_by_week = _qodo_counts_by_week(all_qodo_prs)
     for week in weekly_coverage:
         week["qodo"] = qodo_by_week.get(week["week_start"], 0)
 

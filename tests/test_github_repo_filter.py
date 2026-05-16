@@ -188,6 +188,7 @@ def test_search_merged_prs_follows_pagination_cursor(monkeypatch):
     # Second call must include the cursor from page 1
     second_call_args = calls[1]
     assert any(a == "cursor=cursor_abc" for a in second_call_args)
+    assert len(calls) == 2  # loop must terminate after hasNextPage=False
 
 
 import json as _json
