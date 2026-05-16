@@ -308,7 +308,7 @@ def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) 
         "labels(first:10){nodes{name}} "
         "reviews(last:100){nodes{author{login} state submittedAt}} "
         "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
-        "allCommits:commits(first:100){nodes{commit{committedDate message}}} "
+        "allCommits:commits(last:100){nodes{commit{committedDate message}}} "
         f"comments(first:{comments_limit})"
         "{nodes{body createdAt "
         "userContentEdits(last:2){nodes{editedAt}} "
@@ -369,7 +369,7 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 50) -> dict:
             "labels(first:10){nodes{name}} "
             "reviews(last:100){nodes{author{login} state submittedAt}} "
             "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
-            "allCommits:commits(first:100){nodes{commit{committedDate message}}} "
+            "allCommits:commits(last:100){nodes{commit{committedDate message}}} "
             "comments(first:20){nodes{body createdAt "
             "userContentEdits(last:2){nodes{editedAt}} "
             "author{login __typename}}}"
@@ -582,10 +582,13 @@ def compute_speed_to_fix(qodo_ts: Optional[str], commits: list) -> dict:
     """
     if not qodo_ts or not commits:
         return {"commits_after_qodo": 0, "speed_to_fix_min": None}
-    after = [c for c in commits if ((c.get("commit") or {}).get("committedDate") or "") > qodo_ts]
+    after = sorted(
+        [c for c in commits if ((c.get("commit") or {}).get("committedDate") or "") > qodo_ts],
+        key=lambda c: (c.get("commit") or {}).get("committedDate") or "",
+    )
     if not after:
         return {"commits_after_qodo": 0, "speed_to_fix_min": None}
-    first_ts = min(c["commit"]["committedDate"] for c in after)
+    first_ts = after[0]["commit"]["committedDate"]
     return {
         "commits_after_qodo": len(after),
         "speed_to_fix_min": _minutes_between(qodo_ts, first_ts),
