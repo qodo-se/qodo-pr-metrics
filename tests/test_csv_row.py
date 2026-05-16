@@ -374,11 +374,11 @@ def test_fetch_pr_data_returns_ci_status(monkeypatch):
 
 
 def test_fetch_pr_data_returns_commits(monkeypatch):
-    commits = [{"committedDate": "2026-01-01T11:00:00Z", "message": "fix: address review"}]
+    commits = [{"commit": {"committedDate": "2026-01-01T11:00:00Z", "message": "fix: address review"}}]
     monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(commits=commits))
     result = fetch_pr_data("acme", "repo", 42)
     assert len(result["commits"]) == 1
-    assert result["commits"][0]["committedDate"] == "2026-01-01T11:00:00Z"
+    assert result["commits"][0]["commit"]["committedDate"] == "2026-01-01T11:00:00Z"
 
 
 def test_fetch_pr_data_ci_status_none_when_missing(monkeypatch):
