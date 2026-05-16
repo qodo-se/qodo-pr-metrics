@@ -521,3 +521,48 @@ def test_speed_to_fix_picks_earliest_commit():
     ]
     result = compute_speed_to_fix("2026-01-01T10:00:00Z", commits)
     assert result["speed_to_fix_min"] == 15
+
+
+# ---------------------------------------------------------------------------
+# build_csv_row — new extras columns for AI authorship, reviews, CI, speed
+# ---------------------------------------------------------------------------
+
+def test_build_csv_row_extras_populated():
+    extras = {
+        "is_ai_authored": True,
+        "ai_author_type": "copilot",
+        "reviewer_count": 2,
+        "had_request_changes": True,
+        "approver": "alice",
+        "ci_status": "SUCCESS",
+        "commits_after_qodo": 3,
+        "speed_to_fix_min": 45,
+    }
+    row = build_csv_row(_pr(), lines_changed=100, stats=None, extras=extras)
+    assert row["Is AI Authored"] is True
+    assert row["AI Author Type"] == "copilot"
+    assert row["Reviewer Count"] == 2
+    assert row["Had Request Changes"] is True
+    assert row["Final Approver"] == "alice"
+    assert row["CI Status"] == "SUCCESS"
+    assert row["Commits After Qodo"] == 3
+    assert row["Speed to First Fix (min)"] == 45
+
+
+def test_build_csv_row_extras_none_defaults():
+    row = build_csv_row(_pr(), lines_changed=100, stats=None)
+    assert row["Is AI Authored"] is False
+    assert row["AI Author Type"] == ""
+    assert row["Reviewer Count"] == 0
+    assert row["Had Request Changes"] is False
+    assert row["Final Approver"] == ""
+    assert row["CI Status"] == ""
+    assert row["Commits After Qodo"] == 0
+    assert row["Speed to First Fix (min)"] == ""
+
+
+def test_build_csv_row_speed_to_fix_none_becomes_empty():
+    extras = {"speed_to_fix_min": None, "ci_status": None}
+    row = build_csv_row(_pr(), lines_changed=100, stats=None, extras=extras)
+    assert row["Speed to First Fix (min)"] == ""
+    assert row["CI Status"] == ""

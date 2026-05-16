@@ -577,6 +577,10 @@ CSV_COLUMNS = [
     "Implementation Rate (%)", "Suggestions per 100 Lines",
     "Time to First Qodo Comment (min)", "Time to First Human Comment (min)",
     "Has Human Comment", "Spotlight Issues",
+    "Is AI Authored", "AI Author Type",
+    "Reviewer Count", "Had Request Changes", "Final Approver",
+    "CI Status",
+    "Commits After Qodo", "Speed to First Fix (min)",
 ]
 
 
@@ -647,11 +651,13 @@ def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] 
 
 
 def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
-                  timing: Optional[dict] = None) -> dict:
+                  timing: Optional[dict] = None,
+                  extras: Optional[dict] = None) -> dict:
     has_qodo = stats is not None
     total = stats.total_suggestions if has_qodo else 0
     implemented = stats.total_implemented if has_qodo else 0
     timing = timing or {}
+    extras = extras or {}
 
     impl_rate = f"{100 * implemented / total:.1f}" if total > 0 else ""
     per_100 = (
@@ -691,6 +697,15 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
         "Time to First Human Comment (min)":    human_min if human_min is not None else "",
         "Has Human Comment":                    timing.get("has_human", False),
         "Spotlight Issues":                     json.dumps(stats.spotlight_issues if has_qodo else []),
+        "Is AI Authored":                       extras.get("is_ai_authored", False),
+        "AI Author Type":                       extras.get("ai_author_type", ""),
+        "Reviewer Count":                       extras.get("reviewer_count", 0),
+        "Had Request Changes":                  extras.get("had_request_changes", False),
+        "Final Approver":                       extras.get("approver", ""),
+        "CI Status":                            extras.get("ci_status") or "",
+        "Commits After Qodo":                   extras.get("commits_after_qodo", 0),
+        "Speed to First Fix (min)":             extras.get("speed_to_fix_min")
+                                                if extras.get("speed_to_fix_min") is not None else "",
     }
 
 
@@ -842,6 +857,42 @@ def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) 
         return int(out.strip())
     except ValueError:
         return None
+
+
+def get_revert_pr_count(org: str, since: date,
+                        repos: Optional[List[str]] = None) -> Optional[int]:
+    """Count merged PRs with 'revert' in the title merged since `since`."""
+    today = date.today()
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
+    total = 0
+    for qual in qualifiers:
+        q = (f"{qual} is:pr is:merged revert in:title "
+             f"merged:{since.isoformat()}..{today.isoformat()}")
+        try:
+            out = run_gh(["api", "-X", "GET", "search/issues",
+                          "-f", f"q={q}", "--jq", ".total_count"])
+            total += int(out.strip())
+        except Exception:
+            return None
+    return total
+
+
+def get_hotfix_pr_count(org: str, since: date,
+                        repos: Optional[List[str]] = None) -> Optional[int]:
+    """Count merged PRs from hotfix/* branches merged since `since`."""
+    today = date.today()
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
+    total = 0
+    for qual in qualifiers:
+        q = (f"{qual} is:pr is:merged head:hotfix "
+             f"merged:{since.isoformat()}..{today.isoformat()}")
+        try:
+            out = run_gh(["api", "-X", "GET", "search/issues",
+                          "-f", f"q={q}", "--jq", ".total_count"])
+            total += int(out.strip())
+        except Exception:
+            return None
+    return total
 
 
 def cmd_count(args):
