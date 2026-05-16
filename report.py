@@ -85,10 +85,22 @@ class ReportData:
     org_prs_total: Optional[int]
     org_pr_authors_total: Optional[int]
     repos_with_qodo: int
+    ai_authored_count: int
+    ai_authored_impl_rate_pct: float
+    avg_reviewer_count: float
+    pct_had_request_changes: float
+    ci_pass_rate_pct: Optional[float]
+    speed_to_fix_median_min: Optional[float]
+    weekly_coverage: list
+    revert_count: Optional[int]
+    hotfix_count: Optional[int]
 
 
 def aggregate(rows: list, org_prs_total: Optional[int] = None,
-              org_pr_authors_total: Optional[int] = None) -> ReportData:
+              org_pr_authors_total: Optional[int] = None,
+              weekly_coverage: Optional[list] = None,
+              revert_count: Optional[int] = None,
+              hotfix_count: Optional[int] = None) -> ReportData:
     prs_with_qodo = sum(1 for r in rows if r.get("Has Qodo Review", True))
 
     total_sug = sum(r.get("Total Suggestions", 0) for r in rows)
@@ -159,6 +171,29 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
                 "pr_url": r.get("PR URL", ""),
             })
 
+    # AI-authored stats
+    ai_rows = [r for r in rows if r.get("Is AI Authored")]
+    ai_authored_count = len(ai_rows)
+    ai_sug = sum(r.get("Total Suggestions", 0) for r in ai_rows)
+    ai_imp = sum(r.get("Total Implemented", 0) for r in ai_rows)
+
+    # Reviewer stats
+    rev_counts = [r["Reviewer Count"] for r in rows
+                  if isinstance(r.get("Reviewer Count"), int)]
+    avg_reviewer_count = round(sum(rev_counts) / len(rev_counts), 1) if rev_counts else 0.0
+    had_changes_count = sum(1 for r in rows if r.get("Had Request Changes"))
+    pct_had_changes = _rate(had_changes_count, len(rows)) if rows else 0.0
+
+    # CI pass rate (only count rows with a non-empty CI Status)
+    ci_rows = [r for r in rows if r.get("CI Status") not in ("", None)]
+    ci_pass = sum(1 for r in ci_rows if r.get("CI Status") == "SUCCESS")
+    ci_pass_rate_pct = _rate(ci_pass, len(ci_rows)) if ci_rows else None
+
+    # Speed to fix median
+    fix_times = [r["Speed to First Fix (min)"] for r in rows
+                 if r.get("Speed to First Fix (min)") not in ("", None)]
+    speed_to_fix_median = _median(fix_times)
+
     repos_with_qodo = len({r["Repo Name"] for r in rows if r.get("Repo Name")})
     all_devs = {r["PR Creator"] for r in rows if r.get("PR Creator")}
     devs_with_qodo = {r["PR Creator"] for r in rows
@@ -200,6 +235,15 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
         org_prs_total=org_prs_total,
         org_pr_authors_total=org_pr_authors_total,
         repos_with_qodo=repos_with_qodo,
+        ai_authored_count=ai_authored_count,
+        ai_authored_impl_rate_pct=_rate(ai_imp, ai_sug),
+        avg_reviewer_count=avg_reviewer_count,
+        pct_had_request_changes=pct_had_changes,
+        ci_pass_rate_pct=ci_pass_rate_pct,
+        speed_to_fix_median_min=speed_to_fix_median,
+        weekly_coverage=weekly_coverage or [],
+        revert_count=revert_count,
+        hotfix_count=hotfix_count,
     )
 
 
