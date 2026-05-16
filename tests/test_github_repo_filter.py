@@ -373,7 +373,7 @@ def test_get_revert_pr_count_includes_revert_in_title(monkeypatch):
     assert any("revert in:title" in q for q in q_args)
 
 
-def test_get_hotfix_pr_count_uses_head_qualifier(monkeypatch):
+def test_get_hotfix_pr_count_uses_all_signals(monkeypatch):
     captured = []
     def fake_run_gh(args, **kw):
         captured.extend(args)
@@ -382,6 +382,8 @@ def test_get_hotfix_pr_count_uses_head_qualifier(monkeypatch):
     result = get_hotfix_pr_count("acme", date(2026, 1, 1))
     assert result == 3
     q_args = [a for a in captured if a.startswith("q=")]
+    assert any("hotfix in:title" in q for q in q_args)
+    assert any("label:hotfix" in q for q in q_args)
     assert any("head:hotfix" in q for q in q_args)
 
 
