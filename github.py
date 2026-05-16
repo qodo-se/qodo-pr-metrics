@@ -249,8 +249,15 @@ def _extract_ci_status(last_commit_data: Optional[dict]) -> Optional[str]:
 def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) -> dict:
     """Fetch PR comments and line counts via a single GraphQL query.
 
-    Returns {"comments": [...], "additions": int, "deletions": int}.
-    Each comment: {"body": str, "created_at": str, "user": {"login": str}}.
+    Returns a dict with keys:
+      - comments:  list of comment dicts, each with keys body, created_at, user
+      - additions: int
+      - deletions: int
+      - body:      str (PR description body)
+      - labels:    list of str
+      - reviews:   list of review nodes
+      - ci_status: str or None (GitHub status check rollup state)
+      - commits:   list of commit nodes (capped at 100)
     """
     query = (
         "query($owner:String!,$repo:String!,$number:Int!){"

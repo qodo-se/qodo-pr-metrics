@@ -247,3 +247,58 @@ def test_fetch_pr_data_batch_splits_into_batches(monkeypatch):
     prs = [{"node_id": f"PR_{i}", "owner": "a", "repo": "r", "number": i} for i in range(5)]
     fetch_pr_data_batch(prs, batch_size=2)
     assert call_count[0] == 3  # ceil(5/2) = 3
+
+
+def test_fetch_pr_data_batch_returns_body_and_labels(monkeypatch):
+    node = {
+        "id": "PR_abc",
+        "additions": 0, "deletions": 0,
+        "body": "Co-Authored-By: github-copilot",
+        "labels": {"nodes": [{"name": "copilot"}, {"name": "bug"}]},
+        "reviews": {"nodes": []},
+        "lastCommit": {"nodes": [{"commit": {"statusCheckRollup": {"state": "SUCCESS"}}}]},
+        "allCommits": {"nodes": []},
+        "comments": {"nodes": []},
+    }
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _batch_response([node]))
+    prs = [{"node_id": "PR_abc", "owner": "acme", "repo": "r", "number": 1}]
+    result = fetch_pr_data_batch(prs)
+    assert result["PR_abc"]["body"] == "Co-Authored-By: github-copilot"
+    assert result["PR_abc"]["labels"] == ["copilot", "bug"]
+
+
+def test_fetch_pr_data_batch_returns_reviews(monkeypatch):
+    node = {
+        "id": "PR_def",
+        "additions": 0, "deletions": 0,
+        "body": "",
+        "labels": {"nodes": []},
+        "reviews": {"nodes": [{"author": {"login": "alice"}, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"}]},
+        "lastCommit": {"nodes": []},
+        "allCommits": {"nodes": []},
+        "comments": {"nodes": []},
+    }
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _batch_response([node]))
+    prs = [{"node_id": "PR_def", "owner": "acme", "repo": "r", "number": 2}]
+    result = fetch_pr_data_batch(prs)
+    assert result["PR_def"]["reviews"][0]["state"] == "APPROVED"
+    assert result["PR_def"]["ci_status"] is None
+
+
+def test_fetch_pr_data_batch_returns_ci_status_and_commits(monkeypatch):
+    node = {
+        "id": "PR_ghi",
+        "additions": 0, "deletions": 0,
+        "body": "",
+        "labels": {"nodes": []},
+        "reviews": {"nodes": []},
+        "lastCommit": {"nodes": [{"commit": {"statusCheckRollup": {"state": "FAILURE"}}}]},
+        "allCommits": {"nodes": [{"committedDate": "2026-01-01T11:00:00Z", "message": "fix: resolve review"}]},
+        "comments": {"nodes": []},
+    }
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _batch_response([node]))
+    prs = [{"node_id": "PR_ghi", "owner": "acme", "repo": "r", "number": 3}]
+    result = fetch_pr_data_batch(prs)
+    assert result["PR_ghi"]["ci_status"] == "FAILURE"
+    assert len(result["PR_ghi"]["commits"]) == 1
+    assert result["PR_ghi"]["commits"][0]["committedDate"] == "2026-01-01T11:00:00Z"
