@@ -2,7 +2,7 @@
 
 Generates an HTML report measuring Qodo code-review impact across merged PRs in a GitHub org — covering suggestion volume, implementation rates, reviewer velocity, and developer adoption.
 
-[View sample report](examples/sample_report.html)
+[View sample report](https://htmlpreview.github.io/?https://github.com/qodo-se/qodo-pr-metrics/blob/main/examples/sample_report.html)
 
 ## What it does
 
