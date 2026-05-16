@@ -1066,10 +1066,12 @@ def _section_breakdown(agg: ReportData) -> str:
 
 
 def _section_quality_signal(agg: ReportData) -> str:
-    if agg.revert_count is None and agg.hotfix_count is None:
+    revert_absent = agg.revert_count is None or agg.revert_count == 0
+    hotfix_absent = agg.hotfix_count is None or agg.hotfix_count == 0
+    if revert_absent and hotfix_absent:
         return ""
     revert_val = str(agg.revert_count) if agg.revert_count is not None else "—"
-    hotfix_val = str(agg.hotfix_count) if agg.hotfix_count is not None else "—"
+    hotfix_val = str(agg.hotfix_count) if agg.hotfix_count else "—"
     return (
         f'<section class="r-section">'
         f'<div class="r-section-head"><div>'
