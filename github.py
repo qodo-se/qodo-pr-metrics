@@ -1009,6 +1009,8 @@ def cmd_count(args):
     ]
     qodo_total = len(pending)
     org_author_count = len({pr["creator"] for pr in pending if pr.get("creator")})
+    # Note: on --resume runs, already-processed PRs are absent from pending,
+    # so qodo weekly counts may be understated for weeks partially done in a prior run.
     qodo_by_week = _qodo_counts_by_week(pending)
     for week in weekly_coverage:
         week["qodo"] = qodo_by_week.get(week["week_start"], 0)
