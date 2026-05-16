@@ -87,6 +87,21 @@ _CAT_CORRECTNESS = re.compile(r"\bCorrectness\b", re.IGNORECASE)
 _HTML_TAG        = re.compile(r"<[^>]+>")
 _STRIKETHROUGH   = re.compile(r"~~(.+?)~~")
 
+_AI_BODY_PATTERNS = [
+    (re.compile(r"co-authored-by:[^\n]*github-copilot", re.IGNORECASE), "copilot"),
+    (re.compile(r"\bcopilot\b", re.IGNORECASE), "copilot"),
+    (re.compile(r"co-authored-by:[^\n]*cursor", re.IGNORECASE), "cursor"),
+    (re.compile(r"generated.*with.*cursor", re.IGNORECASE), "cursor"),
+    (re.compile(r"co-authored-by:[^\n]*claude", re.IGNORECASE), "claude"),
+    (re.compile(r"generated.*with.*claude", re.IGNORECASE), "claude"),
+]
+_AI_LABEL_NAMES = {
+    "copilot": "copilot",
+    "ai-generated": "copilot",
+    "cursor": "cursor",
+    "claude": "claude",
+}
+
 
 @dataclass
 class QodoStats:
@@ -487,6 +502,24 @@ def _clean_title(title: str) -> str:
     text = re.sub(r'\s*[☑✓].*$', '', text)       # strip ☑ and after
     text = re.sub(r'\s*[^\x00-\x7F].*$', '', text)  # strip emoji and after
     return text.strip()
+
+
+def detect_ai_authored(body: str, labels: list) -> tuple:
+    """Return (is_ai_authored: bool, ai_type: str) for a PR.
+
+    Checks body text for co-author signatures and labels for AI tags.
+    Returns the first match found; ai_type is '' when not AI-authored.
+    """
+    text = body or ""
+    for pattern, ai_type in _AI_BODY_PATTERNS:
+        if pattern.search(text):
+            return True, ai_type
+    for label in labels:
+        lower = label.lower()
+        for name, ai_type in _AI_LABEL_NAMES.items():
+            if name in lower:
+                return True, ai_type
+    return False, ""
 
 
 CSV_COLUMNS = [

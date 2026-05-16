@@ -393,3 +393,47 @@ def test_fetch_pr_data_ci_status_none_when_missing(monkeypatch):
     monkeypatch.setattr("github.run_gh", lambda args, **kw: payload)
     result = fetch_pr_data("acme", "repo", 1)
     assert result["ci_status"] is None
+
+
+# ---------------------------------------------------------------------------
+# detect_ai_authored — identify AI-generated PRs
+# ---------------------------------------------------------------------------
+
+from github import detect_ai_authored
+
+def test_detect_ai_copilot_coauthor():
+    body = "Co-Authored-By: github-copilot[bot] <github-copilot[bot]@users.noreply.github.com>"
+    is_ai, ai_type = detect_ai_authored(body, [])
+    assert is_ai is True
+    assert ai_type == "copilot"
+
+def test_detect_ai_copilot_label():
+    is_ai, ai_type = detect_ai_authored("", ["copilot", "bug"])
+    assert is_ai is True
+    assert ai_type == "copilot"
+
+def test_detect_ai_cursor_coauthor():
+    body = "Co-Authored-By: cursor-ai <cursor@example.com>"
+    is_ai, ai_type = detect_ai_authored(body, [])
+    assert is_ai is True
+    assert ai_type == "cursor"
+
+def test_detect_ai_claude_coauthor():
+    body = "Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>"
+    is_ai, ai_type = detect_ai_authored(body, [])
+    assert is_ai is True
+    assert ai_type == "claude"
+
+def test_detect_ai_label_ai_generated():
+    is_ai, ai_type = detect_ai_authored("", ["ai-generated"])
+    assert is_ai is True
+
+def test_detect_ai_not_triggered_by_normal_pr():
+    is_ai, ai_type = detect_ai_authored("Fix the login bug", ["bug", "backend"])
+    assert is_ai is False
+    assert ai_type == ""
+
+def test_detect_ai_empty_inputs():
+    is_ai, ai_type = detect_ai_authored("", [])
+    assert is_ai is False
+    assert ai_type == ""
