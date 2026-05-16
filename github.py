@@ -994,17 +994,26 @@ def cmd_test_hotfix_signals(args):
         "combined": "(hotfix in:title OR label:hotfix OR head:hotfix)",
     }
     results = {}
+    had_failures = False
     for name, signal in signals.items():
         total = 0
+        failed = False
         for qual in qualifiers:
             q = (f"{qual} is:pr is:merged {signal} "
                  f"merged:{args.since.isoformat()}..{today.isoformat()}")
-            out = run_gh(["api", "-X", "GET", "search/issues",
-                          "-f", f"q={q}", "--jq", ".total_count"])
-            total += int(out.strip())
-        results[name] = total
+            try:
+                out = run_gh(["api", "-X", "GET", "search/issues",
+                              "-f", f"q={q}", "--jq", ".total_count"])
+                total += int(out.strip())
+            except (SystemExit, ValueError, Exception) as e:
+                print(f"  WARNING: {name}/{qual} failed: {e}", file=sys.stderr)
+                failed = True
+                had_failures = True
+        if not failed:
+            results[name] = total
         label = name.ljust(10)
-        print(f"  {label} {total}")
+        suffix = " (ERROR)" if failed else ""
+        print(f"  {label} {total}{suffix}")
     if len(results) == 4:
         signal_sum = results["title"] + results["label"] + results["branch"]
         combined = results["combined"]
@@ -1012,6 +1021,8 @@ def cmd_test_hotfix_signals(args):
             print(f"\n  OK: combined ({combined}) <= sum of signals ({signal_sum}) — OR deduplication confirmed")
         else:
             print(f"\n  WARNING: combined ({combined}) > sum ({signal_sum}) — check GitHub Search OR behavior")
+    if had_failures:
+        sys.exit(1)
 
 
 def cmd_count(args):
