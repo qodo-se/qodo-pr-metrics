@@ -983,6 +983,44 @@ def get_weekly_pr_counts(org: str, since: date,
     return results
 
 
+def cmd_test_hotfix_signals(args):
+    """Print hotfix detection counts per signal and combined for smoke-testing."""
+    today = date.today()
+    qualifiers = [f"repo:{args.org}/{r}" for r in args.repos] if args.repos else [f"org:{args.org}"]
+    signals = {
+        "title":    "hotfix in:title",
+        "label":    "label:hotfix",
+        "branch":   "head:hotfix",
+        "combined": "(hotfix in:title OR label:hotfix OR head:hotfix)",
+    }
+    results = {}
+    for name, signal in signals.items():
+        total = 0
+        ok = True
+        for qual in qualifiers:
+            q = (f"{qual} is:pr is:merged {signal} "
+                 f"merged:{args.since.isoformat()}..{today.isoformat()}")
+            try:
+                out = run_gh(["api", "-X", "GET", "search/issues",
+                              "-f", f"q={q}", "--jq", ".total_count"])
+                total += int(out.strip())
+            except Exception as e:
+                print(f"  {name}: ERROR ({e})")
+                ok = False
+                break
+        if ok:
+            results[name] = total
+            label = name.ljust(10)
+            print(f"  {label} {total}")
+    if len(results) == 4:
+        signal_sum = results["title"] + results["label"] + results["branch"]
+        combined = results["combined"]
+        if combined <= signal_sum:
+            print(f"\n  OK: combined ({combined}) <= sum of signals ({signal_sum}) — OR deduplication confirmed")
+        else:
+            print(f"\n  WARNING: combined ({combined}) > sum ({signal_sum}) — check GitHub Search OR behavior")
+
+
 def cmd_count(args):
     start_time = time.monotonic()
     cp_path = checkpoint_path(args.org)
@@ -1216,6 +1254,8 @@ def main():
         "--repos", nargs="+", metavar="REPO",
         help="Limit to specific repos (e.g. --repos frontend-app backend-api)",
     )
+    p.add_argument("--test-hotfix-signals", action="store_true",
+                   help="Smoke-test hotfix detection signals (branch/label/title) and exit")
     args = p.parse_args()
 
     if not args.since:
@@ -1226,6 +1266,8 @@ def main():
 
     if args.inspect:
         cmd_inspect(args)
+    elif args.test_hotfix_signals:
+        cmd_test_hotfix_signals(args)
     else:
         cmd_count(args)
 
