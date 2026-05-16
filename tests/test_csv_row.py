@@ -481,3 +481,43 @@ def test_parse_reviews_null_author_skipped():
     result = parse_reviews(reviews)
     assert result["reviewer_count"] == 0
     assert result["approver"] == ""
+
+
+# ---------------------------------------------------------------------------
+# compute_speed_to_fix — commits pushed after Qodo review
+# ---------------------------------------------------------------------------
+
+from github import compute_speed_to_fix
+
+def test_speed_to_fix_basic():
+    commits = [
+        {"committedDate": "2026-01-01T10:30:00Z", "message": "fix: address review"},
+        {"committedDate": "2026-01-01T11:00:00Z", "message": "chore: cleanup"},
+    ]
+    result = compute_speed_to_fix("2026-01-01T10:00:00Z", commits)
+    assert result["commits_after_qodo"] == 2
+    assert result["speed_to_fix_min"] == 30
+
+def test_speed_to_fix_no_commits_after():
+    commits = [{"committedDate": "2026-01-01T09:00:00Z", "message": "initial"}]
+    result = compute_speed_to_fix("2026-01-01T10:00:00Z", commits)
+    assert result["commits_after_qodo"] == 0
+    assert result["speed_to_fix_min"] is None
+
+def test_speed_to_fix_no_qodo_ts():
+    result = compute_speed_to_fix(None, [{"committedDate": "2026-01-01T10:00:00Z", "message": "fix"}])
+    assert result["commits_after_qodo"] == 0
+    assert result["speed_to_fix_min"] is None
+
+def test_speed_to_fix_empty_commits():
+    result = compute_speed_to_fix("2026-01-01T10:00:00Z", [])
+    assert result["commits_after_qodo"] == 0
+    assert result["speed_to_fix_min"] is None
+
+def test_speed_to_fix_picks_earliest_commit():
+    commits = [
+        {"committedDate": "2026-01-01T11:00:00Z", "message": "second"},
+        {"committedDate": "2026-01-01T10:15:00Z", "message": "first"},
+    ]
+    result = compute_speed_to_fix("2026-01-01T10:00:00Z", commits)
+    assert result["speed_to_fix_min"] == 15

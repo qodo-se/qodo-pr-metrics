@@ -547,6 +547,24 @@ def parse_reviews(reviews: list) -> dict:
     }
 
 
+def compute_speed_to_fix(qodo_ts: Optional[str], commits: list) -> dict:
+    """Return commits pushed after qodo_ts and time to the first such commit.
+
+    ISO string comparison works because GitHub timestamps are all UTC Z-suffixed.
+    speed_to_fix_min is None when there are no commits after the Qodo review.
+    """
+    if not qodo_ts or not commits:
+        return {"commits_after_qodo": 0, "speed_to_fix_min": None}
+    after = [c for c in commits if (c.get("committedDate") or "") > qodo_ts]
+    if not after:
+        return {"commits_after_qodo": 0, "speed_to_fix_min": None}
+    first_ts = min(c["committedDate"] for c in after)
+    return {
+        "commits_after_qodo": len(after),
+        "speed_to_fix_min": _minutes_between(qodo_ts, first_ts),
+    }
+
+
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
     "Hours to Merge", "PR Creator", "Lines Changed",
