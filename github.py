@@ -926,8 +926,8 @@ def get_hotfix_pr_count(org: str, since: date,
 
 
 def _search_pr_count_range(org: str, from_date: date, to_date: date,
-                            repos: Optional[List[str]] = None) -> int:
-    """Count merged PRs in [from_date, to_date]."""
+                            repos: Optional[List[str]] = None) -> Optional[int]:
+    """Count merged PRs in [from_date, to_date]. Returns None if any query fails."""
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     total = 0
     for qual in qualifiers:
@@ -938,7 +938,7 @@ def _search_pr_count_range(org: str, from_date: date, to_date: date,
                           "-f", f"q={q}", "--jq", ".total_count"])
             total += int(out.strip())
         except Exception:
-            pass
+            return None
     return total
 
 
@@ -974,6 +974,8 @@ def get_weekly_pr_counts(org: str, since: date,
     while cursor <= today:
         week_end = min(cursor + timedelta(days=6), today)
         total = _search_pr_count_range(org, cursor, week_end, repos)
+        if total is None:
+            print(f"  Warning: failed to fetch PR count for week {cursor}", file=sys.stderr)
         results.append({"week_start": cursor.isoformat(), "total": total, "qodo": 0})
         cursor += timedelta(days=7)
     return results
