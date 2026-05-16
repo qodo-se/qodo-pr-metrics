@@ -84,7 +84,7 @@ The script generates two output files:
 
 For example, running `python3 github.py --org acme-corp` creates `acme-corp_2025-05-12_2026-05-12.csv` and `acme-corp_2025-05-12_2026-05-12.html`.
 
-Each row in the CSV contains 27 columns with per-PR data:
+Each row in the CSV contains 35 columns with per-PR data:
 
 | Column | Description |
 |---|---|
@@ -114,6 +114,14 @@ Each row in the CSV contains 27 columns with per-PR data:
 | Time to First Human Comment (min) | Minutes from PR creation to the first non-Qodo comment; blank if none |
 | Has Human Comment | `True` if any non-Qodo comment exists on the PR |
 | Spotlight Issues | JSON array of high-impact Action Required issues (Security or Correctness sub-label) that were implemented |
+| Is AI Authored | `True` if the PR was detected as AI-assisted (by body patterns or labels) |
+| AI Author Type | Which AI tool: `copilot`, `cursor`, `claude`, `ai`, or blank if not detected |
+| Reviewer Count | Number of distinct reviewers who submitted a review |
+| Had Request Changes | `True` if any reviewer submitted a "Request Changes" review |
+| Final Approver | GitHub login of the last reviewer to approve; blank if none |
+| CI Status | Status check rollup state at the last commit: `SUCCESS`, `FAILURE`, `PENDING`, or blank if unavailable |
+| Commits After Qodo | Number of commits pushed after Qodo posted its first review |
+| Speed to First Fix (min) | Minutes between Qodo's first review and the first commit that followed it; blank if no post-review commit |
 
 ### HTML report sections
 
@@ -127,10 +135,13 @@ The HTML report is organized into the following sections:
 | Adoption | Developer breadth stats (how many developers had PRs reviewed, how many implemented suggestions); per-repository and per-developer (top 10) breakdown tables |
 | Impact by Severity | Action Required vs Review Recommended suggestion counts and implementation rates |
 | Impact by Category | Bugs, Rule Violations, and Requirement Gaps counts and implementation rates |
+| Speed to First Fix | Median minutes from Qodo's first review to the developer's first follow-up commit; shown when data is available |
+| AI-Authored PRs | Count and implementation rate for PRs detected as AI-assisted |
+| Quality Signals | Revert PR count and hotfix branch PR count for the period; shown when data is available |
 | Top 5 PRs by Issues Found | The PRs with the most Qodo suggestions |
 | Top 5 PRs by Implemented Suggestions | The PRs with the most implemented suggestions |
 
-The Velocity and High-Impact sections are omitted from the report if no relevant data is present.
+The Velocity, High-Impact, Speed to First Fix, and Quality Signals sections are omitted from the report if no relevant data is present.
 
 ### Options
 
