@@ -345,6 +345,20 @@ def test_get_revert_pr_count_returns_none_on_error(monkeypatch):
     assert result is None
 
 
+def test_get_hotfix_pr_count_with_repos_sums(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: "4\n")
+    result = get_hotfix_pr_count("acme", date(2026, 1, 1), repos=["a", "b"])
+    assert result == 8
+
+
+def test_get_hotfix_pr_count_returns_none_on_error(monkeypatch):
+    def bad_run_gh(args, **kw):
+        raise Exception("network error")
+    monkeypatch.setattr("github.run_gh", bad_run_gh)
+    result = get_hotfix_pr_count("acme", date(2026, 1, 1))
+    assert result is None
+
+
 from github import get_weekly_pr_counts
 
 

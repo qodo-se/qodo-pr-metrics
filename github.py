@@ -909,7 +909,7 @@ def _search_pr_count_range(org: str, from_date: date, to_date: date,
             out = run_gh(["api", "-X", "GET", "search/issues",
                           "-f", f"q={q}", "--jq", ".total_count"])
             total += int(out.strip())
-        except (ValueError, Exception):
+        except Exception:
             pass
     return total
 
