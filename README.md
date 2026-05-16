@@ -138,7 +138,7 @@ The HTML report is organized into the following sections:
 | Impact by Category | Bugs, Rule Violations, and Requirement Gaps counts and implementation rates |
 | Speed to First Fix | Median minutes from Qodo's first review to the developer's first follow-up commit; shown when data is available |
 | AI-Authored PRs | Count and implementation rate for PRs detected as AI-assisted |
-| Quality Signals | Revert PR count and hotfix branch PR count for the period; shown when data is available |
+| Quality Signals | Revert PR count and hotfix PR count for the period; hotfixes are detected by PR title containing "hotfix", PR label "hotfix", or branch name starting with "hotfix"; shown when data is available |
 | Top 5 PRs by Issues Found | The PRs with the most Qodo suggestions |
 | Top 5 PRs by Implemented Suggestions | The PRs with the most implemented suggestions |
 
@@ -155,3 +155,4 @@ The Velocity, High-Impact, Speed to First Fix, and Quality Signals sections are 
 | `--verbose` | Print per-PR suggestion counts instead of just the final summary |
 | `--resume` | Resume from a previous checkpoint (`ORG-checkpoint.json`) |
 | `--repos` | Space-delimited list of repo names to scope the run (e.g. `--repos frontend-app backend-api`); omit to scan the full org |
+| `--test-hotfix-signals` | Smoke-test hotfix detection signals against the org and exit. Prints counts for each signal (branch, label, title) and the combined OR query, and confirms that OR deduplication is working correctly. |
