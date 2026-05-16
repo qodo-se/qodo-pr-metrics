@@ -97,7 +97,7 @@ _AI_BODY_PATTERNS = [
 ]
 _AI_LABEL_NAMES = {
     "copilot": "copilot",
-    "ai-generated": "copilot",
+    "ai-generated": "ai",
     "cursor": "cursor",
     "claude": "claude",
 }
