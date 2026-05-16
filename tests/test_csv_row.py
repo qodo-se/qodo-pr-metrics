@@ -314,3 +314,82 @@ def test_build_csv_row_spotlight_issues_serialised():
 def test_build_csv_row_no_spotlight_issues_empty_json():
     row = build_csv_row(_pr(), lines_changed=100, stats=None)
     assert row["Spotlight Issues"] == "[]"
+
+
+# ---------------------------------------------------------------------------
+# fetch_pr_data — new fields: body, labels, reviews, ci_status, commits
+# ---------------------------------------------------------------------------
+
+def _graphql_response_extended(
+    body="PR description", labels=None, reviews=None,
+    ci_state="SUCCESS", commits=None,
+    additions=120, deletions=40
+):
+    return json.dumps({
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "additions": additions,
+                    "deletions": deletions,
+                    "body": body,
+                    "labels": {"nodes": [{"name": n} for n in (labels or [])]},
+                    "reviews": {"nodes": reviews or []},
+                    "lastCommit": {
+                        "nodes": [{"commit": {"statusCheckRollup": {"state": ci_state}}}]
+                    },
+                    "allCommits": {
+                        "nodes": commits or []
+                    },
+                    "comments": {"nodes": []},
+                }
+            }
+        }
+    })
+
+
+def test_fetch_pr_data_returns_body(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(body="My PR"))
+    result = fetch_pr_data("acme", "repo", 42)
+    assert result["body"] == "My PR"
+
+
+def test_fetch_pr_data_returns_labels(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(labels=["copilot", "bug"]))
+    result = fetch_pr_data("acme", "repo", 42)
+    assert result["labels"] == ["copilot", "bug"]
+
+
+def test_fetch_pr_data_returns_reviews(monkeypatch):
+    reviews = [{"author": {"login": "alice"}, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"}]
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(reviews=reviews))
+    result = fetch_pr_data("acme", "repo", 42)
+    assert len(result["reviews"]) == 1
+    assert result["reviews"][0]["state"] == "APPROVED"
+
+
+def test_fetch_pr_data_returns_ci_status(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(ci_state="FAILURE"))
+    result = fetch_pr_data("acme", "repo", 42)
+    assert result["ci_status"] == "FAILURE"
+
+
+def test_fetch_pr_data_returns_commits(monkeypatch):
+    commits = [{"committedDate": "2026-01-01T11:00:00Z", "message": "fix: address review"}]
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(commits=commits))
+    result = fetch_pr_data("acme", "repo", 42)
+    assert len(result["commits"]) == 1
+    assert result["commits"][0]["committedDate"] == "2026-01-01T11:00:00Z"
+
+
+def test_fetch_pr_data_ci_status_none_when_missing(monkeypatch):
+    payload = json.dumps({
+        "data": {"repository": {"pullRequest": {
+            "additions": 0, "deletions": 0,
+            "body": "", "labels": {"nodes": []}, "reviews": {"nodes": []},
+            "lastCommit": {"nodes": []}, "allCommits": {"nodes": []},
+            "comments": {"nodes": []},
+        }}}
+    })
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: payload)
+    result = fetch_pr_data("acme", "repo", 1)
+    assert result["ci_status"] is None

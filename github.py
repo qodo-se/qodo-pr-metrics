@@ -233,6 +233,19 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
 
 
 
+def _extract_ci_status(last_commit_data: Optional[dict]) -> Optional[str]:
+    """Extract the rollup CI state from a lastCommit GraphQL node."""
+    if not last_commit_data:
+        return None
+    nodes = last_commit_data.get("nodes", [])
+    if not nodes:
+        return None
+    rollup = (nodes[0].get("commit") or {}).get("statusCheckRollup")
+    if not rollup:
+        return None
+    return rollup.get("state")
+
+
 def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) -> dict:
     """Fetch PR comments and line counts via a single GraphQL query.
 
@@ -243,7 +256,11 @@ def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) 
         "query($owner:String!,$repo:String!,$number:Int!){"
         "repository(owner:$owner,name:$repo){"
         "pullRequest(number:$number){"
-        "additions deletions "
+        "additions deletions body "
+        "labels(first:10){nodes{name}} "
+        "reviews(first:20){nodes{author{login} state submittedAt}} "
+        "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
+        "allCommits:commits(first:100){nodes{committedDate message}} "
         f"comments(first:{comments_limit})"
         "{nodes{body createdAt "
         "userContentEdits(last:2){nodes{editedAt}} "
@@ -278,6 +295,11 @@ def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) 
         "comments": comments,
         "additions": pr["additions"] or 0,
         "deletions": pr["deletions"] or 0,
+        "body": pr.get("body") or "",
+        "labels": [n["name"] for n in (pr.get("labels") or {}).get("nodes", [])],
+        "reviews": (pr.get("reviews") or {}).get("nodes", []),
+        "ci_status": _extract_ci_status(pr.get("lastCommit")),
+        "commits": (pr.get("allCommits") or {}).get("nodes", []),
     }
 
 
@@ -295,7 +317,11 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 50) -> dict:
             "{"
             f"nodes(ids:[{ids_str}]){{"
             "... on PullRequest{"
-            "id additions deletions "
+            "id additions deletions body "
+            "labels(first:10){nodes{name}} "
+            "reviews(first:20){nodes{author{login} state submittedAt}} "
+            "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
+            "allCommits:commits(first:100){nodes{committedDate message}} "
             "comments(first:20){nodes{body createdAt "
             "userContentEdits(last:2){nodes{editedAt}} "
             "author{login __typename}}}"
@@ -327,6 +353,11 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 50) -> dict:
                 "comments": comments,
                 "additions": node["additions"] or 0,
                 "deletions": node["deletions"] or 0,
+                "body": node.get("body") or "",
+                "labels": [n["name"] for n in (node.get("labels") or {}).get("nodes", [])],
+                "reviews": (node.get("reviews") or {}).get("nodes", []),
+                "ci_status": _extract_ci_status(node.get("lastCommit")),
+                "commits": (node.get("allCommits") or {}).get("nodes", []),
             }
     return results
 
