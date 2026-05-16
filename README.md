@@ -96,6 +96,7 @@ Each row in the CSV contains 35 columns with per-PR data:
 | Hours to Merge | Whole hours from creation to merge |
 | PR Creator | GitHub login of the PR author |
 | Lines Changed | Total lines added + deleted |
+| Has Qodo Review | `True` if Qodo posted a review on this PR |
 | Action Required Suggestions | Count of "Action Required" suggestions |
 | Action Required Implemented | Count of implemented "Action Required" suggestions |
 | Review Recommended Suggestions | Count of "Review Recommended" suggestions |
