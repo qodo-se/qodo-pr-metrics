@@ -68,13 +68,25 @@ from datetime import timedelta
 from github import search_merged_prs
 
 
-def _make_fake_run_gh(captured_queries, pr_lines=None):
-    """Returns a fake run_gh that records q= args and returns pr_lines as JSON."""
-    pr_lines = pr_lines or []
+def _gql_search_response(nodes=None):
+    """Return a GraphQL search response JSON string with the given PR nodes."""
+    import json
+    return json.dumps({
+        "data": {
+            "search": {
+                "pageInfo": {"hasNextPage": False, "endCursor": None},
+                "nodes": nodes or [],
+            }
+        }
+    })
+
+
+def _make_fake_run_gh(captured_queries, nodes=None):
+    """Returns a fake run_gh that records q= args and returns a GraphQL response."""
     def fake(args, **kw):
         q_args = [a for a in args if a.startswith("q=")]
         captured_queries.extend(q_args)
-        return "\n".join(pr_lines)
+        return _gql_search_response(nodes)
     return fake
 
 
@@ -103,36 +115,35 @@ def test_search_merged_prs_includes_qodo_comment_filter(monkeypatch):
 
 
 def test_search_merged_prs_deduplicates_when_same_repo_listed_twice(monkeypatch):
-    import json
-    pr_json = json.dumps({
+    node = {
         "number": 1,
-        "repo": "https://api.github.com/repos/acme/frontend",
+        "id": "PR_kwDOA_dedup",
+        "repository": {"nameWithOwner": "acme/frontend"},
         "url": "https://github.com/acme/frontend/pull/1",
-        "creator": "alice",
-        "created_at": "2026-01-01T10:00:00Z",
-        "merged_at": "2026-01-02T10:00:00Z",
-    })
+        "author": {"login": "alice"},
+        "createdAt": "2026-01-01T10:00:00Z",
+        "mergedAt": "2026-01-02T10:00:00Z",
+    }
     call_count = [0]
     def fake_run_gh(args, **kw):
         call_count[0] += 1
-        return pr_json  # same PR returned from both queries
+        return _gql_search_response([node])  # same PR returned from both queries
     monkeypatch.setattr("github.run_gh", fake_run_gh)
     results = list(search_merged_prs("acme", date.today() - timedelta(days=1), repos=["frontend", "frontend"]))
     assert len(results) == 1  # deduped
 
 
 def test_search_merged_prs_yields_node_id(monkeypatch):
-    import json
-    pr_json = json.dumps({
+    node = {
         "number": 1,
-        "node_id": "PR_kwDOA_test",
-        "repo": "https://api.github.com/repos/acme/frontend",
+        "id": "PR_kwDOA_test",
+        "repository": {"nameWithOwner": "acme/frontend"},
         "url": "https://github.com/acme/frontend/pull/1",
-        "creator": "alice",
-        "created_at": "2026-01-01T10:00:00Z",
-        "merged_at": "2026-01-02T10:00:00Z",
-    })
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: pr_json)
+        "author": {"login": "alice"},
+        "createdAt": "2026-01-01T10:00:00Z",
+        "mergedAt": "2026-01-02T10:00:00Z",
+    }
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _gql_search_response([node]))
     results = list(search_merged_prs("acme", date.today() - timedelta(days=1)))
     assert results[0]["node_id"] == "PR_kwDOA_test"
 

@@ -102,6 +102,19 @@ _AI_LABEL_NAMES = {
     "claude": "claude",
 }
 
+GQL_SEARCH_QUERY = (
+    "query($q:String!,$cursor:String){"
+    "search(query:$q,type:ISSUE,first:100,after:$cursor){"
+    "pageInfo{hasNextPage endCursor}"
+    "nodes{...on PullRequest{"
+    "number id "
+    "repository{nameWithOwner} "
+    "url "
+    "author{login} "
+    "createdAt mergedAt"
+    "}}}}"
+)
+
 
 @dataclass
 class QodoStats:
@@ -175,14 +188,39 @@ def run_gh(args, paginate=False):
         sys.exit(f"`{' '.join(cmd)}` failed:\n{stderr}")
 
 
+def _parse_search_gql_nodes(nodes):
+    """Parse GraphQL search result nodes into the PR dict format used by search_merged_prs.
+
+    Nodes that are empty dicts (non-PullRequest hits from the search index) are skipped.
+    """
+    results = []
+    for node in nodes:
+        if not node.get("number"):
+            continue
+        owner, repo = node["repository"]["nameWithOwner"].split("/", 1)
+        results.append({
+            "owner": owner,
+            "repo": repo,
+            "number": node["number"],
+            "node_id": node["id"],
+            "url": node.get("url", ""),
+            "creator": (node.get("author") or {}).get("login", ""),
+            "created_at": node.get("createdAt", ""),
+            "merged_at": node.get("mergedAt", ""),
+        })
+    return results
+
+
 def search_merged_prs(org, since, chunk_days=30, repos=None):
     """Yield a dict of PR metadata for every merged PR in the window.
 
-    Each yielded dict contains: owner, repo, number, url, creator,
+    Each yielded dict contains: owner, repo, number, node_id, url, creator,
     created_at, merged_at.
 
+    Uses GraphQL search (core API, 5000 req/hr) instead of REST search/issues
+    (Search API, 30 req/min) to avoid rate limiting on large orgs.
+
     Chunked by date range to stay under the search API's 1000-result cap.
-    Shrink chunk_days if a single chunk ever exceeds 1000 for your org.
     """
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     today = date.today()
@@ -207,42 +245,31 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
                 f'"Code Review by Qodo" in:comments '
                 f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
             )
-            out = run_gh([
-                "api", "-X", "GET", "search/issues",
-                "-f", f"q={q}",
-                "--paginate",
-                "--jq", (
-                    ".items[] | {"
-                    "number: .number, "
-                    "node_id: .node_id, "
-                    "repo: .repository_url, "
-                    "url: .html_url, "
-                    "creator: .user.login, "
-                    "created_at: .created_at, "
-                    "merged_at: .pull_request.merged_at"
-                    "}"
-                ),
-            ])
+            end_cursor = None
             chunk_count = 0
-            for line in filter(None, out.split("\n")):
-                item = json.loads(line)
-                owner_repo = item["repo"].split("/repos/", 1)[1]
-                key = (owner_repo, item["number"])
-                if key in seen:
-                    continue
-                seen.add(key)
-                chunk_count += 1
-                owner, repo = owner_repo.split("/", 1)
-                yield {
-                    "owner": owner,
-                    "repo": repo,
-                    "number": item["number"],
-                    "node_id": item.get("node_id", ""),
-                    "url": item.get("url", ""),
-                    "creator": item.get("creator", ""),
-                    "created_at": item.get("created_at", ""),
-                    "merged_at": item.get("merged_at", ""),
-                }
+            while True:
+                gh_args = [
+                    "api", "graphql",
+                    "-f", f"query={GQL_SEARCH_QUERY}",
+                    "-f", f"q={q}",
+                ]
+                if end_cursor:
+                    gh_args += ["-f", f"cursor={end_cursor}"]
+                else:
+                    gh_args += ["-F", "cursor=null"]
+                out = run_gh(gh_args)
+                data = json.loads(out)
+                search = data["data"]["search"]
+                for pr in _parse_search_gql_nodes(search["nodes"]):
+                    key = (pr["owner"], pr["repo"], pr["number"])
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    chunk_count += 1
+                    yield pr
+                if not search["pageInfo"]["hasNextPage"]:
+                    break
+                end_cursor = search["pageInfo"]["endCursor"]
             print(f" {chunk_count} PRs", file=sys.stderr)
         cursor = chunk_end + timedelta(days=1)
 
