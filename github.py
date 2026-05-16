@@ -976,6 +976,15 @@ def cmd_count(args):
     org_pr_count = get_org_pr_count(args.org, args.since, repos=args.repos)
     print(f" {org_pr_count}" if org_pr_count is not None else " (unavailable)", file=sys.stderr)
 
+    print("  Fetching weekly PR counts...", end="", file=sys.stderr, flush=True)
+    weekly_coverage = get_weekly_pr_counts(args.org, args.since, repos=args.repos)
+    print(f" {len(weekly_coverage)} weeks", file=sys.stderr)
+
+    print("  Fetching revert/hotfix counts...", end="", file=sys.stderr, flush=True)
+    revert_count = get_revert_pr_count(args.org, args.since, repos=args.repos)
+    hotfix_count = get_hotfix_pr_count(args.org, args.since, repos=args.repos)
+    print(f" {revert_count} reverts, {hotfix_count} hotfixes", file=sys.stderr)
+
     pending = [
         pr for pr in search_merged_prs(args.org, args.since, repos=args.repos)
         if (pr["owner"], pr["repo"], str(pr["number"])) not in processed
@@ -1037,7 +1046,27 @@ def cmd_count(args):
                     f"{stats.total_implemented}/{stats.total_suggestions} implemented"
                 )
 
-            rows.append(build_csv_row(pr, lines_changed, stats, timing))
+            reviews_data = pr_data.get("reviews", [])
+            review_info = parse_reviews(reviews_data)
+            body = pr_data.get("body", "")
+            labels = pr_data.get("labels", [])
+            is_ai, ai_type = detect_ai_authored(body, labels)
+            # Use the real Qodo content timestamp (first real edit if available)
+            edits = (qodo.get("user_content_edits") or [])
+            qodo_ts = edits[0]["edited_at"] if len(edits) >= 2 else qodo.get("created_at")
+            speed_info = compute_speed_to_fix(qodo_ts, pr_data.get("commits", []))
+            extras = {
+                "is_ai_authored": is_ai,
+                "ai_author_type": ai_type,
+                "reviewer_count": review_info["reviewer_count"],
+                "had_request_changes": review_info["had_request_changes"],
+                "approver": review_info["approver"],
+                "ci_status": pr_data.get("ci_status"),
+                "commits_after_qodo": speed_info["commits_after_qodo"],
+                "speed_to_fix_min": speed_info["speed_to_fix_min"],
+            }
+
+            rows.append(build_csv_row(pr, lines_changed, stats, timing, extras=extras))
 
             processed.add((owner, repo, str(number)))
             save_checkpoint(args.org, {
