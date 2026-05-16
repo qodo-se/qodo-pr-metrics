@@ -1099,6 +1099,9 @@ def cmd_count(args):
                 rows, args.org, args.since, today, "logo.svg",
                 org_pr_count=org_pr_count,
                 org_author_count=org_author_count,
+                weekly_coverage=weekly_coverage,
+                revert_count=revert_count,
+                hotfix_count=hotfix_count,
             ),
             encoding="utf-8",
         )

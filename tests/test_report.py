@@ -689,3 +689,53 @@ def test_aggregate_new_fields_default_when_empty():
     assert agg.weekly_coverage == []
     assert agg.revert_count is None
     assert agg.hotfix_count is None
+
+
+def test_generate_html_speed_to_fix_shown_when_data():
+    from report import generate_html
+    rows = [
+        _extras_row(speed_min=30, qodo_min=8, human_min=270),
+        _extras_row(speed_min=60, qodo_min=10, human_min=300),
+    ]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "Speed to first fix" in html
+    assert "45m" in html   # median of [30, 60]
+
+
+def test_generate_html_speed_to_fix_hidden_when_no_data():
+    from report import generate_html
+    rows = [_timing_row(qodo_min=8, human_min=270)]  # no Speed to First Fix column
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "Speed to first fix" not in html
+
+
+def test_generate_html_ai_authored_insight_shown_when_nonzero():
+    from report import generate_html
+    rows = [_extras_row(is_ai=True, ai_type="copilot", suggestions=4, implemented=2)]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "AI-authored" in html
+
+
+def test_generate_html_ai_authored_hidden_when_zero():
+    from report import generate_html
+    rows = [_extras_row(is_ai=False)]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "AI-authored" not in html
+
+
+def test_generate_html_quality_signal_shown_when_data():
+    from report import generate_html
+    rows = [_extras_row()]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None,
+                         revert_count=5, hotfix_count=2)
+    assert "Reverts" in html
+    assert "Hotfixes" in html
+
+
+def test_generate_html_quality_signal_hidden_when_none():
+    from report import generate_html
+    rows = [_extras_row()]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None,
+                         revert_count=None, hotfix_count=None)
+    assert "Reverts" not in html
+    assert "Hotfixes" not in html
