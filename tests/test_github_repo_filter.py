@@ -302,3 +302,44 @@ def test_fetch_pr_data_batch_returns_ci_status_and_commits(monkeypatch):
     assert result["PR_ghi"]["ci_status"] == "FAILURE"
     assert len(result["PR_ghi"]["commits"]) == 1
     assert result["PR_ghi"]["commits"][0]["committedDate"] == "2026-01-01T11:00:00Z"
+
+
+from github import get_revert_pr_count, get_hotfix_pr_count
+
+
+def test_get_revert_pr_count_includes_revert_in_title(monkeypatch):
+    captured = []
+    def fake_run_gh(args, **kw):
+        captured.extend(args)
+        return "7\n"
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    result = get_revert_pr_count("acme", date(2026, 1, 1))
+    assert result == 7
+    q_args = [a for a in captured if a.startswith("q=")]
+    assert any("revert in:title" in q for q in q_args)
+
+
+def test_get_hotfix_pr_count_uses_head_qualifier(monkeypatch):
+    captured = []
+    def fake_run_gh(args, **kw):
+        captured.extend(args)
+        return "3\n"
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    result = get_hotfix_pr_count("acme", date(2026, 1, 1))
+    assert result == 3
+    q_args = [a for a in captured if a.startswith("q=")]
+    assert any("head:hotfix" in q for q in q_args)
+
+
+def test_get_revert_pr_count_with_repos_sums(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: "4\n")
+    result = get_revert_pr_count("acme", date(2026, 1, 1), repos=["a", "b"])
+    assert result == 8
+
+
+def test_get_revert_pr_count_returns_none_on_error(monkeypatch):
+    def bad_run_gh(args, **kw):
+        raise Exception("network error")
+    monkeypatch.setattr("github.run_gh", bad_run_gh)
+    result = get_revert_pr_count("acme", date(2026, 1, 1))
+    assert result is None

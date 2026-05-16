@@ -895,6 +895,45 @@ def get_hotfix_pr_count(org: str, since: date,
     return total
 
 
+def _search_pr_count_range(org: str, from_date: date, to_date: date,
+                            repos: Optional[List[str]] = None,
+                            qodo_only: bool = False) -> int:
+    """Count merged PRs in [from_date, to_date], optionally restricted to Qodo PRs."""
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
+    qodo_filter = '"Code Review by Qodo" in:comments ' if qodo_only else ""
+    total = 0
+    for qual in qualifiers:
+        q = (f"{qual} is:pr is:merged {qodo_filter}"
+             f"merged:{from_date.isoformat()}..{to_date.isoformat()}")
+        try:
+            out = run_gh(["api", "-X", "GET", "search/issues",
+                          "-f", f"q={q}", "--jq", ".total_count"])
+            total += int(out.strip())
+        except (ValueError, Exception):
+            pass
+    return total
+
+
+def get_weekly_pr_counts(org: str, since: date,
+                          repos: Optional[List[str]] = None) -> list:
+    """Return [{week_start, total, qodo}, ...] from the Monday of since's week through today.
+
+    Makes 2 search API calls per week (total + qodo-only). Each week_start is a
+    Monday ISO date. Gaps caused by API errors produce zero counts rather than None.
+    """
+    today = date.today()
+    start = since - timedelta(days=since.weekday())  # rewind to Monday
+    results = []
+    cursor = start
+    while cursor <= today:
+        week_end = min(cursor + timedelta(days=6), today)
+        total = _search_pr_count_range(org, cursor, week_end, repos, qodo_only=False)
+        qodo = _search_pr_count_range(org, cursor, week_end, repos, qodo_only=True)
+        results.append({"week_start": cursor.isoformat(), "total": total, "qodo": qodo})
+        cursor += timedelta(days=7)
+    return results
+
+
 def cmd_count(args):
     start_time = time.monotonic()
     cp_path = checkpoint_path(args.org)
