@@ -996,22 +996,15 @@ def cmd_test_hotfix_signals(args):
     results = {}
     for name, signal in signals.items():
         total = 0
-        ok = True
         for qual in qualifiers:
             q = (f"{qual} is:pr is:merged {signal} "
                  f"merged:{args.since.isoformat()}..{today.isoformat()}")
-            try:
-                out = run_gh(["api", "-X", "GET", "search/issues",
-                              "-f", f"q={q}", "--jq", ".total_count"])
-                total += int(out.strip())
-            except Exception as e:
-                print(f"  {name}: ERROR ({e})")
-                ok = False
-                break
-        if ok:
-            results[name] = total
-            label = name.ljust(10)
-            print(f"  {label} {total}")
+            out = run_gh(["api", "-X", "GET", "search/issues",
+                          "-f", f"q={q}", "--jq", ".total_count"])
+            total += int(out.strip())
+        results[name] = total
+        label = name.ljust(10)
+        print(f"  {label} {total}")
     if len(results) == 4:
         signal_sum = results["title"] + results["label"] + results["branch"]
         combined = results["combined"]
