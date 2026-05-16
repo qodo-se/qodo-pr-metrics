@@ -909,12 +909,13 @@ def get_revert_pr_count(org: str, since: date,
 
 def get_hotfix_pr_count(org: str, since: date,
                         repos: Optional[List[str]] = None) -> Optional[int]:
-    """Count merged PRs from hotfix/* branches merged since `since`."""
+    """Count merged PRs matching any hotfix signal (branch, label, or title)."""
     today = date.today()
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     total = 0
     for qual in qualifiers:
-        q = (f"{qual} is:pr is:merged head:hotfix "
+        q = (f"{qual} is:pr is:merged "
+             f"(hotfix in:title OR label:hotfix OR head:hotfix) "
              f"merged:{since.isoformat()}..{today.isoformat()}")
         try:
             out = run_gh(["api", "-X", "GET", "search/issues",
