@@ -343,3 +343,50 @@ def test_get_revert_pr_count_returns_none_on_error(monkeypatch):
     monkeypatch.setattr("github.run_gh", bad_run_gh)
     result = get_revert_pr_count("acme", date(2026, 1, 1))
     assert result is None
+
+
+from github import get_weekly_pr_counts
+
+
+def test_get_weekly_pr_counts_returns_list(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: "5\n")
+    result = get_weekly_pr_counts("acme", date(2026, 5, 11))  # Monday
+    assert isinstance(result, list)
+    assert len(result) >= 1
+    assert "week_start" in result[0]
+    assert "total" in result[0]
+    assert "qodo" in result[0]
+
+
+def test_get_weekly_pr_counts_week_start_is_monday(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: "0\n")
+    result = get_weekly_pr_counts("acme", date(2026, 5, 13))  # Wednesday
+    # First week_start must be the Monday of that week
+    from datetime import date as d
+    first_week = d.fromisoformat(result[0]["week_start"])
+    assert first_week.weekday() == 0  # Monday
+
+
+def test_get_weekly_pr_counts_calls_search_twice_per_week(monkeypatch):
+    call_count = [0]
+    def fake_run_gh(args, **kw):
+        call_count[0] += 1
+        return "3\n"
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    # Force exactly one week by passing since = today - 1 day
+    from datetime import date as d, timedelta
+    result = get_weekly_pr_counts("acme", d.today() - timedelta(days=1))
+    # One week → 2 calls (total + qodo)
+    assert call_count[0] == 2
+
+
+def test_get_weekly_pr_counts_with_repos_uses_repo_qualifier(monkeypatch):
+    captured = []
+    def fake_run_gh(args, **kw):
+        captured.extend(args)
+        return "1\n"
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    from datetime import date as d, timedelta
+    get_weekly_pr_counts("acme", d.today() - timedelta(days=1), repos=["frontend"])
+    q_args = [a for a in captured if a.startswith("q=")]
+    assert any("repo:acme/frontend" in q for q in q_args)
