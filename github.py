@@ -87,6 +87,34 @@ _CAT_CORRECTNESS = re.compile(r"\bCorrectness\b", re.IGNORECASE)
 _HTML_TAG        = re.compile(r"<[^>]+>")
 _STRIKETHROUGH   = re.compile(r"~~(.+?)~~")
 
+_AI_BODY_PATTERNS = [
+    (re.compile(r"co-authored-by:[^\n]*github-copilot", re.IGNORECASE), "copilot"),
+    (re.compile(r"\bcopilot\b", re.IGNORECASE), "copilot"),
+    (re.compile(r"co-authored-by:[^\n]*cursor", re.IGNORECASE), "cursor"),
+    (re.compile(r"generated.*with.*cursor", re.IGNORECASE), "cursor"),
+    (re.compile(r"co-authored-by:[^\n]*claude", re.IGNORECASE), "claude"),
+    (re.compile(r"generated.*with.*claude", re.IGNORECASE), "claude"),
+]
+_AI_LABEL_NAMES = {
+    "copilot": "copilot",
+    "ai-generated": "ai",
+    "cursor": "cursor",
+    "claude": "claude",
+}
+
+_GQL_SEARCH_QUERY = (
+    "query($q:String!,$cursor:String){"
+    "search(query:$q,type:ISSUE,first:100,after:$cursor){"
+    "pageInfo{hasNextPage endCursor}"
+    "nodes{...on PullRequest{"
+    "number id "
+    "repository{nameWithOwner} "
+    "url "
+    "author{login} "
+    "createdAt mergedAt"
+    "}}}}"
+)
+
 
 @dataclass
 class QodoStats:
@@ -160,14 +188,39 @@ def run_gh(args, paginate=False):
         sys.exit(f"`{' '.join(cmd)}` failed:\n{stderr}")
 
 
+def _parse_search_gql_nodes(nodes):
+    """Parse GraphQL search result nodes into the PR dict format used by search_merged_prs.
+
+    Nodes that are empty dicts (non-PullRequest hits from the search index) are skipped.
+    """
+    results = []
+    for node in nodes:
+        if not node.get("number"):
+            continue
+        owner, repo = node["repository"]["nameWithOwner"].split("/", 1)
+        results.append({
+            "owner": owner,
+            "repo": repo,
+            "number": node["number"],
+            "node_id": node["id"],
+            "url": node.get("url", ""),
+            "creator": (node.get("author") or {}).get("login", ""),
+            "created_at": node.get("createdAt", ""),
+            "merged_at": node.get("mergedAt", ""),
+        })
+    return results
+
+
 def search_merged_prs(org, since, chunk_days=30, repos=None):
     """Yield a dict of PR metadata for every merged PR in the window.
 
-    Each yielded dict contains: owner, repo, number, url, creator,
+    Each yielded dict contains: owner, repo, number, node_id, url, creator,
     created_at, merged_at.
 
-    Chunked by date range to stay under the search API's 1000-result cap.
-    Shrink chunk_days if a single chunk ever exceeds 1000 for your org.
+    Uses GraphQL search (core API, 5000 req/hr) instead of REST search/issues
+    (Search API, 30 req/min) to avoid rate limiting on large orgs.
+
+    Chunked by date range to stay under GitHub's 1000-result search query cap.
     """
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     today = date.today()
@@ -192,58 +245,70 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
                 f'"Code Review by Qodo" in:comments '
                 f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
             )
-            out = run_gh([
-                "api", "-X", "GET", "search/issues",
-                "-f", f"q={q}",
-                "--paginate",
-                "--jq", (
-                    ".items[] | {"
-                    "number: .number, "
-                    "node_id: .node_id, "
-                    "repo: .repository_url, "
-                    "url: .html_url, "
-                    "creator: .user.login, "
-                    "created_at: .created_at, "
-                    "merged_at: .pull_request.merged_at"
-                    "}"
-                ),
-            ])
+            end_cursor = None
             chunk_count = 0
-            for line in filter(None, out.split("\n")):
-                item = json.loads(line)
-                owner_repo = item["repo"].split("/repos/", 1)[1]
-                key = (owner_repo, item["number"])
-                if key in seen:
-                    continue
-                seen.add(key)
-                chunk_count += 1
-                owner, repo = owner_repo.split("/", 1)
-                yield {
-                    "owner": owner,
-                    "repo": repo,
-                    "number": item["number"],
-                    "node_id": item.get("node_id", ""),
-                    "url": item.get("url", ""),
-                    "creator": item.get("creator", ""),
-                    "created_at": item.get("created_at", ""),
-                    "merged_at": item.get("merged_at", ""),
-                }
+            while True:
+                gh_args = [
+                    "api", "graphql",
+                    "-f", f"query={_GQL_SEARCH_QUERY}",
+                    "-f", f"q={q}",
+                ]
+                if end_cursor:
+                    gh_args += ["-f", f"cursor={end_cursor}"]
+                else:
+                    gh_args += ["-F", "cursor=null"]
+                out = run_gh(gh_args)
+                data = json.loads(out)
+                search = data["data"]["search"]
+                for pr in _parse_search_gql_nodes(search["nodes"]):
+                    key = (pr["owner"], pr["repo"], pr["number"])
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    chunk_count += 1
+                    yield pr
+                if not search["pageInfo"]["hasNextPage"]:
+                    break
+                end_cursor = search["pageInfo"]["endCursor"]
             print(f" {chunk_count} PRs", file=sys.stderr)
         cursor = chunk_end + timedelta(days=1)
 
+
+def _extract_ci_status(last_commit_data: Optional[dict]) -> Optional[str]:
+    """Extract the rollup CI state from a lastCommit GraphQL node."""
+    if not last_commit_data:
+        return None
+    nodes = last_commit_data.get("nodes", [])
+    if not nodes:
+        return None
+    rollup = (nodes[0].get("commit") or {}).get("statusCheckRollup")
+    if not rollup:
+        return None
+    return rollup.get("state")
 
 
 def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) -> dict:
     """Fetch PR comments and line counts via a single GraphQL query.
 
-    Returns {"comments": [...], "additions": int, "deletions": int}.
-    Each comment: {"body": str, "created_at": str, "user": {"login": str}}.
+    Returns a dict with keys:
+      - comments:  list of comment dicts, each with keys body, created_at, user
+      - additions: int
+      - deletions: int
+      - body:      str (PR description body)
+      - labels:    list of str
+      - reviews:   list of review nodes
+      - ci_status: str or None (GitHub status check rollup state)
+      - commits:   list of commit nodes (capped at 100)
     """
     query = (
         "query($owner:String!,$repo:String!,$number:Int!){"
         "repository(owner:$owner,name:$repo){"
         "pullRequest(number:$number){"
-        "additions deletions "
+        "additions deletions body "
+        "labels(first:10){nodes{name}} "
+        "reviews(last:100){nodes{author{login} state submittedAt}} "
+        "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
+        "allCommits:commits(last:100){nodes{commit{committedDate message}}} "
         f"comments(first:{comments_limit})"
         "{nodes{body createdAt "
         "userContentEdits(last:2){nodes{editedAt}} "
@@ -278,6 +343,11 @@ def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) 
         "comments": comments,
         "additions": pr["additions"] or 0,
         "deletions": pr["deletions"] or 0,
+        "body": pr.get("body") or "",
+        "labels": [n["name"] for n in (pr.get("labels") or {}).get("nodes", [])],
+        "reviews": (pr.get("reviews") or {}).get("nodes", []),
+        "ci_status": _extract_ci_status(pr.get("lastCommit")),
+        "commits": (pr.get("allCommits") or {}).get("nodes", []),
     }
 
 
@@ -295,7 +365,11 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 50) -> dict:
             "{"
             f"nodes(ids:[{ids_str}]){{"
             "... on PullRequest{"
-            "id additions deletions "
+            "id additions deletions body "
+            "labels(first:10){nodes{name}} "
+            "reviews(last:100){nodes{author{login} state submittedAt}} "
+            "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
+            "allCommits:commits(last:100){nodes{commit{committedDate message}}} "
             "comments(first:20){nodes{body createdAt "
             "userContentEdits(last:2){nodes{editedAt}} "
             "author{login __typename}}}"
@@ -327,6 +401,11 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 50) -> dict:
                 "comments": comments,
                 "additions": node["additions"] or 0,
                 "deletions": node["deletions"] or 0,
+                "body": node.get("body") or "",
+                "labels": [n["name"] for n in (node.get("labels") or {}).get("nodes", [])],
+                "reviews": (node.get("reviews") or {}).get("nodes", []),
+                "ci_status": _extract_ci_status(node.get("lastCommit")),
+                "commits": (node.get("allCommits") or {}).get("nodes", []),
             }
     return results
 
@@ -451,6 +530,71 @@ def _clean_title(title: str) -> str:
     return text.strip()
 
 
+def detect_ai_authored(body: str, labels: list) -> tuple:
+    """Return (is_ai_authored: bool, ai_type: str) for a PR.
+
+    Checks body text for co-author signatures and labels for AI tags.
+    Returns the first match found; ai_type is '' when not AI-authored.
+    """
+    text = body or ""
+    for pattern, ai_type in _AI_BODY_PATTERNS:
+        if pattern.search(text):
+            return True, ai_type
+    for label in labels:
+        lower = label.lower()
+        for name, ai_type in _AI_LABEL_NAMES.items():
+            if name in lower:
+                return True, ai_type
+    return False, ""
+
+
+def parse_reviews(reviews: list) -> dict:
+    """Extract reviewer count, request-changes flag, and final approver.
+
+    reviewer_count: unique authors across all reviews.
+    had_request_changes: True if any review has state CHANGES_REQUESTED.
+    approver: login of the last reviewer to submit an APPROVED state.
+    """
+    reviewers: set = set()
+    had_changes = False
+    approved_reviews = []
+    for r in sorted(reviews, key=lambda r: r.get("submittedAt") or ""):
+        login = (r.get("author") or {}).get("login", "")
+        if login:
+            reviewers.add(login)
+        if r.get("state") == "CHANGES_REQUESTED":
+            had_changes = True
+        if r.get("state") == "APPROVED" and login:
+            approved_reviews.append((r.get("submittedAt") or "", login))
+    approver = approved_reviews[-1][1] if approved_reviews else ""
+    return {
+        "reviewer_count": len(reviewers),
+        "had_request_changes": had_changes,
+        "approver": approver,
+    }
+
+
+def compute_speed_to_fix(qodo_ts: Optional[str], commits: list) -> dict:
+    """Return commits pushed after qodo_ts and time to the first such commit.
+
+    ISO string comparison works because GitHub timestamps are all UTC Z-suffixed.
+    speed_to_fix_min is None when there are no commits after the Qodo review.
+    """
+    if not qodo_ts or not commits:
+        return {"commits_after_qodo": 0, "speed_to_fix_min": None}
+    after = sorted(
+        [c for c in commits if ((c.get("commit") or {}).get("committedDate") or "") > qodo_ts],
+        key=lambda c: (c.get("commit") or {}).get("committedDate") or "",
+    )
+    if not after:
+        return {"commits_after_qodo": 0, "speed_to_fix_min": None}
+    first_ts = after[0]["commit"]["committedDate"]
+    return {
+        "commits_after_qodo": len(after),
+        "speed_to_fix_min": _minutes_between(qodo_ts, first_ts),
+    }
+
+
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
     "Hours to Merge", "PR Creator", "Lines Changed",
@@ -463,6 +607,10 @@ CSV_COLUMNS = [
     "Implementation Rate (%)", "Suggestions per 100 Lines",
     "Time to First Qodo Comment (min)", "Time to First Human Comment (min)",
     "Has Human Comment", "Spotlight Issues",
+    "Is AI Authored", "AI Author Type",
+    "Reviewer Count", "Had Request Changes", "Final Approver",
+    "CI Status",
+    "Commits After Qodo", "Speed to First Fix (min)",
 ]
 
 
@@ -533,11 +681,13 @@ def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] 
 
 
 def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
-                  timing: Optional[dict] = None) -> dict:
+                  timing: Optional[dict] = None,
+                  extras: Optional[dict] = None) -> dict:
     has_qodo = stats is not None
     total = stats.total_suggestions if has_qodo else 0
     implemented = stats.total_implemented if has_qodo else 0
     timing = timing or {}
+    extras = extras or {}
 
     impl_rate = f"{100 * implemented / total:.1f}" if total > 0 else ""
     per_100 = (
@@ -577,6 +727,15 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
         "Time to First Human Comment (min)":    human_min if human_min is not None else "",
         "Has Human Comment":                    timing.get("has_human", False),
         "Spotlight Issues":                     json.dumps(stats.spotlight_issues if has_qodo else []),
+        "Is AI Authored":                       extras.get("is_ai_authored", False),
+        "AI Author Type":                       extras.get("ai_author_type", ""),
+        "Reviewer Count":                       extras.get("reviewer_count", 0),
+        "Had Request Changes":                  extras.get("had_request_changes", False),
+        "Final Approver":                       extras.get("approver", ""),
+        "CI Status":                            extras.get("ci_status") or "",
+        "Commits After Qodo":                   extras.get("commits_after_qodo", 0),
+        "Speed to First Fix (min)":             extras.get("speed_to_fix_min")
+                                                if extras.get("speed_to_fix_min") is not None else "",
     }
 
 
@@ -730,6 +889,99 @@ def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) 
         return None
 
 
+def get_revert_pr_count(org: str, since: date,
+                        repos: Optional[List[str]] = None) -> Optional[int]:
+    """Count merged PRs with 'revert' in the title merged since `since`."""
+    today = date.today()
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
+    total = 0
+    for qual in qualifiers:
+        q = (f"{qual} is:pr is:merged revert in:title "
+             f"merged:{since.isoformat()}..{today.isoformat()}")
+        try:
+            out = run_gh(["api", "-X", "GET", "search/issues",
+                          "-f", f"q={q}", "--jq", ".total_count"])
+            total += int(out.strip())
+        except Exception:
+            return None
+    return total
+
+
+def get_hotfix_pr_count(org: str, since: date,
+                        repos: Optional[List[str]] = None) -> Optional[int]:
+    """Count merged PRs from hotfix/* branches merged since `since`."""
+    today = date.today()
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
+    total = 0
+    for qual in qualifiers:
+        q = (f"{qual} is:pr is:merged head:hotfix "
+             f"merged:{since.isoformat()}..{today.isoformat()}")
+        try:
+            out = run_gh(["api", "-X", "GET", "search/issues",
+                          "-f", f"q={q}", "--jq", ".total_count"])
+            total += int(out.strip())
+        except Exception:
+            return None
+    return total
+
+
+def _search_pr_count_range(org: str, from_date: date, to_date: date,
+                            repos: Optional[List[str]] = None) -> Optional[int]:
+    """Count merged PRs in [from_date, to_date]. Returns None if any query fails."""
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
+    total = 0
+    for qual in qualifiers:
+        q = (f"{qual} is:pr is:merged "
+             f"merged:{from_date.isoformat()}..{to_date.isoformat()}")
+        try:
+            out = run_gh(["api", "-X", "GET", "search/issues",
+                          "-f", f"q={q}", "--jq", ".total_count"])
+            total += int(out.strip())
+        except Exception:
+            return None
+    return total
+
+
+def _qodo_counts_by_week(prs):
+    """Count PRs per calendar week. Returns {monday_iso_str: count}.
+
+    Each PR is bucketed to the Monday of its merged_at week.
+    PRs with a missing or empty merged_at are silently skipped.
+    """
+    counts = {}
+    for pr in prs:
+        merged_at = pr.get("merged_at") or ""
+        if not merged_at:
+            continue
+        d = date.fromisoformat(merged_at[:10])
+        monday = d - timedelta(days=d.weekday())
+        key = monday.isoformat()
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
+def get_weekly_pr_counts(org: str, since: date,
+                          repos: Optional[List[str]] = None) -> list:
+    """Return [{week_start, total, qodo}, ...] from the Monday of since's week through today.
+
+    Makes 1 search API call per week (total only). The caller is responsible for
+    filling in the qodo counts from already-fetched PR data via _qodo_counts_by_week.
+    """
+    today = date.today()
+    start = since - timedelta(days=since.weekday())  # rewind to Monday
+    results = []
+    cursor = start
+    while cursor <= today:
+        week_end = min(cursor + timedelta(days=6), today)
+        total = _search_pr_count_range(org, cursor, week_end, repos)
+        if total is None:
+            print(f"  Warning: failed to fetch PR count for week {cursor}", file=sys.stderr)
+        results.append({"week_start": cursor.isoformat(), "total": total, "qodo": 0})
+        cursor += timedelta(days=7)
+        time.sleep(2)  # pace to ~20 req/min, well under the Search API 30 req/min limit
+    return results
+
+
 def cmd_count(args):
     start_time = time.monotonic()
     cp_path = checkpoint_path(args.org)
@@ -772,13 +1024,26 @@ def cmd_count(args):
     org_pr_count = get_org_pr_count(args.org, args.since, repos=args.repos)
     print(f" {org_pr_count}" if org_pr_count is not None else " (unavailable)", file=sys.stderr)
 
+    print("  Fetching weekly PR counts...", end="", file=sys.stderr, flush=True)
+    weekly_coverage = get_weekly_pr_counts(args.org, args.since, repos=args.repos)
+    print(f" {len(weekly_coverage)} weeks", file=sys.stderr)
+
+    print("  Fetching revert/hotfix counts...", end="", file=sys.stderr, flush=True)
+    revert_count = get_revert_pr_count(args.org, args.since, repos=args.repos)
+    hotfix_count = get_hotfix_pr_count(args.org, args.since, repos=args.repos)
+    print(f" {revert_count} reverts, {hotfix_count} hotfixes", file=sys.stderr)
+
+    all_qodo_prs = list(search_merged_prs(args.org, args.since, repos=args.repos))
     pending = [
-        pr for pr in search_merged_prs(args.org, args.since, repos=args.repos)
+        pr for pr in all_qodo_prs
         if (pr["owner"], pr["repo"], str(pr["number"])) not in processed
         and (pr["owner"], pr["repo"], pr["number"]) not in processed
     ]
     qodo_total = len(pending)
-    org_author_count = len({pr["creator"] for pr in pending if pr.get("creator")})
+    org_author_count = len({pr["creator"] for pr in all_qodo_prs if pr.get("creator")})
+    qodo_by_week = _qodo_counts_by_week(all_qodo_prs)
+    for week in weekly_coverage:
+        week["qodo"] = qodo_by_week.get(week["week_start"], 0)
 
     for i in range(0, len(pending), 25):
         batch = pending[i:i + 25]
@@ -833,7 +1098,27 @@ def cmd_count(args):
                     f"{stats.total_implemented}/{stats.total_suggestions} implemented"
                 )
 
-            rows.append(build_csv_row(pr, lines_changed, stats, timing))
+            reviews_data = pr_data.get("reviews", [])
+            review_info = parse_reviews(reviews_data)
+            body = pr_data.get("body", "")
+            labels = pr_data.get("labels", [])
+            is_ai, ai_type = detect_ai_authored(body, labels)
+            # Use the real Qodo content timestamp (first real edit if available)
+            edits = (qodo.get("user_content_edits") or [])
+            qodo_ts = edits[0]["edited_at"] if len(edits) >= 2 else qodo.get("created_at")
+            speed_info = compute_speed_to_fix(qodo_ts, pr_data.get("commits", []))
+            extras = {
+                "is_ai_authored": is_ai,
+                "ai_author_type": ai_type,
+                "reviewer_count": review_info["reviewer_count"],
+                "had_request_changes": review_info["had_request_changes"],
+                "approver": review_info["approver"],
+                "ci_status": pr_data.get("ci_status"),
+                "commits_after_qodo": speed_info["commits_after_qodo"],
+                "speed_to_fix_min": speed_info["speed_to_fix_min"],
+            }
+
+            rows.append(build_csv_row(pr, lines_changed, stats, timing, extras=extras))
 
             processed.add((owner, repo, str(number)))
             save_checkpoint(args.org, {
@@ -866,6 +1151,9 @@ def cmd_count(args):
                 rows, args.org, args.since, today, "logo.svg",
                 org_pr_count=org_pr_count,
                 org_author_count=org_author_count,
+                weekly_coverage=weekly_coverage,
+                revert_count=revert_count,
+                hotfix_count=hotfix_count,
             ),
             encoding="utf-8",
         )

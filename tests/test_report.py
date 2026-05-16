@@ -573,3 +573,169 @@ def test_aggregate_explicit_false_qodo_flag_excludes_row():
     assert agg.by_repo[0]["repo"] == "api"
     assert agg.developers_with_qodo == 1
     assert len(agg.top_prs) == 1
+
+
+def _extras_row(repo="backend", creator="alice",
+                suggestions=4, implemented=2,
+                is_ai=False, ai_type="", reviewer_count=2,
+                had_request_changes=False, approver="bob",
+                ci_status="SUCCESS", commits_after=3, speed_min=30,
+                qodo_min=8, human_min=270):
+    base = _timing_row(repo=repo, creator=creator,
+                       suggestions=suggestions, implemented=implemented,
+                       qodo_min=qodo_min, human_min=human_min)
+    base["Is AI Authored"] = is_ai
+    base["AI Author Type"] = ai_type
+    base["Reviewer Count"] = reviewer_count
+    base["Had Request Changes"] = had_request_changes
+    base["Final Approver"] = approver
+    base["CI Status"] = ci_status
+    base["Commits After Qodo"] = commits_after
+    base["Speed to First Fix (min)"] = speed_min
+    return base
+
+
+def test_aggregate_ai_authored_count():
+    rows = [
+        _extras_row(is_ai=True, ai_type="copilot"),
+        _extras_row(is_ai=False),
+        _extras_row(is_ai=True, ai_type="cursor"),
+    ]
+    agg = aggregate(rows)
+    assert agg.ai_authored_count == 2
+
+
+def test_aggregate_ai_authored_impl_rate():
+    rows = [
+        _extras_row(is_ai=True, suggestions=4, implemented=4),
+        _extras_row(is_ai=True, suggestions=4, implemented=0),
+    ]
+    agg = aggregate(rows)
+    assert agg.ai_authored_impl_rate_pct == 50.0
+
+
+def test_aggregate_avg_reviewer_count():
+    rows = [
+        _extras_row(reviewer_count=3),
+        _extras_row(reviewer_count=1),
+    ]
+    agg = aggregate(rows)
+    assert agg.avg_reviewer_count == 2.0
+
+
+def test_aggregate_pct_had_request_changes():
+    rows = [
+        _extras_row(had_request_changes=True),
+        _extras_row(had_request_changes=False),
+        _extras_row(had_request_changes=False),
+    ]
+    agg = aggregate(rows)
+    assert agg.pct_had_request_changes == round(100 / 3, 1)
+
+
+def test_aggregate_ci_pass_rate():
+    rows = [
+        _extras_row(ci_status="SUCCESS"),
+        _extras_row(ci_status="SUCCESS"),
+        _extras_row(ci_status="FAILURE"),
+        _extras_row(ci_status=""),    # no CI data
+    ]
+    agg = aggregate(rows)
+    assert agg.ci_pass_rate_pct == round(200 / 3, 1)
+
+
+def test_aggregate_ci_pass_rate_none_when_no_ci_data():
+    rows = [_extras_row(ci_status=""), _extras_row(ci_status="")]
+    agg = aggregate(rows)
+    assert agg.ci_pass_rate_pct is None
+
+
+def test_aggregate_speed_to_fix_median():
+    rows = [
+        _extras_row(speed_min=10),
+        _extras_row(speed_min=20),
+        _extras_row(speed_min=30),
+    ]
+    agg = aggregate(rows)
+    assert agg.speed_to_fix_median_min == 20.0
+
+
+def test_aggregate_speed_to_fix_none_when_empty():
+    rows = [_extras_row(speed_min="")]
+    agg = aggregate(rows)
+    assert agg.speed_to_fix_median_min is None
+
+
+def test_aggregate_weekly_coverage_passthrough():
+    weekly = [{"week_start": "2026-05-11", "total": 10, "qodo": 5}]
+    agg = aggregate([], weekly_coverage=weekly)
+    assert agg.weekly_coverage == weekly
+
+
+def test_aggregate_revert_hotfix_passthrough():
+    agg = aggregate([], revert_count=3, hotfix_count=1)
+    assert agg.revert_count == 3
+    assert agg.hotfix_count == 1
+
+
+def test_aggregate_new_fields_default_when_empty():
+    agg = aggregate([])
+    assert agg.ai_authored_count == 0
+    assert agg.ai_authored_impl_rate_pct == 0.0
+    assert agg.avg_reviewer_count == 0.0
+    assert agg.pct_had_request_changes == 0.0
+    assert agg.ci_pass_rate_pct is None
+    assert agg.speed_to_fix_median_min is None
+    assert agg.weekly_coverage == []
+    assert agg.revert_count is None
+    assert agg.hotfix_count is None
+
+
+def test_generate_html_speed_to_fix_shown_when_data():
+    from report import generate_html
+    rows = [
+        _extras_row(speed_min=30, qodo_min=8, human_min=270),
+        _extras_row(speed_min=60, qodo_min=10, human_min=300),
+    ]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "Speed to first fix" in html
+    assert "45m" in html   # median of [30, 60]
+
+
+def test_generate_html_speed_to_fix_hidden_when_no_data():
+    from report import generate_html
+    rows = [_timing_row(qodo_min=8, human_min=270)]  # no Speed to First Fix column
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "Speed to first fix" not in html
+
+
+def test_generate_html_ai_authored_insight_shown_when_nonzero():
+    from report import generate_html
+    rows = [_extras_row(is_ai=True, ai_type="copilot", suggestions=4, implemented=2)]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "AI-authored" in html
+
+
+def test_generate_html_ai_authored_hidden_when_zero():
+    from report import generate_html
+    rows = [_extras_row(is_ai=False)]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "AI-authored" not in html
+
+
+def test_generate_html_quality_signal_shown_when_data():
+    from report import generate_html
+    rows = [_extras_row()]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None,
+                         revert_count=5, hotfix_count=2)
+    assert "Reverts" in html
+    assert "Hotfixes" in html
+
+
+def test_generate_html_quality_signal_hidden_when_none():
+    from report import generate_html
+    rows = [_extras_row()]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None,
+                         revert_count=None, hotfix_count=None)
+    assert "Reverts" not in html
+    assert "Hotfixes" not in html

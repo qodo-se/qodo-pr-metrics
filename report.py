@@ -85,10 +85,22 @@ class ReportData:
     org_prs_total: Optional[int]
     org_pr_authors_total: Optional[int]
     repos_with_qodo: int
+    ai_authored_count: int
+    ai_authored_impl_rate_pct: float
+    avg_reviewer_count: float
+    pct_had_request_changes: float
+    ci_pass_rate_pct: Optional[float]
+    speed_to_fix_median_min: Optional[float]
+    weekly_coverage: list
+    revert_count: Optional[int]
+    hotfix_count: Optional[int]
 
 
 def aggregate(rows: list, org_prs_total: Optional[int] = None,
-              org_pr_authors_total: Optional[int] = None) -> ReportData:
+              org_pr_authors_total: Optional[int] = None,
+              weekly_coverage: Optional[list] = None,
+              revert_count: Optional[int] = None,
+              hotfix_count: Optional[int] = None) -> ReportData:
     prs_with_qodo = sum(1 for r in rows if r.get("Has Qodo Review", True))
 
     total_sug = sum(r.get("Total Suggestions", 0) for r in rows)
@@ -159,6 +171,29 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
                 "pr_url": r.get("PR URL", ""),
             })
 
+    # AI-authored stats
+    ai_rows = [r for r in rows if r.get("Is AI Authored")]
+    ai_authored_count = len(ai_rows)
+    ai_sug = sum(r.get("Total Suggestions", 0) for r in ai_rows)
+    ai_imp = sum(r.get("Total Implemented", 0) for r in ai_rows)
+
+    # Reviewer stats
+    rev_counts = [r["Reviewer Count"] for r in rows
+                  if isinstance(r.get("Reviewer Count"), int)]
+    avg_reviewer_count = round(sum(rev_counts) / len(rev_counts), 1) if rev_counts else 0.0
+    had_changes_count = sum(1 for r in rows if r.get("Had Request Changes"))
+    pct_had_changes = _rate(had_changes_count, len(rows)) if rows else 0.0
+
+    # CI pass rate (only count rows with a non-empty CI Status)
+    ci_rows = [r for r in rows if r.get("CI Status") not in ("", None)]
+    ci_pass = sum(1 for r in ci_rows if r.get("CI Status") == "SUCCESS")
+    ci_pass_rate_pct = _rate(ci_pass, len(ci_rows)) if ci_rows else None
+
+    # Speed to fix median
+    fix_times = [r["Speed to First Fix (min)"] for r in rows
+                 if r.get("Speed to First Fix (min)") not in ("", None)]
+    speed_to_fix_median = _median(fix_times)
+
     repos_with_qodo = len({r["Repo Name"] for r in rows if r.get("Repo Name")})
     all_devs = {r["PR Creator"] for r in rows if r.get("PR Creator")}
     devs_with_qodo = {r["PR Creator"] for r in rows
@@ -200,6 +235,15 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
         org_prs_total=org_prs_total,
         org_pr_authors_total=org_pr_authors_total,
         repos_with_qodo=repos_with_qodo,
+        ai_authored_count=ai_authored_count,
+        ai_authored_impl_rate_pct=_rate(ai_imp, ai_sug),
+        avg_reviewer_count=avg_reviewer_count,
+        pct_had_request_changes=pct_had_changes,
+        ci_pass_rate_pct=ci_pass_rate_pct,
+        speed_to_fix_median_min=speed_to_fix_median,
+        weekly_coverage=weekly_coverage or [],
+        revert_count=revert_count,
+        hotfix_count=hotfix_count,
     )
 
 
@@ -543,6 +587,27 @@ table.top-prs .mini-bar{position:relative;width:80px;height:6px;background:var(-
   border-radius:999px;overflow:hidden;display:inline-block;margin-right:8px;vertical-align:middle}
 table.top-prs .mini-bar > i{display:block;height:100%;background:var(--success);border-radius:999px}
 
+.vel-fix-row { display:flex; align-items:baseline; gap:12px; margin-top:16px;
+               padding-top:16px; border-top:1px solid rgba(255,255,255,.08); }
+.vel-fix-label { font-size:.8rem; color:#9992b4; min-width:140px; }
+.vel-fix-value { font-size:1.4rem; font-weight:600; color:#e2dffe; font-family:'IBM Plex Mono',monospace; }
+.vel-fix-sub { font-size:.75rem; color:#6b6585; }
+
+.ai-stat { display:flex; align-items:center; gap:16px; margin-top:16px;
+           padding:12px 16px; border-radius:8px; background:rgba(121,104,250,.08);
+           border:1px solid rgba(121,104,250,.2); }
+.ai-count { font-size:1.6rem; font-weight:700; color:#7968FA; font-family:'IBM Plex Mono',monospace; }
+.ai-label { font-size:.85rem; color:#9992b4; flex:1; }
+.ai-rate  { font-size:.85rem; color:#b8b2d4; }
+
+.quality-signal { margin-bottom:40px; }
+.quality-grid { display:flex; gap:24px; }
+.quality-cell { flex:1; padding:20px; border-radius:10px;
+                background:rgba(255,255,255,.03); border:1px solid rgba(255,255,255,.08); }
+.quality-value { font-size:2rem; font-weight:700; color:#e2dffe;
+                 font-family:'IBM Plex Mono',monospace; }
+.quality-label { font-size:.8rem; color:#9992b4; margin-top:4px; }
+
 .r-footer{padding:24px 36px 28px;text-align:center;font-size:12px;color:var(--fg-subtle);
   background:var(--bg-inset);border-top:1px solid var(--border-default)}
 .r-footer .mono{color:var(--fg-muted)}
@@ -793,6 +858,16 @@ def _section_velocity(agg: ReportData) -> str:
             f'</div>'
         )
 
+    if agg.speed_to_fix_median_min is not None:
+        fix_time = _format_duration(agg.speed_to_fix_median_min)
+        scale_html += (
+            f'<div class="vel-fix-row">'
+            f'<span class="vel-fix-label">Speed to first fix</span>'
+            f'<span class="vel-fix-value">{fix_time}</span>'
+            f'<span class="vel-fix-sub">median time from Qodo comment to first fix commit</span>'
+            f'</div>'
+        )
+
     scale_html += "</div>"
 
     aside_html = ""
@@ -881,6 +956,17 @@ def _section_adoption(agg: ReportData) -> str:
 
     dev_rate_pct = _rate(agg.developers_engaged, agg.developers_with_qodo) if agg.developers_with_qodo else 0.0
 
+    ai_stat_html = ""
+    if agg.ai_authored_count > 0:
+        ai_rate_label = f"{agg.ai_authored_impl_rate_pct:.1f}% implementation rate" if agg.ai_authored_count > 0 else ""
+        ai_stat_html = (
+            f'<div class="ai-stat">'
+            f'<span class="ai-count">{agg.ai_authored_count}</span>'
+            f'<span class="ai-label">AI-authored PRs reviewed by Qodo this period</span>'
+            f'<span class="ai-rate">{ai_rate_label}</span>'
+            f'</div>'
+        )
+
     return (
         f'<section class="r-section">'
         f'<div class="r-section-head"><div>'
@@ -901,6 +987,7 @@ def _section_adoption(agg: ReportData) -> str:
         f'<div class="cov-cell-bar"><i style="width:{dev_rate_pct}%"></i></div>'
         f'</div>'
         f'</div>'
+        f'{ai_stat_html}'
 
         f'<div class="bar-grid">'
         f'<div>'
@@ -978,6 +1065,34 @@ def _section_breakdown(agg: ReportData) -> str:
     )
 
 
+def _section_quality_signal(agg: ReportData) -> str:
+    if agg.revert_count is None and agg.hotfix_count is None:
+        return ""
+    revert_val = str(agg.revert_count) if agg.revert_count is not None else "—"
+    hotfix_val = str(agg.hotfix_count) if agg.hotfix_count is not None else "—"
+    return (
+        f'<section class="r-section">'
+        f'<div class="r-section-head"><div>'
+        f'<div class="r-section-eyebrow">Quality Signal</div>'
+        f'<div class="r-section-title">Reverts &amp; hotfixes</div>'
+        f'<div class="r-section-deck">Indicators of post-merge quality issues in the period.</div>'
+        f'</div></div>'
+        f'<div class="quality-signal">'
+        f'<div class="quality-grid">'
+        f'<div class="quality-cell">'
+        f'<div class="quality-value">{revert_val}</div>'
+        f'<div class="quality-label">Reverts</div>'
+        f'</div>'
+        f'<div class="quality-cell">'
+        f'<div class="quality-value">{hotfix_val}</div>'
+        f'<div class="quality-label">Hotfixes</div>'
+        f'</div>'
+        f'</div>'
+        f'</div>'
+        f'</section>'
+    )
+
+
 def _section_top_prs(agg: ReportData) -> str:
     rows = []
     for r in agg.top_prs_by_implemented:
@@ -1049,8 +1164,13 @@ def generate_html(
     logo_path: Optional[str] = "logo.svg",
     org_pr_count: Optional[int] = None,
     org_author_count: Optional[int] = None,
+    weekly_coverage: Optional[list] = None,
+    revert_count: Optional[int] = None,
+    hotfix_count: Optional[int] = None,
 ) -> str:
-    agg = aggregate(rows, org_prs_total=org_pr_count, org_pr_authors_total=org_author_count)
+    agg = aggregate(rows, org_prs_total=org_pr_count, org_pr_authors_total=org_author_count,
+                    weekly_coverage=weekly_coverage, revert_count=revert_count,
+                    hotfix_count=hotfix_count)
     logo_tag = _embed_logo(logo_path)
     span_days = (until - since).days
 
@@ -1070,6 +1190,7 @@ def generate_html(
         f'{_section_velocity(agg)}'
         f'{_section_adoption(agg)}'
         f'{_section_breakdown(agg)}'
+        f'{_section_quality_signal(agg)}'
         f'{_section_top_prs(agg)}'
         f'{_section_footer(org, span_days)}'
         f'</div></div>\n'

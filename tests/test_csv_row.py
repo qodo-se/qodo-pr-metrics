@@ -314,3 +314,255 @@ def test_build_csv_row_spotlight_issues_serialised():
 def test_build_csv_row_no_spotlight_issues_empty_json():
     row = build_csv_row(_pr(), lines_changed=100, stats=None)
     assert row["Spotlight Issues"] == "[]"
+
+
+# ---------------------------------------------------------------------------
+# fetch_pr_data — new fields: body, labels, reviews, ci_status, commits
+# ---------------------------------------------------------------------------
+
+def _graphql_response_extended(
+    body="PR description", labels=None, reviews=None,
+    ci_state="SUCCESS", commits=None,
+    additions=120, deletions=40
+):
+    return json.dumps({
+        "data": {
+            "repository": {
+                "pullRequest": {
+                    "additions": additions,
+                    "deletions": deletions,
+                    "body": body,
+                    "labels": {"nodes": [{"name": n} for n in (labels or [])]},
+                    "reviews": {"nodes": reviews or []},
+                    "lastCommit": {
+                        "nodes": [{"commit": {"statusCheckRollup": {"state": ci_state}}}]
+                    },
+                    "allCommits": {
+                        "nodes": commits or []
+                    },
+                    "comments": {"nodes": []},
+                }
+            }
+        }
+    })
+
+
+def test_fetch_pr_data_returns_body(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(body="My PR"))
+    result = fetch_pr_data("acme", "repo", 42)
+    assert result["body"] == "My PR"
+
+
+def test_fetch_pr_data_returns_labels(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(labels=["copilot", "bug"]))
+    result = fetch_pr_data("acme", "repo", 42)
+    assert result["labels"] == ["copilot", "bug"]
+
+
+def test_fetch_pr_data_returns_reviews(monkeypatch):
+    reviews = [{"author": {"login": "alice"}, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"}]
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(reviews=reviews))
+    result = fetch_pr_data("acme", "repo", 42)
+    assert len(result["reviews"]) == 1
+    assert result["reviews"][0]["state"] == "APPROVED"
+
+
+def test_fetch_pr_data_returns_ci_status(monkeypatch):
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(ci_state="FAILURE"))
+    result = fetch_pr_data("acme", "repo", 42)
+    assert result["ci_status"] == "FAILURE"
+
+
+def test_fetch_pr_data_returns_commits(monkeypatch):
+    commits = [{"commit": {"committedDate": "2026-01-01T11:00:00Z", "message": "fix: address review"}}]
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(commits=commits))
+    result = fetch_pr_data("acme", "repo", 42)
+    assert len(result["commits"]) == 1
+    assert result["commits"][0]["commit"]["committedDate"] == "2026-01-01T11:00:00Z"
+
+
+def test_fetch_pr_data_ci_status_none_when_missing(monkeypatch):
+    payload = json.dumps({
+        "data": {"repository": {"pullRequest": {
+            "additions": 0, "deletions": 0,
+            "body": "", "labels": {"nodes": []}, "reviews": {"nodes": []},
+            "lastCommit": {"nodes": []}, "allCommits": {"nodes": []},
+            "comments": {"nodes": []},
+        }}}
+    })
+    monkeypatch.setattr("github.run_gh", lambda args, **kw: payload)
+    result = fetch_pr_data("acme", "repo", 1)
+    assert result["ci_status"] is None
+
+
+# ---------------------------------------------------------------------------
+# detect_ai_authored — identify AI-generated PRs
+# ---------------------------------------------------------------------------
+
+from github import detect_ai_authored
+
+def test_detect_ai_copilot_coauthor():
+    body = "Co-Authored-By: github-copilot[bot] <github-copilot[bot]@users.noreply.github.com>"
+    is_ai, ai_type = detect_ai_authored(body, [])
+    assert is_ai is True
+    assert ai_type == "copilot"
+
+def test_detect_ai_copilot_label():
+    is_ai, ai_type = detect_ai_authored("", ["copilot", "bug"])
+    assert is_ai is True
+    assert ai_type == "copilot"
+
+def test_detect_ai_cursor_coauthor():
+    body = "Co-Authored-By: cursor-ai <cursor@example.com>"
+    is_ai, ai_type = detect_ai_authored(body, [])
+    assert is_ai is True
+    assert ai_type == "cursor"
+
+def test_detect_ai_claude_coauthor():
+    body = "Co-Authored-By: Claude Sonnet 4 <noreply@anthropic.com>"
+    is_ai, ai_type = detect_ai_authored(body, [])
+    assert is_ai is True
+    assert ai_type == "claude"
+
+def test_detect_ai_label_ai_generated():
+    is_ai, ai_type = detect_ai_authored("", ["ai-generated"])
+    assert is_ai is True
+
+def test_detect_ai_not_triggered_by_normal_pr():
+    is_ai, ai_type = detect_ai_authored("Fix the login bug", ["bug", "backend"])
+    assert is_ai is False
+    assert ai_type == ""
+
+def test_detect_ai_empty_inputs():
+    is_ai, ai_type = detect_ai_authored("", [])
+    assert is_ai is False
+    assert ai_type == ""
+
+
+# ---------------------------------------------------------------------------
+# parse_reviews — reviewer count, request-changes flag, and approver
+# ---------------------------------------------------------------------------
+
+from github import parse_reviews
+
+def test_parse_reviews_approved():
+    reviews = [{"author": {"login": "alice"}, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"}]
+    result = parse_reviews(reviews)
+    assert result["reviewer_count"] == 1
+    assert result["had_request_changes"] is False
+    assert result["approver"] == "alice"
+
+def test_parse_reviews_request_changes():
+    reviews = [
+        {"author": {"login": "bob"}, "state": "CHANGES_REQUESTED", "submittedAt": "2026-01-01T10:00:00Z"},
+        {"author": {"login": "bob"}, "state": "APPROVED", "submittedAt": "2026-01-01T11:00:00Z"},
+    ]
+    result = parse_reviews(reviews)
+    assert result["had_request_changes"] is True
+    assert result["reviewer_count"] == 1
+    assert result["approver"] == "bob"
+
+def test_parse_reviews_multiple_reviewers():
+    reviews = [
+        {"author": {"login": "alice"}, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"},
+        {"author": {"login": "bob"}, "state": "COMMENTED", "submittedAt": "2026-01-01T11:00:00Z"},
+    ]
+    result = parse_reviews(reviews)
+    assert result["reviewer_count"] == 2
+
+def test_parse_reviews_empty():
+    result = parse_reviews([])
+    assert result["reviewer_count"] == 0
+    assert result["had_request_changes"] is False
+    assert result["approver"] == ""
+
+def test_parse_reviews_null_author_skipped():
+    reviews = [{"author": None, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"}]
+    result = parse_reviews(reviews)
+    assert result["reviewer_count"] == 0
+    assert result["approver"] == ""
+
+
+# ---------------------------------------------------------------------------
+# compute_speed_to_fix — commits pushed after Qodo review
+# ---------------------------------------------------------------------------
+
+from github import compute_speed_to_fix
+
+def test_speed_to_fix_basic():
+    commits = [
+        {"commit": {"committedDate": "2026-01-01T10:30:00Z", "message": "fix: address review"}},
+        {"commit": {"committedDate": "2026-01-01T11:00:00Z", "message": "chore: cleanup"}},
+    ]
+    result = compute_speed_to_fix("2026-01-01T10:00:00Z", commits)
+    assert result["commits_after_qodo"] == 2
+    assert result["speed_to_fix_min"] == 30
+
+def test_speed_to_fix_no_commits_after():
+    commits = [{"commit": {"committedDate": "2026-01-01T09:00:00Z", "message": "initial"}}]
+    result = compute_speed_to_fix("2026-01-01T10:00:00Z", commits)
+    assert result["commits_after_qodo"] == 0
+    assert result["speed_to_fix_min"] is None
+
+def test_speed_to_fix_no_qodo_ts():
+    result = compute_speed_to_fix(None, [{"commit": {"committedDate": "2026-01-01T10:00:00Z", "message": "fix"}}])
+    assert result["commits_after_qodo"] == 0
+    assert result["speed_to_fix_min"] is None
+
+def test_speed_to_fix_empty_commits():
+    result = compute_speed_to_fix("2026-01-01T10:00:00Z", [])
+    assert result["commits_after_qodo"] == 0
+    assert result["speed_to_fix_min"] is None
+
+def test_speed_to_fix_picks_earliest_commit():
+    commits = [
+        {"commit": {"committedDate": "2026-01-01T11:00:00Z", "message": "second"}},
+        {"commit": {"committedDate": "2026-01-01T10:15:00Z", "message": "first"}},
+    ]
+    result = compute_speed_to_fix("2026-01-01T10:00:00Z", commits)
+    assert result["speed_to_fix_min"] == 15
+
+
+# ---------------------------------------------------------------------------
+# build_csv_row — new extras columns for AI authorship, reviews, CI, speed
+# ---------------------------------------------------------------------------
+
+def test_build_csv_row_extras_populated():
+    extras = {
+        "is_ai_authored": True,
+        "ai_author_type": "copilot",
+        "reviewer_count": 2,
+        "had_request_changes": True,
+        "approver": "alice",
+        "ci_status": "SUCCESS",
+        "commits_after_qodo": 3,
+        "speed_to_fix_min": 45,
+    }
+    row = build_csv_row(_pr(), lines_changed=100, stats=None, extras=extras)
+    assert row["Is AI Authored"] is True
+    assert row["AI Author Type"] == "copilot"
+    assert row["Reviewer Count"] == 2
+    assert row["Had Request Changes"] is True
+    assert row["Final Approver"] == "alice"
+    assert row["CI Status"] == "SUCCESS"
+    assert row["Commits After Qodo"] == 3
+    assert row["Speed to First Fix (min)"] == 45
+
+
+def test_build_csv_row_extras_none_defaults():
+    row = build_csv_row(_pr(), lines_changed=100, stats=None)
+    assert row["Is AI Authored"] is False
+    assert row["AI Author Type"] == ""
+    assert row["Reviewer Count"] == 0
+    assert row["Had Request Changes"] is False
+    assert row["Final Approver"] == ""
+    assert row["CI Status"] == ""
+    assert row["Commits After Qodo"] == 0
+    assert row["Speed to First Fix (min)"] == ""
+
+
+def test_build_csv_row_speed_to_fix_none_becomes_empty():
+    extras = {"speed_to_fix_min": None, "ci_status": None}
+    row = build_csv_row(_pr(), lines_changed=100, stats=None, extras=extras)
+    assert row["Speed to First Fix (min)"] == ""
+    assert row["CI Status"] == ""
