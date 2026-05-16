@@ -282,7 +282,7 @@ def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) 
         "labels(first:10){nodes{name}} "
         "reviews(first:20){nodes{author{login} state submittedAt}} "
         "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
-        "allCommits:commits(first:100){nodes{committedDate message}} "
+        "allCommits:commits(first:100){nodes{commit{committedDate message}}} "
         f"comments(first:{comments_limit})"
         "{nodes{body createdAt "
         "userContentEdits(last:2){nodes{editedAt}} "
@@ -343,7 +343,7 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 50) -> dict:
             "labels(first:10){nodes{name}} "
             "reviews(first:20){nodes{author{login} state submittedAt}} "
             "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
-            "allCommits:commits(first:100){nodes{committedDate message}} "
+            "allCommits:commits(first:100){nodes{commit{committedDate message}}} "
             "comments(first:20){nodes{body createdAt "
             "userContentEdits(last:2){nodes{editedAt}} "
             "author{login __typename}}}"
@@ -555,10 +555,10 @@ def compute_speed_to_fix(qodo_ts: Optional[str], commits: list) -> dict:
     """
     if not qodo_ts or not commits:
         return {"commits_after_qodo": 0, "speed_to_fix_min": None}
-    after = [c for c in commits if (c.get("committedDate") or "") > qodo_ts]
+    after = [c for c in commits if ((c.get("commit") or {}).get("committedDate") or "") > qodo_ts]
     if not after:
         return {"commits_after_qodo": 0, "speed_to_fix_min": None}
-    first_ts = min(c["committedDate"] for c in after)
+    first_ts = min(c["commit"]["committedDate"] for c in after)
     return {
         "commits_after_qodo": len(after),
         "speed_to_fix_min": _minutes_between(qodo_ts, first_ts),
@@ -914,12 +914,30 @@ def _search_pr_count_range(org: str, from_date: date, to_date: date,
     return total
 
 
+def _qodo_counts_by_week(prs):
+    """Count PRs per calendar week. Returns {monday_iso_str: count}.
+
+    Each PR is bucketed to the Monday of its merged_at week.
+    PRs with a missing or empty merged_at are silently skipped.
+    """
+    counts = {}
+    for pr in prs:
+        merged_at = pr.get("merged_at") or ""
+        if not merged_at:
+            continue
+        d = date.fromisoformat(merged_at[:10])
+        monday = d - timedelta(days=d.weekday())
+        key = monday.isoformat()
+        counts[key] = counts.get(key, 0) + 1
+    return counts
+
+
 def get_weekly_pr_counts(org: str, since: date,
                           repos: Optional[List[str]] = None) -> list:
     """Return [{week_start, total, qodo}, ...] from the Monday of since's week through today.
 
-    Makes 2 search API calls per week (total + qodo-only). Each week_start is a
-    Monday ISO date. Gaps caused by API errors produce zero counts rather than None.
+    Makes 1 search API call per week (total only). The caller is responsible for
+    filling in the qodo counts from already-fetched PR data via _qodo_counts_by_week.
     """
     today = date.today()
     start = since - timedelta(days=since.weekday())  # rewind to Monday
@@ -928,8 +946,7 @@ def get_weekly_pr_counts(org: str, since: date,
     while cursor <= today:
         week_end = min(cursor + timedelta(days=6), today)
         total = _search_pr_count_range(org, cursor, week_end, repos, qodo_only=False)
-        qodo = _search_pr_count_range(org, cursor, week_end, repos, qodo_only=True)
-        results.append({"week_start": cursor.isoformat(), "total": total, "qodo": qodo})
+        results.append({"week_start": cursor.isoformat(), "total": total, "qodo": 0})
         cursor += timedelta(days=7)
     return results
 
@@ -992,6 +1009,9 @@ def cmd_count(args):
     ]
     qodo_total = len(pending)
     org_author_count = len({pr["creator"] for pr in pending if pr.get("creator")})
+    qodo_by_week = _qodo_counts_by_week(pending)
+    for week in weekly_coverage:
+        week["qodo"] = qodo_by_week.get(week["week_start"], 0)
 
     for i in range(0, len(pending), 25):
         batch = pending[i:i + 25]

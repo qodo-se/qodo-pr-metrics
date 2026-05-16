@@ -381,7 +381,7 @@ def test_get_weekly_pr_counts_week_start_is_monday(monkeypatch):
     assert first_week.weekday() == 0  # Monday
 
 
-def test_get_weekly_pr_counts_calls_search_twice_per_week(monkeypatch):
+def test_get_weekly_pr_counts_calls_search_once_per_week(monkeypatch):
     call_count = [0]
     def fake_run_gh(args, **kw):
         call_count[0] += 1
@@ -390,8 +390,8 @@ def test_get_weekly_pr_counts_calls_search_twice_per_week(monkeypatch):
     # Force exactly one week by passing since = today - 1 day
     from datetime import date as d, timedelta
     result = get_weekly_pr_counts("acme", d.today() - timedelta(days=1))
-    # One week → 2 calls (total + qodo)
-    assert call_count[0] == 2
+    # One week → 1 call (total only; qodo counts come from _qodo_counts_by_week)
+    assert call_count[0] == 1
 
 
 def test_get_weekly_pr_counts_with_repos_uses_repo_qualifier(monkeypatch):
