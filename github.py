@@ -306,7 +306,7 @@ def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) 
         "pullRequest(number:$number){"
         "additions deletions body "
         "labels(first:10){nodes{name}} "
-        "reviews(first:20){nodes{author{login} state submittedAt}} "
+        "reviews(last:100){nodes{author{login} state submittedAt}} "
         "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
         "allCommits:commits(first:100){nodes{commit{committedDate message}}} "
         f"comments(first:{comments_limit})"
@@ -367,7 +367,7 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 50) -> dict:
             "... on PullRequest{"
             "id additions deletions body "
             "labels(first:10){nodes{name}} "
-            "reviews(first:20){nodes{author{login} state submittedAt}} "
+            "reviews(last:100){nodes{author{login} state submittedAt}} "
             "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
             "allCommits:commits(first:100){nodes{commit{committedDate message}}} "
             "comments(first:20){nodes{body createdAt "
@@ -557,15 +557,16 @@ def parse_reviews(reviews: list) -> dict:
     """
     reviewers: set = set()
     had_changes = False
-    approver = ""
-    for r in reviews:
+    approved_reviews = []
+    for r in sorted(reviews, key=lambda r: r.get("submittedAt") or ""):
         login = (r.get("author") or {}).get("login", "")
         if login:
             reviewers.add(login)
         if r.get("state") == "CHANGES_REQUESTED":
             had_changes = True
         if r.get("state") == "APPROVED" and login:
-            approver = login
+            approved_reviews.append((r.get("submittedAt") or "", login))
+    approver = approved_reviews[-1][1] if approved_reviews else ""
     return {
         "reviewer_count": len(reviewers),
         "had_request_changes": had_changes,
