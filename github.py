@@ -102,7 +102,7 @@ _AI_LABEL_NAMES = {
     "claude": "claude",
 }
 
-GQL_SEARCH_QUERY = (
+_GQL_SEARCH_QUERY = (
     "query($q:String!,$cursor:String){"
     "search(query:$q,type:ISSUE,first:100,after:$cursor){"
     "pageInfo{hasNextPage endCursor}"
@@ -220,7 +220,7 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
     Uses GraphQL search (core API, 5000 req/hr) instead of REST search/issues
     (Search API, 30 req/min) to avoid rate limiting on large orgs.
 
-    Chunked by date range to stay under the search API's 1000-result cap.
+    Chunked by date range to stay under GitHub's 1000-result search query cap.
     """
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     today = date.today()
@@ -250,7 +250,7 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
             while True:
                 gh_args = [
                     "api", "graphql",
-                    "-f", f"query={GQL_SEARCH_QUERY}",
+                    "-f", f"query={_GQL_SEARCH_QUERY}",
                     "-f", f"q={q}",
                 ]
                 if end_cursor:
@@ -272,7 +272,6 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
                 end_cursor = search["pageInfo"]["endCursor"]
             print(f" {chunk_count} PRs", file=sys.stderr)
         cursor = chunk_end + timedelta(days=1)
-
 
 
 def _extract_ci_status(last_commit_data: Optional[dict]) -> Optional[str]:

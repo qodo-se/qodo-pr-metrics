@@ -70,8 +70,7 @@ from github import search_merged_prs
 
 def _gql_search_response(nodes=None):
     """Return a GraphQL search response JSON string with the given PR nodes."""
-    import json
-    return json.dumps({
+    return _json.dumps({
         "data": {
             "search": {
                 "pageInfo": {"hasNextPage": False, "endCursor": None},
@@ -146,6 +145,49 @@ def test_search_merged_prs_yields_node_id(monkeypatch):
     monkeypatch.setattr("github.run_gh", lambda args, **kw: _gql_search_response([node]))
     results = list(search_merged_prs("acme", date.today() - timedelta(days=1)))
     assert results[0]["node_id"] == "PR_kwDOA_test"
+
+
+def test_search_merged_prs_follows_pagination_cursor(monkeypatch):
+    """Verify that when hasNextPage is True, a second request is made with the endCursor."""
+    page1_node = {
+        "number": 1,
+        "id": "PR_page1",
+        "repository": {"nameWithOwner": "acme/frontend"},
+        "url": "https://github.com/acme/frontend/pull/1",
+        "author": {"login": "alice"},
+        "createdAt": "2026-01-01T10:00:00Z",
+        "mergedAt": "2026-01-02T10:00:00Z",
+    }
+    page2_node = {
+        "number": 2,
+        "id": "PR_page2",
+        "repository": {"nameWithOwner": "acme/frontend"},
+        "url": "https://github.com/acme/frontend/pull/2",
+        "author": {"login": "bob"},
+        "createdAt": "2026-01-03T10:00:00Z",
+        "mergedAt": "2026-01-04T10:00:00Z",
+    }
+    import json
+    calls = []
+    def fake_run_gh(args, **kw):
+        calls.append(args)
+        if len(calls) == 1:
+            return json.dumps({"data": {"search": {
+                "pageInfo": {"hasNextPage": True, "endCursor": "cursor_abc"},
+                "nodes": [page1_node],
+            }}})
+        return json.dumps({"data": {"search": {
+            "pageInfo": {"hasNextPage": False, "endCursor": None},
+            "nodes": [page2_node],
+        }}})
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    results = list(search_merged_prs("acme", date.today() - timedelta(days=1)))
+    assert len(results) == 2
+    assert results[0]["node_id"] == "PR_page1"
+    assert results[1]["node_id"] == "PR_page2"
+    # Second call must include the cursor from page 1
+    second_call_args = calls[1]
+    assert any(a == "cursor=cursor_abc" for a in second_call_args)
 
 
 import json as _json
