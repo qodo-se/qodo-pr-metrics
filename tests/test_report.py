@@ -739,3 +739,21 @@ def test_generate_html_quality_signal_hidden_when_none():
                          revert_count=None, hotfix_count=None)
     assert "Reverts" not in html
     assert "Hotfixes" not in html
+
+
+def test_generate_html_hotfix_zero_renders_dash():
+    from report import generate_html
+    rows = [_extras_row()]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None,
+                         revert_count=3, hotfix_count=0)
+    assert "Hotfixes" in html
+    assert ">—<" in html
+
+
+def test_generate_html_quality_signal_hidden_when_both_zero():
+    from report import generate_html
+    rows = [_extras_row()]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None,
+                         revert_count=0, hotfix_count=0)
+    assert "Reverts" not in html
+    assert "Hotfixes" not in html
