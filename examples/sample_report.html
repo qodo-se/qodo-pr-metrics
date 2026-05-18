@@ -107,41 +107,34 @@ section.r-section:last-of-type{border-bottom:none}
 .spot-more{margin-top:14px;text-align:center;font-size:12px;color:var(--fg-muted);
   padding:10px;border:1px dashed var(--border-default);border-radius:var(--radius-md)}
 
-/* velocity */
-.vel-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:24px}
-.vel-scale{background:var(--bg-surface);border:1px solid var(--border-default);
-  border-radius:var(--radius-lg);padding:28px 28px 24px}
-.vel-axis{position:relative;height:80px;margin:24px 0 8px}
-.vel-track{position:absolute;left:0;right:0;top:50%;height:2px;
-  background:linear-gradient(90deg,var(--p-400) 0%,var(--p-400) var(--qodo-pct),
-    var(--pm-500) var(--qodo-pct),var(--pm-500) 100%);
-  transform:translateY(-50%);border-radius:999px}
-.vel-marker{position:absolute;top:50%;transform:translate(-50%,-50%);
-  display:flex;flex-direction:column;align-items:center;gap:10px}
-.vel-marker .pt{width:14px;height:14px;border-radius:50%;background:var(--p-400);
-  box-shadow:0 0 0 4px var(--bg-surface),0 0 0 5px var(--p-400)}
-.vel-marker.human .pt{background:var(--pm-400);box-shadow:0 0 0 4px var(--bg-surface),0 0 0 5px var(--pm-400)}
-.vel-label-top,.vel-label-bot{position:absolute;left:50%;transform:translateX(-50%);
-  white-space:nowrap;text-align:center}
-.vel-label-top{bottom:calc(50% + 18px)}
-.vel-label-bot{top:calc(50% + 18px)}
-.vel-marker.human .vel-label-bot{left:auto;right:0;transform:none;text-align:right}
-.vel-name{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted);font-weight:600;margin-bottom:4px}
-.vel-name.qodo{color:var(--p-300)}
-.vel-time{font-size:28px;font-weight:700;color:var(--fg-strong);line-height:1;letter-spacing:-.01em}
-.vel-time.qodo{color:var(--p-200)}
-.vel-headline{margin-top:36px;font-size:14px;color:var(--fg-default);line-height:1.6;text-wrap:pretty}
-.vel-headline b{color:var(--fg-strong);font-weight:600}
-.vel-pill{display:inline-block;padding:3px 10px;border-radius:var(--radius-full);
-  background:var(--p-tint-10);color:var(--p-200);font-weight:600;font-size:12px;white-space:nowrap}
-.vel-aside{background:var(--bg-surface);border:1px solid var(--border-default);
-  border-radius:var(--radius-lg);padding:24px 28px;
-  display:flex;flex-direction:column;justify-content:space-between;gap:16px}
-.vel-stat-big{font-size:64px;line-height:1;font-weight:700;color:var(--fg-strong);letter-spacing:-.03em}
-.vel-stat-big .pct{font-size:32px;color:var(--fg-muted);font-weight:600;margin-left:2px}
-.vel-stat-label{font-size:13px;color:var(--fg-muted);line-height:1.55;text-wrap:pretty}
-.vel-stat-label b{color:var(--fg-strong);font-weight:600}
-.vel-aside .vel-foot{font-size:12px;color:var(--fg-subtle);padding-top:14px;border-top:1px solid var(--border-default)}
+/* velocity — distribution (Prototype 04) */
+.dist-wrap{display:grid;grid-template-columns:1fr 280px;gap:24px;align-items:stretch}
+.dist-chart{background:var(--bg-surface);border:1px solid var(--border-default);
+  border-radius:var(--radius-lg);padding:20px 24px 12px;min-height:260px}
+.dist-svg{width:100%;height:240px;display:block}
+.dist-legend{display:flex;justify-content:space-between;align-items:center;
+  margin-bottom:10px;font-size:11px;color:var(--fg-muted)}
+.dist-legend .left{display:flex;gap:16px;flex-wrap:wrap}
+.dist-legend .sw{display:inline-block;width:10px;height:10px;border-radius:2px;
+  margin-right:6px;vertical-align:middle}
+.dist-legend .sw.qodo{background:var(--p-400)}
+.dist-legend .sw.human{background:var(--pm-400)}
+.dist-legend b{color:var(--fg-default);font-weight:500}
+.dist-legend .axis{font-size:10px;letter-spacing:.04em;color:var(--fg-subtle);text-transform:uppercase}
+.dist-side{display:flex;flex-direction:column;justify-content:center;gap:14px}
+.dist-card{background:var(--bg-surface);border:1px solid var(--border-default);
+  border-radius:var(--radius-md);padding:16px 18px}
+.dist-card-label{font-size:10.5px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--fg-muted)}
+.dist-card-val{font-size:26px;font-weight:700;color:var(--fg-strong);line-height:1;
+  margin-top:8px;letter-spacing:-.01em}
+.dist-card-val .pct{font-size:16px;color:var(--fg-muted);font-weight:600;margin-left:2px}
+.dist-card-sub{font-size:12px;color:var(--fg-muted);margin-top:8px;line-height:1.55;text-wrap:pretty}
+.dist-card-sub b{color:var(--fg-default);font-weight:500}
+.dist-card.highlight{border-color:rgba(121,104,250,.30);background:var(--p-tint-10)}
+.dist-card.highlight .dist-card-label{color:var(--p-300)}
+.dist-card.highlight .dist-card-val{color:var(--p-200)}
+@media (max-width:900px){.dist-wrap{grid-template-columns:1fr}}
 
 /* adoption */
 .coverage-strip{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--border-default);
@@ -232,6 +225,31 @@ table.top-prs .mini-bar{position:relative;width:80px;height:6px;background:var(-
   border-radius:999px;overflow:hidden;display:inline-block;margin-right:8px;vertical-align:middle}
 table.top-prs .mini-bar > i{display:block;height:100%;background:var(--success);border-radius:999px}
 
+/* four-part table of contents */
+.toc{padding:34px 36px 30px;background:var(--bg-inset);border-bottom:1px solid var(--border-default)}
+.toc-head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.toc-label{font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--p-300);white-space:nowrap}
+.toc-line{flex:1;height:1px;background:var(--border-default)}
+.toc-hint{font-size:10.5px;color:var(--fg-subtle);font-family:'IBM Plex Mono',monospace;letter-spacing:.04em;white-space:nowrap}
+.acts{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;background:transparent;border:none}
+.act{padding:16px 18px;border:1px solid var(--border-default);border-radius:var(--radius-md);background:var(--bg-canvas);display:flex;flex-direction:column;gap:8px;text-decoration:none;color:inherit;transition:border-color 120ms ease,background 120ms ease,transform 120ms ease}
+.act:hover{border-color:var(--p-400);background:rgba(121,104,250,.05);text-decoration:none;transform:translateY(-1px)}
+.act-num{font-family:'IBM Plex Mono',monospace;font-size:10px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--p-300);display:flex;align-items:center;gap:8px}
+.act-num::before{content:'';width:18px;height:1px;background:var(--p-400)}
+.act-title{font-size:14.5px;font-weight:600;color:var(--fg-strong);letter-spacing:-.005em;line-height:1.25}
+.act-list{font-size:11.5px;color:var(--fg-muted);line-height:1.5;text-wrap:pretty}
+@media (max-width:900px){.acts{grid-template-columns:1fr 1fr}.toc-hint{display:none}}
+@media (max-width:560px){.acts{grid-template-columns:1fr}}
+
+/* embedded leaderboard inside Spotlight */
+.spot-divider{display:flex;align-items:center;gap:14px;margin:32px 0 18px}
+.spot-divider .label{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--p-300);white-space:nowrap}
+.spot-divider .line{flex:1;height:1px;background:var(--border-default)}
+.spot-leaderboard-deck{font-size:12.5px;color:var(--fg-muted);margin-bottom:14px;max-width:680px;line-height:1.55;text-wrap:pretty}
+.spot-leaderboard-deck b{color:var(--fg-default);font-weight:600}
+table.top-prs .num.spot{color:var(--warning);font-weight:600}
+table.top-prs .mini-bar.purple > i{background:var(--p-400)}
+
 .vel-fix-row { display:flex; align-items:baseline; gap:12px; margin-top:16px;
                padding-top:16px; border-top:1px solid rgba(255,255,255,.08); }
 .vel-fix-label { font-size:.8rem; color:#9992b4; min-width:140px; }
@@ -253,9 +271,311 @@ table.top-prs .mini-bar > i{display:block;height:100%;background:var(--success);
                  font-family:'IBM Plex Mono',monospace; }
 .quality-label { font-size:.8rem; color:#9992b4; margin-top:4px; }
 
+/* ── Trend (Prototype 01) ─────────────────────────────────────── */
+.trend-wrap{display:grid;grid-template-columns:1fr 240px;gap:24px;align-items:stretch}
+.trend-chart{position:relative;background:var(--bg-surface);border:1px solid var(--border-default);
+  border-radius:var(--radius-lg);padding:20px 22px 14px;min-height:280px}
+.trend-legend{display:flex;gap:18px;font-size:11px;color:var(--fg-muted);margin-bottom:14px;flex-wrap:wrap}
+.trend-legend > span{white-space:nowrap}
+.trend-legend .sw{width:10px;height:10px;border-radius:2px;display:inline-block;
+  vertical-align:middle;margin-right:6px}
+.trend-legend .sw.caught{background:var(--p-400)}
+.trend-legend .sw.fixed{background:var(--g-mint)}
+.trend-legend b{color:var(--fg-default);font-weight:500}
+.trend-svg{width:100%;height:220px;display:block}
+.trend-side{display:flex;flex-direction:column;justify-content:flex-start;gap:14px}
+.trend-stat{background:var(--bg-surface);border:1px solid var(--border-default);
+  border-radius:var(--radius-lg);padding:18px 20px}
+.trend-stat-label{font-size:10.5px;font-weight:600;letter-spacing:.06em;
+  text-transform:uppercase;color:var(--fg-muted)}
+.trend-stat-val{font-size:30px;font-weight:700;color:var(--fg-strong);line-height:1;
+  letter-spacing:-.02em;margin-top:8px}
+.trend-stat-val .delta{font-size:13px;font-weight:600;margin-left:6px;vertical-align:middle}
+.trend-stat-val .delta.up{color:var(--success)}
+.trend-stat-val .delta.down{color:var(--danger)}
+.trend-stat-sub{font-size:12px;color:var(--fg-muted);margin-top:8px;line-height:1.5}
+.trend-stat-sub b{color:var(--fg-default);font-weight:500}
+@media (max-width: 900px){.trend-wrap{grid-template-columns:1fr}}
+
+/* ── Funnel (Prototype 02) ───────────────────────────────────── */
+.funnel{display:flex;flex-direction:column;
+  background:var(--bg-surface);border:1px solid var(--border-default);
+  border-radius:var(--radius-lg);padding:6px 24px}
+.funnel-row{display:grid;grid-template-columns:220px 1fr 140px;gap:18px;align-items:center;
+  padding:14px 0;border-bottom:1px solid var(--border-subtle)}
+.funnel-row:last-child{border-bottom:none}
+.funnel-name{font-size:13px;color:var(--fg-default);font-weight:500;line-height:1.35}
+.funnel-name .step{font-family:'IBM Plex Mono',monospace;font-size:10px;
+  color:var(--fg-subtle);display:block;margin-bottom:3px;letter-spacing:.08em;
+  text-transform:uppercase;font-weight:600}
+.funnel-bar{position:relative;height:34px;background:var(--bg-inset);
+  border-radius:var(--radius-sm);overflow:hidden}
+.funnel-bar i{display:flex;height:100%;
+  background:linear-gradient(90deg,var(--p-500),var(--p-400));
+  border-radius:var(--radius-sm);align-items:center;padding-left:14px;
+  font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:#fff;
+  font-style:normal;white-space:nowrap;min-width:fit-content}
+.funnel-bar.gold i{background:var(--brand-gradient)}
+.funnel-bar.muted i{background:var(--pm-500);color:var(--fg-default)}
+.funnel-val{text-align:right;font-family:'IBM Plex Mono',monospace;font-size:14px;
+  color:var(--fg-strong);font-weight:600;line-height:1.2}
+.funnel-val .pct{display:block;font-size:11px;color:var(--fg-muted);
+  margin-top:4px;font-weight:400;letter-spacing:0}
+.funnel-foot{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-top:16px;
+  background:var(--bg-surface);border:1px solid var(--border-default);
+  border-radius:var(--radius-lg);overflow:hidden}
+.funnel-foot-cell{font-size:12.5px;color:var(--fg-muted);line-height:1.55;
+  text-wrap:pretty;padding:20px 22px;border-right:1px solid var(--border-default)}
+.funnel-foot-cell:last-child{border-right:none}
+.funnel-foot-cell b{color:var(--fg-strong);font-weight:700;display:block;
+  font-size:22px;letter-spacing:-.015em;margin-bottom:6px;line-height:1.1}
+.funnel-foot-cell.gold b{
+  background:var(--brand-gradient);-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent}
+@media (max-width: 900px){
+  .funnel-row{grid-template-columns:130px 1fr 100px;gap:10px}
+  .funnel-foot{grid-template-columns:1fr}
+  .funnel-foot-cell{border-right:none;border-bottom:1px solid var(--border-default)}
+  .funnel-foot-cell:last-child{border-bottom:none}
+}
+
+/* ── Hours Saved (Prototype 03) ────────────────────────────── */
+.saved-grid{display:grid;grid-template-columns:1fr 320px;gap:18px;align-items:start}
+.observed-col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.saved-hero{background:linear-gradient(135deg,rgba(121,104,250,.08),rgba(6,228,174,.05));
+  border:1px solid var(--border-default);border-radius:var(--radius-lg);padding:24px 28px;
+  display:flex;flex-direction:column;gap:14px}
+.saved-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--g-mint);line-height:1.4;text-wrap:balance}
+.saved-eyebrow .sep{color:var(--fg-subtle);margin:0 7px}
+.saved-big{display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+.saved-big .n{font-size:60px;font-weight:700;line-height:1;letter-spacing:-.03em;
+  background:var(--brand-gradient);-webkit-background-clip:text;background-clip:text;
+  -webkit-text-fill-color:transparent;font-variant-numeric:tabular-nums}
+.saved-big .u{font-size:16px;color:var(--fg-muted);font-weight:500;letter-spacing:-.005em}
+.saved-lede{font-size:13px;color:var(--fg-default);line-height:1.65;text-wrap:pretty}
+.saved-lede b{color:var(--fg-strong);font-weight:600}
+.saved-formula{font-size:11.5px;color:var(--fg-subtle);font-family:'IBM Plex Mono',monospace;
+  padding:11px 13px;background:var(--bg-inset);border:1px dashed var(--border-default);
+  border-radius:var(--radius-sm);line-height:1.7;font-variant-numeric:tabular-nums}
+.saved-formula b{color:var(--fg-default);font-weight:500}
+.saved-formula .op{color:var(--fg-subtle)}
+.scale-col{background:linear-gradient(180deg,rgba(121,104,250,.10),rgba(15,15,25,.4));
+  border:1px solid var(--p-tint-20);border-radius:var(--radius-lg);
+  padding:22px 22px 20px;display:flex;flex-direction:column;gap:16px;align-self:start}
+.scale-eyebrow{font-size:10.5px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--p-300);display:flex;align-items:center;gap:8px}
+.scale-eyebrow .live-dot{width:5px;height:5px;border-radius:50%;background:var(--p-400);
+  box-shadow:0 0 6px var(--p-400)}
+.scale-headline{display:flex;flex-direction:column;gap:2px}
+.scale-amount{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;font-variant-numeric:tabular-nums}
+.scale-amount .v{font-size:36px;font-weight:700;color:var(--fg-strong);letter-spacing:-.025em;line-height:1.05}
+.scale-amount .yr{font-size:14px;color:var(--fg-muted);font-weight:500;letter-spacing:-.01em}
+.scale-sub{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--fg-muted);
+  font-variant-numeric:tabular-nums;letter-spacing:-.005em}
+.scale-context{font-size:12.5px;color:var(--fg-default);line-height:1.55;text-wrap:pretty}
+.scale-context b{color:var(--fg-strong);font-weight:600}
+.scale-3yr{display:flex;justify-content:space-between;align-items:baseline;gap:10px;
+  padding:10px 14px;background:rgba(6,228,174,.06);border:1px solid rgba(6,228,174,.20);
+  border-radius:var(--radius-md)}
+.scale-3yr .lbl{font-size:10.5px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--fg-muted)}
+.scale-3yr .val{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:700;color:var(--g-mint);
+  font-variant-numeric:tabular-nums}
+.saved-breakdown{display:flex;flex-direction:column;gap:10px}
+.sbr-row{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+  padding:14px 16px;background:var(--bg-inset);border:1px solid var(--border-default);
+  border-radius:var(--radius-md)}
+.sbr-tag{font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--fg-muted);
+  padding:3px 9px;border-radius:var(--radius-full);background:var(--bg-surface);
+  border:1px solid var(--border-default);white-space:nowrap}
+.sbr-tag.warn{color:var(--warning);border-color:rgba(245,181,68,.20);background:rgba(245,181,68,.07)}
+.sbr-tag.norm{color:var(--p-300);border-color:var(--p-tint-20);background:var(--p-tint-10)}
+.sbr-tag.lg{font-size:11px;padding:5px 11px}
+.sbr-mid{font-size:12.5px;color:var(--fg-default);line-height:1.5;min-width:0}
+.sbr-mid .top{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap}
+.sbr-mid .top b{color:var(--fg-strong);font-weight:600;font-variant-numeric:tabular-nums}
+.sbr-mid span.sub{display:block;font-size:11px;color:var(--fg-muted);margin-top:3px;line-height:1.45}
+.sbr-val{font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:600;color:var(--fg-strong);
+  text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+.sbr-val .u{font-size:11px;color:var(--fg-muted);font-weight:500;margin-left:2px}
+.sbr-row.big{padding:18px 20px;grid-template-columns:1fr auto;
+  grid-template-areas:"tag val" "mid mid";row-gap:12px;align-items:center}
+.sbr-row.big > .sbr-tag{grid-area:tag;justify-self:start}
+.sbr-row.big > .sbr-mid{grid-area:mid}
+.sbr-row.big > .sbr-val{grid-area:val;justify-self:end}
+.sbr-row.big .sbr-mid{font-size:13px}
+.sbr-row.big .sbr-mid .top b{font-size:18px;letter-spacing:-.01em}
+.sbr-row.big .sbr-val{font-size:18px}
+.sbr-row.bonus{background:transparent;border-style:dashed;
+  grid-template-columns:1fr auto;grid-template-areas:"tag val" "mid mid";row-gap:10px;align-items:center}
+.sbr-row.bonus > .sbr-tag{grid-area:tag;justify-self:start;
+  color:var(--g-mint);border-color:rgba(6,228,174,.25);background:rgba(6,228,174,.07)}
+.sbr-row.bonus > .sbr-mid{grid-area:mid}
+.sbr-row.bonus > .sbr-val{grid-area:val;justify-self:end;color:var(--g-mint)}
+.sbr-total{display:grid;grid-template-columns:auto 1fr auto;gap:14px;align-items:center;
+  padding:14px 16px;margin-top:4px;
+  background:linear-gradient(135deg,rgba(121,104,250,.10),rgba(6,228,174,.06));
+  border:1px solid rgba(168,161,253,.25);border-radius:var(--radius-md)}
+.sbr-total .lbl{font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--p-200)}
+.sbr-total .mid{font-size:11.5px;color:var(--fg-muted);line-height:1.4}
+.sbr-total .mid b{color:var(--fg-default);font-weight:500;font-variant-numeric:tabular-nums}
+.sbr-total .v{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:700;
+  color:var(--fg-strong);text-align:right;font-variant-numeric:tabular-nums}
+@media (max-width:920px){.saved-grid{grid-template-columns:1fr}}
+
+/* ── Hours Saved · interactive bits (live chips, sliders, segs) ── */
+.hs-live{display:inline-flex;align-items:baseline;position:relative;
+  color:var(--fg-strong);font-weight:600;font-variant-numeric:tabular-nums;
+  padding:1px 4px;margin:0 -1px;border-radius:4px;cursor:text;
+  border-bottom:1px dashed rgba(168,161,253,.35);
+  transition:background-color 120ms ease, color 120ms ease, box-shadow 120ms ease}
+.hs-live:hover{background:var(--p-tint-10);color:var(--p-200);border-bottom-color:var(--p-300)}
+.hs-live:focus-within,.hs-live.is-focused{background:var(--p-tint-10);color:var(--p-200);
+  border-bottom-color:var(--p-400);box-shadow:0 0 0 1px var(--p-400)}
+.hs-live input{font:inherit;color:inherit;letter-spacing:inherit;
+  background:transparent;border:none;outline:none;padding:0;margin:0;
+  width:var(--w,3ch);text-align:center;font-variant-numeric:tabular-nums;
+  -moz-appearance:textfield}
+.hs-live input::-webkit-outer-spin-button,
+.hs-live input::-webkit-inner-spin-button{-webkit-appearance:none;margin:0}
+.hs-live .prefix,.hs-live .suffix{color:var(--fg-muted);font-weight:500;pointer-events:none}
+.hs-live:hover .prefix,.hs-live:hover .suffix,
+.hs-live:focus-within .prefix,.hs-live:focus-within .suffix{color:var(--p-300)}
+.hs-live-cycle{cursor:pointer !important;outline:none;user-select:none}
+.hs-live-cycle::after{content:'\21bb';font-size:.85em;margin-left:6px;color:var(--p-300);opacity:.7;
+  font-weight:400;transition:transform 200ms ease, opacity 120ms ease;display:inline-block}
+.hs-live-cycle:hover::after{opacity:1;transform:rotate(180deg)}
+.hs-live-cycle:focus-visible{box-shadow:0 0 0 1px var(--p-400);background:var(--p-tint-10)}
+
+.hs-scale-card{padding:12px 14px;background:rgba(0,0,0,.22);
+  border:1px solid var(--border-default);border-radius:var(--radius-md);
+  display:flex;flex-direction:column;gap:6px}
+.hs-scale-card-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.hs-scale-card-label{font-size:10.5px;font-weight:700;letter-spacing:.08em;
+  text-transform:uppercase;color:var(--fg-muted)}
+.hs-scale-card-val{font-family:'IBM Plex Mono',monospace;font-size:13px;font-weight:600;
+  color:var(--fg-strong);font-variant-numeric:tabular-nums}
+.hs-scale-card-val .u{font-size:10.5px;color:var(--fg-muted);font-weight:500;margin-left:2px}
+.hs-scale-card-range{position:relative;width:100%}
+.hs-scale-card-range input[type=range]{-webkit-appearance:none;appearance:none;
+  width:100%;height:18px;background:transparent;cursor:pointer;margin:0;display:block}
+.hs-scale-card-range input[type=range]::-webkit-slider-runnable-track{
+  height:4px;background:var(--bg-canvas);border:1px solid var(--border-default);
+  border-radius:var(--radius-full)}
+.hs-scale-card-range input[type=range]::-moz-range-track{
+  height:4px;background:var(--bg-canvas);border:1px solid var(--border-default);
+  border-radius:var(--radius-full)}
+.hs-scale-card-range input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;
+  appearance:none;width:14px;height:14px;border-radius:50%;background:var(--p-400);
+  border:2px solid var(--bg-inset);box-shadow:0 0 0 1px var(--p-400);margin-top:-6px;cursor:grab}
+.hs-scale-card-range input[type=range]::-moz-range-thumb{
+  width:14px;height:14px;border-radius:50%;background:var(--p-400);
+  border:2px solid var(--bg-inset);box-shadow:0 0 0 1px var(--p-400);cursor:grab}
+.hs-scale-card-foot{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;
+  font-size:10px;color:var(--fg-subtle);margin-top:2px}
+
+.hs-seg{display:flex;background:var(--bg-surface);border:1px solid var(--border-default);
+  border-radius:var(--radius-sm);padding:3px;gap:2px}
+.hs-seg button{flex:1;font:inherit;font-size:11px;font-weight:600;color:var(--fg-muted);
+  background:transparent;border:none;cursor:pointer;padding:6px 8px;border-radius:4px;
+  white-space:nowrap;transition:background 100ms ease,color 100ms ease}
+.hs-seg button:hover{color:var(--fg-default)}
+.hs-seg button.on{background:var(--p-tint-10);color:var(--p-200)}
+
 .r-footer{padding:24px 36px 28px;text-align:center;font-size:12px;color:var(--fg-subtle);
   background:var(--bg-inset);border-top:1px solid var(--border-default)}
 .r-footer .mono{color:var(--fg-muted)}
+
+/* ── Adoption matrix (Prototype 05) ────────────────────────────── */
+.p05-hero{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:18px}
+.p05-stat{display:grid;grid-template-columns:110px 1fr;gap:14px;align-items:center;
+  padding:14px 16px;background:rgba(0,0,0,.22);border:1px solid var(--border-default);border-radius:var(--radius-md)}
+.p05-stat .v{font-size:22px;font-weight:700;color:var(--fg-strong);font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1;white-space:nowrap}
+.p05-stat .v.mint{color:var(--g-mint)}
+.p05-stat .v.warn{color:var(--warning)}
+.p05-stat .v.danger{color:var(--danger)}
+.p05-stat .lbl{font-size:11.5px;color:var(--fg-muted);line-height:1.45;text-wrap:pretty}
+.p05-stat .lbl b{color:var(--fg-default);font-weight:600}
+.p05-chart-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-lg);overflow:hidden;margin-bottom:18px}
+.p05-svg-wrap{position:relative;padding:16px 18px}
+.p05-scatter{display:block;width:100%;height:auto;font-family:'Inter',sans-serif;font-variant-numeric:tabular-nums;user-select:none}
+.p05-quad-bg-power{fill:rgba(6,228,174,.045)}
+.p05-quad-bg-coach{fill:rgba(245,181,68,.045)}
+.p05-quad-bg-curious{fill:rgba(168,161,253,.035)}
+.p05-quad-bg-absent{fill:rgba(229,72,77,.045)}
+.p05-bubble{cursor:pointer;transition:opacity 120ms ease,filter 120ms ease}
+.p05-scatter.has-hover .p05-bubble:not(.is-hovered){opacity:.25}
+.p05-bubble.is-hovered{filter:drop-shadow(0 0 6px rgba(255,255,255,.15))}
+.p05-bubble-label{font-size:10px;font-weight:600;fill:var(--fg-strong);pointer-events:none;
+  paint-order:stroke;stroke:var(--bg-surface);stroke-width:3px;stroke-linejoin:round}
+.p05-bubble-sub{font-family:'IBM Plex Mono',monospace;font-size:8.5px;font-weight:500;pointer-events:none;
+  paint-order:stroke;stroke:var(--bg-surface);stroke-width:3px;stroke-linejoin:round}
+.p05-tip{position:absolute;pointer-events:none;background:var(--bg-canvas);
+  border:1px solid var(--p-tint-20);border-radius:var(--radius-sm);
+  padding:10px 12px;font-size:11.5px;color:var(--fg-default);line-height:1.5;
+  box-shadow:0 8px 24px rgba(0,0,0,.55);min-width:200px;z-index:10;
+  opacity:0;transition:opacity 80ms ease;font-variant-numeric:tabular-nums}
+.p05-tip.show{opacity:1}
+.p05-tip .name{font-size:13px;color:var(--fg-strong);font-weight:600;margin-bottom:2px;display:flex;align-items:center;gap:8px}
+.p05-tip .name .badge{font-size:9px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;padding:2px 6px;border-radius:var(--radius-full);white-space:nowrap}
+.p05-tip .name .badge.power{color:var(--g-mint);background:rgba(6,228,174,.10);border:1px solid rgba(6,228,174,.25)}
+.p05-tip .name .badge.coach{color:var(--warning);background:rgba(245,181,68,.10);border:1px solid rgba(245,181,68,.25)}
+.p05-tip .name .badge.curious{color:var(--p-200);background:var(--p-tint-10);border:1px solid var(--p-tint-20)}
+.p05-tip .name .badge.absent{color:var(--danger);background:rgba(229,72,77,.10);border:1px solid rgba(229,72,77,.25)}
+.p05-tip .meta{font-size:10.5px;color:var(--fg-subtle);margin-bottom:8px}
+.p05-tip .row{display:flex;justify-content:space-between;gap:14px;color:var(--fg-muted);font-size:11px;padding:1.5px 0}
+.p05-tip .row b{color:var(--fg-default);font-weight:500;font-family:'IBM Plex Mono',monospace}
+.p05-tip .row b.mint{color:var(--g-mint)}
+.p05-tip .row b.warn{color:var(--warning)}
+.p05-tip .row b.danger{color:var(--danger)}
+.p05-tip .divider{height:1px;background:var(--border-default);margin:7px 0 6px}
+.p05-legend{display:flex;flex-wrap:wrap;gap:10px 18px;padding:10px 18px 14px;border-top:1px solid var(--border-default);background:var(--bg-inset);font-size:10.5px;color:var(--fg-muted)}
+.p05-legend .it{display:flex;align-items:center;gap:7px}
+.p05-legend .sw{width:11px;height:11px;border-radius:50%;flex-shrink:0;border:1.5px solid}
+.p05-legend .sw.power{background:rgba(6,228,174,.18);border-color:#06E4AE}
+.p05-legend .sw.coach{background:rgba(245,181,68,.18);border-color:#F5B544}
+.p05-legend .sw.curious{background:rgba(168,161,253,.18);border-color:#A8A1FD}
+.p05-legend .sw.absent{background:rgba(229,72,77,.18);border-color:#E5484D}
+.p05-legend .dash{width:18px;border-top:1px dashed rgba(255,255,255,.25)}
+.p05-quad-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.p05-quad-card{background:var(--bg-surface);border:1px solid var(--border-default);border-radius:var(--radius-md);overflow:hidden;display:flex;flex-direction:column}
+.p05-quad-card.power{border-color:rgba(6,228,174,.28);background:linear-gradient(180deg,rgba(6,228,174,.04),transparent 50%)}
+.p05-quad-card.coach{border-color:rgba(245,181,68,.28);background:linear-gradient(180deg,rgba(245,181,68,.04),transparent 50%)}
+.p05-quad-card.curious{border-color:rgba(168,161,253,.22);background:linear-gradient(180deg,rgba(168,161,253,.03),transparent 50%)}
+.p05-quad-card.absent{border-color:rgba(229,72,77,.28);background:linear-gradient(180deg,rgba(229,72,77,.04),transparent 50%)}
+.p05-qc-head{padding:14px 16px 10px;display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+.p05-qc-head-l{display:flex;flex-direction:column;gap:3px;min-width:0}
+.p05-qc-eyebrow{font-size:9.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-muted);display:flex;align-items:center;gap:7px}
+.p05-qc-eyebrow .dot{width:6px;height:6px;border-radius:50%}
+.p05-quad-card.power .p05-qc-eyebrow{color:var(--g-mint)}
+.p05-quad-card.power .p05-qc-eyebrow .dot{background:var(--g-mint)}
+.p05-quad-card.coach .p05-qc-eyebrow{color:var(--warning)}
+.p05-quad-card.coach .p05-qc-eyebrow .dot{background:var(--warning)}
+.p05-quad-card.curious .p05-qc-eyebrow{color:var(--p-200)}
+.p05-quad-card.curious .p05-qc-eyebrow .dot{background:var(--p-200)}
+.p05-quad-card.absent .p05-qc-eyebrow{color:var(--danger)}
+.p05-quad-card.absent .p05-qc-eyebrow .dot{background:var(--danger)}
+.p05-qc-title{font-size:15px;font-weight:600;color:var(--fg-strong);letter-spacing:-.005em}
+.p05-qc-deck{font-size:11px;color:var(--fg-muted);margin-top:4px;line-height:1.5;text-wrap:pretty}
+.p05-qc-deck b{color:var(--fg-default);font-weight:600}
+.p05-qc-stat{display:flex;flex-direction:column;align-items:flex-end;flex-shrink:0;text-align:right}
+.p05-qc-stat .v{font-family:'IBM Plex Mono',monospace;font-size:18px;font-weight:600;color:var(--fg-strong);letter-spacing:-.02em;line-height:1}
+.p05-qc-stat .u{font-size:9px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--fg-subtle);margin-top:3px}
+.p05-qc-body{padding:0 16px 14px;flex:1;display:flex;flex-direction:column;gap:8px}
+.p05-qc-action{font-size:10.5px;color:var(--fg-default);padding:8px 10px;background:rgba(0,0,0,.18);border:1px solid var(--border-default);border-radius:var(--radius-sm);line-height:1.5}
+.p05-qc-action b{color:var(--fg-strong);font-weight:600}
+.p05-qc-list{display:flex;flex-direction:column;gap:1px}
+.p05-qc-row{display:grid;grid-template-columns:1fr auto auto;gap:12px;align-items:center;padding:5px 4px;font-size:11.5px;border-radius:4px;transition:background 80ms ease;cursor:pointer}
+.p05-qc-row:hover{background:rgba(255,255,255,.025)}
+.p05-qc-row.is-hovered{background:rgba(255,255,255,.04)}
+.p05-qc-row .name{font-weight:500;color:var(--fg-strong);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+.p05-qc-row .findings{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--fg-muted);text-align:right;white-space:nowrap}
+.p05-qc-row .rate{font-family:'IBM Plex Mono',monospace;font-size:10.5px;font-weight:600;text-align:right;width:48px;white-space:nowrap}
+.p05-quad-card.power .rate{color:var(--g-mint)}
+.p05-quad-card.coach .rate{color:var(--warning)}
+.p05-quad-card.curious .rate{color:var(--p-200)}
+.p05-quad-card.absent .rate{color:var(--danger)}
+@media (max-width:900px){.p05-hero,.p05-quad-grid{grid-template-columns:1fr}}
 
 @media print{
   body{background:#fff;color:#1c1c1c}
@@ -290,6 +610,280 @@ table.top-prs .mini-bar > i{display:block;height:100%;background:var(--success);
     <path d="M29.7975 19.9101C29.7975 19.4814 29.3435 18.9467 28.2181 18.9467C27.0927 18.9467 26.5469 19.491 26.5469 19.9101" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
   </g>
   <path d="M44.3939 25.9098C44.5205 24.9593 44.5859 23.9893 44.5859 23.0041C44.5859 10.9682 34.8289 1.21117 22.7929 1.21117C10.757 1.21117 1 10.9682 1 23.0041C1 35.04 10.757 44.7971 22.7929 44.7971C30.759 44.7971 37.7269 40.5229 41.5282 34.1427" stroke="#0E0F10" stroke-width="0.726431"></path>
-</svg></div><div class="r-meta"><div class="r-meta-title">Code review impact report</div><div><span class="mono">acme-corp</span> &middot; May 14, 2025 &ndash; May 14, 2026 &middot; 365 days</div><div style="color:var(--fg-subtle);font-size:11px">Generated May 16, 2026</div></div></header><section class="hero"><div class="hero-kicker"><span class="dot"></span>Last 365 days</div><h1>Qodo caught <span class="num">197</span> findings across <span class="num">22</span> merged PRs.<br>Your team fixed <span class="num">154</span> of them before merge.</h1><p class="hero-lede">Including <b>12 high-impact security and correctness findings</b> that were implemented before merge. Qodo also delivered first feedback on these PRs <b>46&times; faster</b> than the first human reviewer.</p></section><div class="kpis"><div class="kpi"><div class="kpi-label">PRs reviewed</div><div class="kpi-value">22</div><div class="kpi-sub">across <b>5 repositories</b></div></div><div class="kpi"><div class="kpi-label">Findings caught</div><div class="kpi-value">197</div><div class="kpi-sub"><b>11 developers</b> involved</div></div><div class="kpi"><div class="kpi-label">Fixed before merge</div><div class="kpi-value">154</div><div class="kpi-sub"><b>78.2%</b> implementation rate</div></div><div class="kpi"><div class="kpi-label">High-impact fixes</div><div class="kpi-value">12</div><div class="kpi-sub">security &amp; correctness &middot; <b>implemented before merge</b></div></div></div><section class="r-section"><div class="r-section-head"><div><div class="r-section-eyebrow">Spotlight</div><div class="r-section-title">High-impact findings caught &amp; fixed</div><div class="r-section-deck">Action-required findings flagged as Security or Correctness — the findings most likely to have caused an incident if they reached production.</div></div></div><div class="spotlight-summary"><div class="spot-big">12</div><div class="spot-mid"><b>Security &amp; correctness findings implemented before merge</b><div style="color:var(--fg-muted);margin-top:4px;font-size:13px">Action-required findings flagged as Security or Correctness that the team caught and resolved. Across 5 repositories.</div></div><div class="spot-split"><div class="spot-split-cell security"><b>6</b><span>Security</span></div><div class="spot-split-cell correctness"><b>6</b><span>Correctness</span></div></div></div><div class="spot-grid"><div class="spot-card"><div><div class="spot-card-title">Hardcoded API key in config loader</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-security">Security</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-platform</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-platform/pull/441">PR #441 &#8599;</a></div></div></div><div class="spot-card"><div><div class="spot-card-title">SQL injection via unescaped user input</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-security">Security</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-api</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-api/pull/892">PR #892 &#8599;</a></div></div></div><div class="spot-card"><div><div class="spot-card-title">Missing CSRF token on state-changing endpoint</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-security">Security</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-api</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-api/pull/887">PR #887 &#8599;</a></div></div></div><div class="spot-card"><div><div class="spot-card-title">JWT secret logged to stdout in debug handler</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-security">Security</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-platform</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-platform/pull/438">PR #438 &#8599;</a></div></div></div><div class="spot-card"><div><div class="spot-card-title">Open redirect via unvalidated return_url parameter</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-security">Security</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-platform</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-platform/pull/430">PR #430 &#8599;</a></div></div></div><div class="spot-card correctness"><div><div class="spot-card-title">Pagination skips records when page size equals dataset size</div><div class="spot-card-tags"><span class="tag tag-bug">Requirement gap</span><span class="tag tag-correctness">Correctness</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-web</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-web/pull/334">PR #334 &#8599;</a></div></div></div><div class="spot-card correctness"><div><div class="spot-card-title">Wrong auth variant applied in token refresh</div><div class="spot-card-tags"><span class="tag tag-bug">Requirement gap</span><span class="tag tag-correctness">Correctness</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-infra</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-infra/pull/156">PR #156 &#8599;</a></div></div></div><div class="spot-card correctness"><div><div class="spot-card-title">Race condition in session cleanup causes data loss</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-correctness">Correctness</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-infra</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-infra/pull/151">PR #151 &#8599;</a></div></div></div><div class="spot-card correctness"><div><div class="spot-card-title">Null pointer dereference on incomplete user profile</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-correctness">Correctness</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-infra</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-infra/pull/147">PR #147 &#8599;</a></div></div></div><div class="spot-card correctness"><div><div class="spot-card-title">Off-by-one drops last record in batch processor</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-correctness">Correctness</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-mobile</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-mobile/pull/78">PR #78 &#8599;</a></div></div></div></div><div class="spot-more">+ 2 more high-impact fixes implemented before merge</div></section><section class="r-section"><div class="r-section-head"><div><div class="r-section-eyebrow">Velocity</div><div class="r-section-title">First feedback on a PR</div><div class="r-section-deck">Median time from PR open to the first review comment, compared to the first human reviewer.</div></div></div><div class="vel-grid"><div class="vel-scale"><div class="vel-axis" style="--qodo-pct:8%"><div class="vel-track"></div><div class="vel-marker qodo" style="left:8%"><div class="vel-label-top"><div class="vel-name qodo">Qodo</div><div class="vel-time qodo">7m</div></div><div class="pt"></div></div><div class="vel-marker human" style="left:100%"><div class="pt"></div><div class="vel-label-bot"><div class="vel-time" style="text-align:right">5.4h</div><div class="vel-name" style="margin-top:4px;text-align:right">First human reviewer</div></div></div></div><div class="vel-headline">Qodo posts initial feedback in <b>7m</b> — the first human reviewer takes <b>5.4h</b>. That's a <span class="vel-pill">46&times; speed-up</span> on the feedback loop.</div><div class="vel-fix-row"><span class="vel-fix-label">Speed to first fix</span><span class="vel-fix-value">19m</span><span class="vel-fix-sub">median time from Qodo comment to first fix commit</span></div></div><div class="vel-aside"><div><div class="vel-stat-big">27<span class="pct">%</span></div><div class="vel-stat-label" style="margin-top:10px">of Qodo-reviewed PRs received <b>no human comment</b> before merge — Qodo provided the sole feedback before merge.</div></div><div class="vel-foot">Share of Qodo-reviewed PRs where no human reviewer commented before merge.</div></div></div></section><section class="r-section"><div class="r-section-head"><div><div class="r-section-eyebrow">Adoption</div><div class="r-section-title">Coverage across the org</div><div class="r-section-deck">How Qodo's reach splits across repositories and developers this period.</div></div></div><div class="coverage-strip"><div class="cov-cell"><div class="cov-cell-val">5</div><div class="cov-cell-label">Repos with Qodo-reviewed PRs</div><div class="cov-cell-bar"><i style="width:100%"></i></div></div><div class="cov-cell"><div class="cov-cell-val">11<span class="of"> / 11</span></div><div class="cov-cell-label">Developers who implemented at least one Qodo fix</div><div class="cov-cell-bar"><i style="width:100.0%"></i></div></div></div><div class="ai-stat"><span class="ai-count">3</span><span class="ai-label">AI-authored PRs reviewed by Qodo this period</span><span class="ai-rate">80.0% implementation rate</span></div><div class="bar-grid"><div><div class="bar-head"><h4>By repository &middot; top 10 by volume</h4><span class="axis">% findings implemented &rarr;</span></div><div class="bar-row"><div class="bar-row-name"><span class="nm">repo-platform</span><span class="pr-ct">6 PRs &middot; 46 findings</span></div><div class="bar-row-val hi">78.3%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:78.3%"></i></div></div></div><div class="bar-row"><div class="bar-row-name"><span class="nm">repo-api</span><span class="pr-ct">5 PRs &middot; 52 findings</span></div><div class="bar-row-val hi">80.8%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:80.8%"></i></div></div></div><div class="bar-row"><div class="bar-row-name"><span class="nm">repo-web</span><span class="pr-ct">4 PRs &middot; 22 findings</span></div><div class="bar-row-val hi">77.3%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:77.3%"></i></div></div></div><div class="bar-row"><div class="bar-row-name"><span class="nm">repo-infra</span><span class="pr-ct">4 PRs &middot; 56 findings</span></div><div class="bar-row-val hi">78.6%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:78.6%"></i></div></div></div><div class="bar-row"><div class="bar-row-name"><span class="nm">repo-mobile</span><span class="pr-ct">3 PRs &middot; 21 findings</span></div><div class="bar-row-val hi">71.4%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:71.4%"></i></div></div></div></div><div><div class="bar-head"><h4>By developer &middot; top 10 by volume</h4><span class="axis">% findings implemented &rarr;</span></div><div class="bar-row"><div class="bar-row-name dev"><span class="dev-avatar">DA</span><span class="nm">dev-alice</span><span class="pr-ct">3 PRs</span></div><div class="bar-row-val hi">80.8%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:80.8%"></i></div></div></div><div class="bar-row"><div class="bar-row-name dev"><span class="dev-avatar">DF</span><span class="nm">dev-frank</span><span class="pr-ct">3 PRs</span></div><div class="bar-row-val hi">75.0%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:75.0%"></i></div></div></div><div class="bar-row"><div class="bar-row-name dev"><span class="dev-avatar">DB</span><span class="nm">dev-bob</span><span class="pr-ct">2 PRs</span></div><div class="bar-row-val hi">80.0%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:80.0%"></i></div></div></div><div class="bar-row"><div class="bar-row-name dev"><span class="dev-avatar">DC</span><span class="nm">dev-carol</span><span class="pr-ct">2 PRs</span></div><div class="bar-row-val hi">81.8%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:81.8%"></i></div></div></div><div class="bar-row"><div class="bar-row-name dev"><span class="dev-avatar">DE</span><span class="nm">dev-eve</span><span class="pr-ct">2 PRs</span></div><div class="bar-row-val hi">82.1%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:82.1%"></i></div></div></div><div class="bar-row"><div class="bar-row-name dev"><span class="dev-avatar">DH</span><span class="nm">dev-henry</span><span class="pr-ct">2 PRs</span></div><div class="bar-row-val med">69.2%</div><div style="grid-column:1/-1"><div class="bar-row-bar med"><i style="width:69.2%"></i></div></div></div><div class="bar-row"><div class="bar-row-name dev"><span class="dev-avatar">DI</span><span class="nm">dev-ivan</span><span class="pr-ct">2 PRs</span></div><div class="bar-row-val hi">78.8%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:78.8%"></i></div></div></div><div class="bar-row"><div class="bar-row-name dev"><span class="dev-avatar">DJ</span><span class="nm">dev-judy</span><span class="pr-ct">2 PRs</span></div><div class="bar-row-val hi">78.3%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:78.3%"></i></div></div></div><div class="bar-row"><div class="bar-row-name dev"><span class="dev-avatar">DK</span><span class="nm">dev-kate</span><span class="pr-ct">2 PRs</span></div><div class="bar-row-val hi">71.4%</div><div style="grid-column:1/-1"><div class="bar-row-bar hi"><i style="width:71.4%"></i></div></div></div><div class="bar-row"><div class="bar-row-name dev"><span class="dev-avatar">DD</span><span class="nm">dev-dave</span><span class="pr-ct">1 PRs</span></div><div class="bar-row-val med">66.7%</div><div style="grid-column:1/-1"><div class="bar-row-bar med"><i style="width:66.7%"></i></div></div></div><div class="bar-tail">+ 1 more developers</div></div></div></section><section class="r-section"><div class="r-section-head"><div><div class="r-section-eyebrow">Breakdown</div><div class="r-section-title">What Qodo flagged &amp; how it landed</div><div class="r-section-deck">Bars show fixed (filled) vs total caught — the percentage is the implementation rate.</div></div></div><div class="breakdown"><div class="bd-block"><h4>By severity</h4><div class="bd-item severity-action"><div class="bd-item-head"><div class="bd-item-name"><span class="swatch"></span>Action required</div><div class="bd-item-rate">79.3%</div></div><div class="bd-item-bar"><div class="filled" style="width:79.3%">65</div><div class="total">/ 82</div></div><div class="bd-item-foot"><b>82 caught, 65 fixed</b> before merge.</div></div><div class="bd-item severity-review"><div class="bd-item-head"><div class="bd-item-name"><span class="swatch"></span>Review recommended</div><div class="bd-item-rate">77.4%</div></div><div class="bd-item-bar"><div class="filled" style="width:77.4%">89</div><div class="total">/ 115</div></div><div class="bd-item-foot"><b>115 caught, 89 fixed</b> before merge.</div></div></div><div class="bd-block"><h4>By category</h4><div class="bd-item cat-bugs"><div class="bd-item-head"><div class="bd-item-name"><span class="swatch"></span>Bugs</div><div class="bd-item-rate">87.0%</div></div><div class="bd-item-bar"><div class="filled" style="width:87.0%">47</div><div class="total">/ 54</div></div><div class="bd-item-foot"><b>54 caught, 47 fixed</b> before merge.</div></div><div class="bd-item cat-rule"><div class="bd-item-head"><div class="bd-item-name"><span class="swatch"></span>Rule violations</div><div class="bd-item-rate">76.0%</div></div><div class="bd-item-bar"><div class="filled" style="width:76.0%">57</div><div class="total">/ 75</div></div><div class="bd-item-foot"><b>75 caught, 57 fixed</b> before merge.</div></div><div class="bd-item cat-req"><div class="bd-item-head"><div class="bd-item-name"><span class="swatch"></span>Requirement gaps</div><div class="bd-item-rate">73.5%</div></div><div class="bd-item-bar"><div class="filled" style="width:73.5%">50</div><div class="total">/ 68</div></div><div class="bd-item-foot"><b>68 caught, 50 fixed</b> before merge.</div></div></div></div></section><section class="r-section"><div class="r-section-head"><div><div class="r-section-eyebrow">Quality Signal</div><div class="r-section-title">Reverts &amp; hotfixes</div><div class="r-section-deck">Indicators of post-merge quality issues in the period.</div></div></div><div class="quality-signal"><div class="quality-grid"><div class="quality-cell"><div class="quality-value">3</div><div class="quality-label">Reverts</div></div><div class="quality-cell"><div class="quality-value">1</div><div class="quality-label">Hotfixes</div></div></div></div></section><section class="r-section"><div class="r-section-head"><div><div class="r-section-eyebrow">Top PRs</div><div class="r-section-title">Most fixes implemented in a single PR</div><div class="r-section-deck">PRs with the highest count of implemented Qodo findings.</div></div></div><table class="top-prs"><thead><tr><th>Repository</th><th>PR</th><th>Author</th><th class="num">Caught</th><th class="num">Fixed</th><th>Implementation rate</th></tr></thead><tbody><tr><td class="repo">repo-infra</td><td class="pr-link"><a href="https://github.com/acme-corp/repo-infra/pull/156">#156</a></td><td><div class="creator"><span class="dev-avatar" style="width:18px;height:18px;font-size:9px">DI</span>dev-ivan</div></td><td class="num">22</td><td class="num">17</td><td><span class="mini-bar"><i style="width:77.3%"></i></span> 77.3%</td></tr><tr><td class="repo">repo-api</td><td class="pr-link"><a href="https://github.com/acme-corp/repo-api/pull/892">#892</a></td><td><div class="creator"><span class="dev-avatar" style="width:18px;height:18px;font-size:9px">DE</span>dev-eve</div></td><td class="num">18</td><td class="num">15</td><td><span class="mini-bar"><i style="width:83.3%"></i></span> 83.3%</td></tr><tr><td class="repo">repo-infra</td><td class="pr-link"><a href="https://github.com/acme-corp/repo-infra/pull/151">#151</a></td><td><div class="creator"><span class="dev-avatar" style="width:18px;height:18px;font-size:9px">DJ</span>dev-judy</div></td><td class="num">16</td><td class="num">13</td><td><span class="mini-bar"><i style="width:81.2%"></i></span> 81.2%</td></tr><tr><td class="repo">repo-platform</td><td class="pr-link"><a href="https://github.com/acme-corp/repo-platform/pull/441">#441</a></td><td><div class="creator"><span class="dev-avatar" style="width:18px;height:18px;font-size:9px">DA</span>dev-alice</div></td><td class="num">14</td><td class="num">11</td><td><span class="mini-bar"><i style="width:78.6%"></i></span> 78.6%</td></tr><tr><td class="repo">repo-api</td><td class="pr-link"><a href="https://github.com/acme-corp/repo-api/pull/887">#887</a></td><td><div class="creator"><span class="dev-avatar" style="width:18px;height:18px;font-size:9px">DF</span>dev-frank</div></td><td class="num">12</td><td class="num">10</td><td><span class="mini-bar"><i style="width:83.3%"></i></span> 83.3%</td></tr></tbody></table></section><footer class="r-footer">Generated <span class="mono">May 16, 2026</span> &middot; <span class="mono">acme-corp</span> &middot; 365-day lookback</footer></div></div>
+</svg></div><div class="r-meta"><div class="r-meta-title">Code review impact report</div><div><span class="mono">acme-corp</span> &middot; May 14, 2025 &ndash; May 14, 2026 &middot; 365 days</div><div style="color:var(--fg-subtle);font-size:11px">Generated May 18, 2026</div></div></header><section class="hero"><div class="hero-kicker"><span class="dot"></span>Last 365 days</div><h1>Qodo caught <span class="num">197</span> findings across <span class="num">22</span> merged PRs.<br>Your team fixed <span class="num">154</span> of them before merge.</h1><p class="hero-lede">Including <b>12 high-impact security and correctness findings</b> that were implemented before merge. Qodo also delivered first feedback on these PRs <b>46&times; faster</b> than the first human reviewer.</p></section><div class="toc"><div class="toc-head"><span class="toc-label">In this report</span><span class="toc-line"></span><span class="toc-hint">Click any part to jump</span></div><div class="acts"><a class="act" href="#sec-trend"><div class="act-num">Part I</div><div class="act-title">At a glance</div><div class="act-list">The headline numbers and how they’re trending.</div></a><a class="act" href="#sec-funnel"><div class="act-num">Part II</div><div class="act-title">Code quality impact</div><div class="act-list">Where findings landed, with named examples.</div></a><a class="act" href="#sec-velocity"><div class="act-num">Part III</div><div class="act-title">Engineering velocity</div><div class="act-list">Speed to feedback and developer engagement.</div></a><a class="act" href="#hs-root"><div class="act-num">Part IV</div><div class="act-title">Return on investment</div><div class="act-list">Senior-engineer hours offloaded.</div></a></div></div><div class="kpis"><div class="kpi"><div class="kpi-label">PRs reviewed</div><div class="kpi-value">22</div><div class="kpi-sub">across <b>5 repositories</b></div></div><div class="kpi"><div class="kpi-label">Findings caught</div><div class="kpi-value">197</div><div class="kpi-sub"><b>11 developers</b> involved</div></div><div class="kpi"><div class="kpi-label">Fixed before merge</div><div class="kpi-value">154</div><div class="kpi-sub"><b>78.2%</b> implementation rate</div></div><div class="kpi"><div class="kpi-label">High-impact fixes</div><div class="kpi-value">12</div><div class="kpi-sub">security &amp; correctness &middot; <b>implemented before merge</b></div></div></div><section class="r-section" id="sec-funnel"><div class="r-section-head"><div><div class="r-section-eyebrow">Adoption funnel</div><div class="r-section-title">From merged PR to high-impact fix</div><div class="r-section-deck">Conditional cuts at each step &mdash; each row is the share of the prior. The bottom two rows are golden: PRs where Qodo measurably prevented something bad from shipping.</div></div></div><div class="funnel"><div class="funnel-row"><div class="funnel-name"><span class="step">Step 1</span>Merged PRs in window</div><div class="funnel-bar muted"><i style="width:100%">142</i></div><div class="funnel-val">142<span class="pct">baseline</span></div></div><div class="funnel-row"><div class="funnel-name"><span class="step">Step 2</span>Reviewed by Qodo</div><div class="funnel-bar"><i style="width:15.5%">22</i></div><div class="funnel-val">22<span class="pct">15.5% of merged</span></div></div><div class="funnel-row"><div class="funnel-name"><span class="step">Step 3</span>Qodo found &ge;1 finding</div><div class="funnel-bar"><i style="width:15.5%">22</i></div><div class="funnel-val">22<span class="pct">100.0% of reviewed</span></div></div><div class="funnel-row"><div class="funnel-name"><span class="step">Step 4</span>Author fixed &ge;1 before merge</div><div class="funnel-bar gold"><i style="width:15.5%">22</i></div><div class="funnel-val">22<span class="pct">100.0% of PRs with findings</span></div></div><div class="funnel-row"><div class="funnel-name"><span class="step">Step 5</span>High-impact fix landed</div><div class="funnel-bar gold"><i style="width:8.5%">12</i></div><div class="funnel-val">12<span class="pct">8.5% of merged PRs</span></div></div></div><div class="funnel-foot"><div class="funnel-foot-cell gold"><b>1 in 11.8</b>merged PRs had a Qodo&#8209;flagged security or correctness issue caught and fixed before merge.</div><div class="funnel-foot-cell"><b>100%</b>of authors who received a finding acted on at least one of them &mdash; a strong adoption signal.</div><div class="funnel-foot-cell"><b>12 spotlight</b>issues implemented (security / correctness). Average <b style="display:inline;font-size:inherit;color:var(--fg-default);font-weight:600">0.08</b> high-impact fixes per merged PR.</div></div></section><section class="r-section" id="sec-spotlight"><div class="r-section-head"><div><div class="r-section-eyebrow">Spotlight</div><div class="r-section-title">High-impact findings caught &amp; fixed</div><div class="r-section-deck">Action-required findings flagged as Security or Correctness — the findings most likely to have caused an incident if they reached production.</div></div></div><div class="spotlight-summary"><div class="spot-big">12</div><div class="spot-mid"><b>Security &amp; correctness findings implemented before merge</b><div style="color:var(--fg-muted);margin-top:4px;font-size:13px">Action-required findings flagged as Security or Correctness that the team caught and resolved. Across 5 repositories.</div></div><div class="spot-split"><div class="spot-split-cell security"><b>6</b><span>Security</span></div><div class="spot-split-cell correctness"><b>6</b><span>Correctness</span></div></div></div><div class="spot-grid"><div class="spot-card"><div><div class="spot-card-title">Hardcoded API key in config loader</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-security">Security</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-platform</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-platform/pull/441">PR #441 &#8599;</a></div></div></div><div class="spot-card"><div><div class="spot-card-title">SQL injection via unescaped user input</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-security">Security</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-api</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-api/pull/892">PR #892 &#8599;</a></div></div></div><div class="spot-card"><div><div class="spot-card-title">Missing CSRF token on state-changing endpoint</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-security">Security</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-api</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-api/pull/887">PR #887 &#8599;</a></div></div></div><div class="spot-card"><div><div class="spot-card-title">JWT secret logged to stdout in debug handler</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-security">Security</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-platform</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-platform/pull/438">PR #438 &#8599;</a></div></div></div><div class="spot-card"><div><div class="spot-card-title">Open redirect via unvalidated return_url parameter</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-security">Security</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-platform</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-platform/pull/430">PR #430 &#8599;</a></div></div></div><div class="spot-card correctness"><div><div class="spot-card-title">Pagination skips records when page size equals dataset size</div><div class="spot-card-tags"><span class="tag tag-bug">Requirement gap</span><span class="tag tag-correctness">Correctness</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-web</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-web/pull/334">PR #334 &#8599;</a></div></div></div><div class="spot-card correctness"><div><div class="spot-card-title">Wrong auth variant applied in token refresh</div><div class="spot-card-tags"><span class="tag tag-bug">Requirement gap</span><span class="tag tag-correctness">Correctness</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-infra</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-infra/pull/156">PR #156 &#8599;</a></div></div></div><div class="spot-card correctness"><div><div class="spot-card-title">Race condition in session cleanup causes data loss</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-correctness">Correctness</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-infra</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-infra/pull/151">PR #151 &#8599;</a></div></div></div><div class="spot-card correctness"><div><div class="spot-card-title">Null pointer dereference on incomplete user profile</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-correctness">Correctness</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-infra</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-infra/pull/147">PR #147 &#8599;</a></div></div></div><div class="spot-card correctness"><div><div class="spot-card-title">Off-by-one drops last record in batch processor</div><div class="spot-card-tags"><span class="tag tag-bug">Bug</span><span class="tag tag-correctness">Correctness</span><span class="tag tag-check">Fixed</span></div></div><div class="spot-card-right"><div class="spot-card-repo">repo-mobile</div><div class="spot-card-pr"><a href="https://github.com/acme-corp/repo-mobile/pull/78">PR #78 &#8599;</a></div></div></div></div><div class="spot-more">+ 2 more high-impact fixes implemented before merge</div><div class="spot-divider"><span class="label">Top PRs by spotlight catches</span><span class="line"></span></div><div class="spot-leaderboard-deck">The PRs where Qodo caught the most <b>security &amp; correctness</b> findings during review. Ranked by spotlight findings caught, not raw fix count — this avoids rewarding huge churn PRs where Qodo just had more surface area.</div><table class="top-prs"><thead><tr><th>Repository</th><th>PR</th><th>Author</th><th class="num">Spotlight caught</th><th class="num">All findings</th><th>PR implementation rate</th></tr></thead><tbody><tr><td class="repo">repo-infra</td><td class="pr-link"><a href="https://github.com/acme-corp/repo-infra/pull/156">#156</a></td><td><div class="creator"><span class="dev-avatar" style="width:18px;height:18px;font-size:9px">DE</span>dev-ivan</div></td><td class="num spot">1</td><td class="num">17 / 22</td><td><span class="mini-bar"><i style="width:77.3%"></i></span> 77.3%</td></tr><tr><td class="repo">repo-api</td><td class="pr-link"><a href="https://github.com/acme-corp/repo-api/pull/892">#892</a></td><td><div class="creator"><span class="dev-avatar" style="width:18px;height:18px;font-size:9px">DE</span>dev-eve</div></td><td class="num spot">1</td><td class="num">15 / 18</td><td><span class="mini-bar"><i style="width:83.3%"></i></span> 83.3%</td></tr><tr><td class="repo">repo-infra</td><td class="pr-link"><a href="https://github.com/acme-corp/repo-infra/pull/151">#151</a></td><td><div class="creator"><span class="dev-avatar" style="width:18px;height:18px;font-size:9px">DE</span>dev-judy</div></td><td class="num spot">1</td><td class="num">13 / 16</td><td><span class="mini-bar"><i style="width:81.2%"></i></span> 81.2%</td></tr><tr><td class="repo">repo-platform</td><td class="pr-link"><a href="https://github.com/acme-corp/repo-platform/pull/441">#441</a></td><td><div class="creator"><span class="dev-avatar" style="width:18px;height:18px;font-size:9px">DE</span>dev-alice</div></td><td class="num spot">1</td><td class="num">11 / 14</td><td><span class="mini-bar"><i style="width:78.6%"></i></span> 78.6%</td></tr><tr><td class="repo">repo-api</td><td class="pr-link"><a href="https://github.com/acme-corp/repo-api/pull/887">#887</a></td><td><div class="creator"><span class="dev-avatar" style="width:18px;height:18px;font-size:9px">DE</span>dev-frank</div></td><td class="num spot">1</td><td class="num">10 / 12</td><td><span class="mini-bar"><i style="width:83.3%"></i></span> 83.3%</td></tr></tbody></table></section><section class="r-section" id="sec-breakdown"><div class="r-section-head"><div><div class="r-section-eyebrow">Breakdown</div><div class="r-section-title">What Qodo flagged &amp; how it landed</div><div class="r-section-deck">Bars show fixed (filled) vs total caught — the percentage is the implementation rate.</div></div></div><div class="breakdown"><div class="bd-block"><h4>By severity</h4><div class="bd-item severity-action"><div class="bd-item-head"><div class="bd-item-name"><span class="swatch"></span>Action required</div><div class="bd-item-rate">79.3%</div></div><div class="bd-item-bar"><div class="filled" style="width:79.3%">65</div><div class="total">/ 82</div></div><div class="bd-item-foot"><b>82 caught, 65 fixed</b> before merge.</div></div><div class="bd-item severity-review"><div class="bd-item-head"><div class="bd-item-name"><span class="swatch"></span>Review recommended</div><div class="bd-item-rate">77.4%</div></div><div class="bd-item-bar"><div class="filled" style="width:77.4%">89</div><div class="total">/ 115</div></div><div class="bd-item-foot"><b>115 caught, 89 fixed</b> before merge.</div></div></div><div class="bd-block"><h4>By category</h4><div class="bd-item cat-bugs"><div class="bd-item-head"><div class="bd-item-name"><span class="swatch"></span>Bugs</div><div class="bd-item-rate">87.0%</div></div><div class="bd-item-bar"><div class="filled" style="width:87.0%">47</div><div class="total">/ 54</div></div><div class="bd-item-foot"><b>54 caught, 47 fixed</b> before merge.</div></div><div class="bd-item cat-rule"><div class="bd-item-head"><div class="bd-item-name"><span class="swatch"></span>Rule violations</div><div class="bd-item-rate">76.0%</div></div><div class="bd-item-bar"><div class="filled" style="width:76.0%">57</div><div class="total">/ 75</div></div><div class="bd-item-foot"><b>75 caught, 57 fixed</b> before merge.</div></div><div class="bd-item cat-req"><div class="bd-item-head"><div class="bd-item-name"><span class="swatch"></span>Requirement gaps</div><div class="bd-item-rate">73.5%</div></div><div class="bd-item-bar"><div class="filled" style="width:73.5%">50</div><div class="total">/ 68</div></div><div class="bd-item-foot"><b>68 caught, 50 fixed</b> before merge.</div></div></div></div></section><section class="r-section" id="sec-velocity"><div class="r-section-head"><div><div class="r-section-eyebrow">Velocity</div><div class="r-section-title">First feedback on a PR &mdash; the gap, not just the medians</div><div class="r-section-deck">Density plot shows the shape of the wait. Qodo posts in <b>7m</b> (median); the first human takes <b>5.4h</b>. Across the window, <b>27% of Qodo-reviewed PRs merged with no human comment</b>.</div></div></div><div class="dist-wrap"><div class="dist-chart"><div class="dist-legend"><div class="left"><span><span class="sw qodo"></span><b>Qodo</b> &middot; n=22</span><span><span class="sw human"></span><b>First human reviewer</b> &middot; n=16</span></div><span class="axis">log-scale &middot; time to first comment</span></div><svg class="dist-svg" viewBox="0 0 700 220" preserveAspectRatio="none" aria-hidden="true"><line x1="40" y1="195" x2="690" y2="195" stroke="#2C2C2C" stroke-width="1"></line><g stroke="rgba(255,255,255,0.04)" stroke-width="1"><line x1="165.0" y1="20" x2="165.0" y2="195"></line><line x1="304.1" y1="20" x2="304.1" y2="195"></line><line x1="411.7" y1="20" x2="411.7" y2="195"></line><line x1="550.9" y1="20" x2="550.9" y2="195"></line></g><g font-family="IBM Plex Mono" font-size="9" fill="#A09CB6"><text x="40.0" y="212" text-anchor="middle">1m</text><text x="165.0" y="212" text-anchor="middle">5m</text><text x="304.1" y="212" text-anchor="middle">30m</text><text x="411.7" y="212" text-anchor="middle">2h</text><text x="550.9" y="212" text-anchor="middle">12h</text><text x="690.0" y="212" text-anchor="middle">3d</text></g><rect x="604.7" y="20" width="85.3" height="175" fill="rgba(229,72,77,0.06)"></rect><text x="647.3" y="35" font-family="Inter" font-size="10" font-weight="600" fill="#E5484D" text-anchor="middle">long wait zone</text><text x="647.3" y="48" font-family="Inter" font-size="9" fill="#A09CB6" text-anchor="middle">PRs sitting &gt; 1 day</text><defs><linearGradient id="qodoFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#7968FA" stop-opacity="0.45"></stop><stop offset="100%" stop-color="#7968FA" stop-opacity="0"></stop></linearGradient><linearGradient id="humanFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#6E6E6E" stop-opacity="0.30"></stop><stop offset="100%" stop-color="#6E6E6E" stop-opacity="0"></stop></linearGradient></defs><path d="M40,195 L49.0,195.0 L67.1,195.0 L85.1,195.0 L103.2,195.0 L121.2,195.0 L139.3,195.0 L157.4,195.0 L175.4,195.0 L193.5,195.0 L211.5,195.0 L229.6,195.0 L247.6,195.0 L265.7,195.0 L283.8,195.0 L301.8,195.0 L319.9,195.0 L337.9,195.0 L356.0,195.0 L374.0,195.0 L392.1,195.0 L410.1,188.3 L428.2,158.0 L446.2,104.1 L464.3,53.7 L482.4,23.4 L500.4,20.0 L518.5,57.0 L536.5,121.0 L554.6,171.4 L572.6,191.6 L590.7,195.0 L608.8,195.0 L626.8,195.0 L644.9,195.0 L662.9,195.0 L681.0,195.0 L690,195 Z" fill="url(#humanFill)"></path><path d="M40,195 L49.0,195.0 L67.1,195.0 L85.1,195.0 L103.2,195.0 L121.2,195.0 L139.3,195.0 L157.4,195.0 L175.4,195.0 L193.5,195.0 L211.5,195.0 L229.6,195.0 L247.6,195.0 L265.7,195.0 L283.8,195.0 L301.8,195.0 L319.9,195.0 L337.9,195.0 L356.0,195.0 L374.0,195.0 L392.1,195.0 L410.1,188.3 L428.2,158.0 L446.2,104.1 L464.3,53.7 L482.4,23.4 L500.4,20.0 L518.5,57.0 L536.5,121.0 L554.6,171.4 L572.6,191.6 L590.7,195.0 L608.8,195.0 L626.8,195.0 L644.9,195.0 L662.9,195.0 L681.0,195.0 L690,195" stroke="#A09CB6" stroke-width="2" fill="none" stroke-linejoin="round"></path><path d="M40,195 L49.0,195.0 L67.1,195.0 L85.1,192.5 L103.2,182.5 L121.2,162.5 L139.3,132.5 L157.4,92.5 L175.4,47.5 L193.5,20.0 L211.5,35.0 L229.6,85.0 L247.6,140.0 L265.7,177.5 L283.8,192.5 L301.8,195.0 L319.9,195.0 L337.9,195.0 L356.0,195.0 L374.0,195.0 L392.1,195.0 L410.1,195.0 L428.2,195.0 L446.2,195.0 L464.3,195.0 L482.4,195.0 L500.4,195.0 L518.5,195.0 L536.5,195.0 L554.6,195.0 L572.6,195.0 L590.7,195.0 L608.8,195.0 L626.8,195.0 L644.9,195.0 L662.9,195.0 L681.0,195.0 L690,195 Z" fill="url(#qodoFill)"></path><path d="M40,195 L49.0,195.0 L67.1,195.0 L85.1,192.5 L103.2,182.5 L121.2,162.5 L139.3,132.5 L157.4,92.5 L175.4,47.5 L193.5,20.0 L211.5,35.0 L229.6,85.0 L247.6,140.0 L265.7,177.5 L283.8,192.5 L301.8,195.0 L319.9,195.0 L337.9,195.0 L356.0,195.0 L374.0,195.0 L392.1,195.0 L410.1,195.0 L428.2,195.0 L446.2,195.0 L464.3,195.0 L482.4,195.0 L500.4,195.0 L518.5,195.0 L536.5,195.0 L554.6,195.0 L572.6,195.0 L590.7,195.0 L608.8,195.0 L626.8,195.0 L644.9,195.0 L662.9,195.0 L681.0,195.0 L690,195" stroke="#7968FA" stroke-width="2" fill="none" stroke-linejoin="round"></path><line x1="191.1" y1="20" x2="191.1" y2="195" stroke="#A8A1FD" stroke-width="1.5" stroke-dasharray="3 3"></line><text x="195.1" y="18" font-family="Inter" font-size="10" font-weight="600" fill="#A8A1FD">Qodo p50 &middot; 7m</text><line x1="489.1" y1="20" x2="489.1" y2="195" stroke="#A09CB6" stroke-width="1.5" stroke-dasharray="3 3"></line><text x="493.1" y="18" font-family="Inter" font-size="10" font-weight="600" fill="#DFDFDF" text-anchor="start">Human p50 &middot; 5.4h</text></svg></div><div class="dist-side"><div class="dist-card"><div class="dist-card-label">Qodo p90</div><div class="dist-card-val">11m</div><div class="dist-card-sub">90% of Qodo-reviewed PRs received initial feedback within <b>11m</b> of opening.</div></div><div class="dist-card"><div class="dist-card-label">Human p90</div><div class="dist-card-val">8.3h</div><div class="dist-card-sub">Of the PRs that received any human comment, the slowest 10% waited over <b>8.3h</b>.</div></div><div class="dist-card highlight"><div class="dist-card-label">No human comment</div><div class="dist-card-val">27<span class="pct">%</span></div><div class="dist-card-sub"><b>6 of 22</b> Qodo-reviewed PRs merged without any human reviewer comment &mdash; Qodo provided the sole feedback before merge.</div></div></div></div></section><section class="r-section" id="sec-adoption-matrix"><div class="r-section-head"><div><div class="r-section-eyebrow">Adoption matrix</div><div class="r-section-title">Developer adoption matrix &mdash; volume vs implementation rate</div><div class="r-section-deck">Every author plotted by findings received (log scale) and implementation rate. Four quadrants surface four different conversations: power users to learn from, coach candidates to unblock, curious new joiners to observe, and a low-usage group to re-engage. 11 of 11 authors received at least one finding in this window.</div></div></div><div class="p05-hero"><div class="p05-stat"><div class="v mint">79.3%</div><div class="lbl"><b>65 of 82</b> action&#8209;required findings implemented before merge &mdash; Qodo's must-fix grade. The org-wide acceptance signal.</div></div><div class="p05-stat"><div class="v">11</div><div class="lbl"><b>Active authors</b> received at least one Qodo finding in the window. Distribution is flat across the team.</div></div><div class="p05-stat"><div class="v">11</div><div class="lbl"><b>11 curious contributors</b> &mdash; light volume but high acceptance. Recent onboards or occasional PR authors. No active concern in the data.</div></div></div><div class="p05-chart-card"><div class="p05-svg-wrap"><svg class="p05-scatter" id="p05-scatter" viewBox="0 0 1180 600" preserveAspectRatio="xMidYMid meet" aria-hidden="true"><rect class="p05-quad-bg-curious" x="70" y="50" width="965.2" height="343.0"></rect><rect class="p05-quad-bg-power" x="1035.2" y="50" width="114.8" height="343.0"></rect><rect class="p05-quad-bg-absent" x="70" y="393.0" width="965.2" height="147.0"></rect><rect class="p05-quad-bg-coach" x="1035.2" y="393.0" width="114.8" height="147.0"></rect><line x1="70.0" y1="50" x2="70.0" y2="540" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="341.7" y1="50" x2="341.7" y2="540" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="458.7" y1="50" x2="458.7" y2="540" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="730.5" y1="50" x2="730.5" y2="540" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="847.5" y1="50" x2="847.5" y2="540" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="1119.2" y1="50" x2="1119.2" y2="540" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="70" y1="540.0" x2="1150" y2="540.0" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="70" y1="417.5" x2="1150" y2="417.5" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="70" y1="295.0" x2="1150" y2="295.0" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="70" y1="172.5" x2="1150" y2="172.5" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="70" y1="50.0" x2="1150" y2="50.0" stroke="rgba(255,255,255,.04)" stroke-width="1"></line><line x1="1035.2" y1="50" x2="1035.2" y2="540" stroke="rgba(255,255,255,.22)" stroke-width="1" stroke-dasharray="4 5"></line><line x1="70" y1="393.0" x2="1150" y2="393.0" stroke="rgba(255,255,255,.22)" stroke-width="1" stroke-dasharray="4 5"></line><line x1="70" y1="50" x2="70" y2="540" stroke="#2C2C2C" stroke-width="1"></line><line x1="70" y1="540" x2="1150" y2="540" stroke="#2C2C2C" stroke-width="1"></line><text x="70.0" y="558" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">1</text><text x="341.7" y="558" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">5</text><text x="458.7" y="558" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">10</text><text x="730.5" y="558" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">50</text><text x="847.5" y="558" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">100</text><text x="1119.2" y="558" text-anchor="middle" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">500</text><text x="60" y="544.0" text-anchor="end" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">0%</text><text x="60" y="421.5" text-anchor="end" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">25%</text><text x="60" y="299.0" text-anchor="end" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">50%</text><text x="60" y="176.5" text-anchor="end" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">75%</text><text x="60" y="54.0" text-anchor="end" font-family="IBM Plex Mono" font-size="10" fill="#A09CB6">100%</text><text x="610.0" y="588" text-anchor="middle" font-family="Inter" font-size="11" fill="#6E6E6E">Findings received &nbsp;(log scale)</text><text x="22" y="295.0" text-anchor="middle" font-family="Inter" font-size="11" fill="#6E6E6E" transform="rotate(-90 22 295.0)">Implementation rate</text><text x="1049.2" y="72" font-family="Inter" font-size="11" font-weight="700" fill="rgba(6,228,174,.55)" letter-spacing=".06em">POWER USERS</text><text x="1021.2" y="72" text-anchor="end" font-family="Inter" font-size="11" font-weight="700" fill="rgba(168,161,253,.55)" letter-spacing=".06em">CURIOUS / NEW</text><text x="1049.2" y="526" font-family="Inter" font-size="11" font-weight="700" fill="rgba(245,181,68,.65)" letter-spacing=".06em">COACH</text><text x="1021.2" y="526" text-anchor="end" font-family="Inter" font-size="11" font-weight="700" fill="rgba(229,72,77,.55)" letter-spacing=".06em">LOW USAGE</text><g class="p05-bubble" data-user="dev-ivan" transform="translate(660.3 153.9)"><circle r="29.2" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g><g class="p05-bubble" data-user="dev-eve" transform="translate(632.6 137.7)"><circle r="24.8" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g><g class="p05-bubble" data-user="dev-alice" transform="translate(620.1 144.1)"><circle r="33.0" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g><g class="p05-bubble" data-user="dev-frank" transform="translate(606.6 172.5)"><circle r="29.2" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g><g class="p05-bubble" data-user="dev-judy" transform="translate(599.4 156.3)"><circle r="24.8" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g><g class="p05-bubble" data-user="dev-bob" transform="translate(527.2 148.0)"><circle r="33.0" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g><g class="p05-bubble" data-user="dev-kate" transform="translate(515.6 190.1)"><circle r="29.2" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g><g class="p05-bubble" data-user="dev-henry" transform="translate(503.0 200.9)"><circle r="29.2" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g><g class="p05-bubble" data-user="dev-carol" transform="translate(474.8 139.2)"><circle r="29.2" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g><g class="p05-bubble" data-user="dev-grace" transform="translate(398.5 120.1)"><circle r="24.8" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g><g class="p05-bubble" data-user="dev-dave" transform="translate(255.5 213.2)"><circle r="19.0" fill="rgba(168,161,253,.18)" stroke="#A8A1FD" stroke-width="1.5"></circle><circle r="2" fill="#A8A1FD"></circle></g></svg><div class="p05-tip" id="p05-tip"></div></div><div class="p05-legend"><div class="it"><span class="sw power"></span><b style="color:var(--fg-default)">Power</b> &middot; &ge;304 / &ge;30%</div><div class="it"><span class="sw coach"></span><b style="color:var(--fg-default)">Coach</b> &middot; &ge;304 / &lt;30%</div><div class="it"><span class="sw curious"></span><b style="color:var(--fg-default)">Curious</b> &middot; &lt;304 / &ge;30%</div><div class="it"><span class="sw absent"></span><b style="color:var(--fg-default)">Low usage</b> &middot; &lt;304 / &lt;30%</div><div class="it"><span class="dash"></span>Quadrant threshold (304 / 30%)</div></div></div><div class="p05-quad-grid" id="p05-quad-grid"><div class="p05-quad-card power"><div class="p05-qc-head"><div class="p05-qc-head-l"><div class="p05-qc-eyebrow"><span class="dot"></span>Celebrate &amp; study</div><div class="p05-qc-title">Power users</div><div class="p05-qc-deck"><b>High volume, high acceptance.</b> Generating the most Qodo-reviewed code and implementing what comes back. The workflow to case-study and replicate.</div></div><div class="p05-qc-stat"><div class="v">0</div><div class="u">authors</div></div></div><div class="p05-qc-body"><div class="p05-qc-action"><b>Action:</b> Document one of their reviewed-PR flows as a reference.</div><div class="p05-qc-list"></div></div></div><div class="p05-quad-card coach"><div class="p05-qc-head"><div class="p05-qc-head-l"><div class="p05-qc-eyebrow"><span class="dot"></span>Likely fixable</div><div class="p05-qc-title">Coach</div><div class="p05-qc-deck"><b>High volume, low acceptance.</b> Qodo is reviewing their code but they're not acting on most of it. The interesting question is <em>why</em> &mdash; noisy rules, time pressure, or real disagreement.</div></div><div class="p05-qc-stat"><div class="v">0</div><div class="u">authors</div></div></div><div class="p05-qc-body"><div class="p05-qc-action"><b>Action:</b> 1:1 conversation, not an automated nudge.</div><div class="p05-qc-list"></div></div></div><div class="p05-quad-card curious"><div class="p05-qc-head"><div class="p05-qc-head-l"><div class="p05-qc-eyebrow"><span class="dot"></span>Observe</div><div class="p05-qc-title">Curious / new</div><div class="p05-qc-deck"><b>Light usage, high acceptance.</b> Recent onboards, low-PR-volume teammates, or contributors to repos Qodo isn't deeply tuned for.</div></div><div class="p05-qc-stat"><div class="v">11</div><div class="u">authors</div></div></div><div class="p05-qc-body"><div class="p05-qc-action"><b>Action:</b> Nothing at this time. Expect them to shift quadrants in the next report once their PR volume settles.</div><div class="p05-qc-list"><div class="p05-qc-row curious" data-user="dev-ivan"><span class="name">dev-ivan</span><span class="findings">33 findings &middot; 3 PRs</span><span class="rate">79%</span></div><div class="p05-qc-row curious" data-user="dev-eve"><span class="name">dev-eve</span><span class="findings">28 findings &middot; 2 PRs</span><span class="rate">82%</span></div><div class="p05-qc-row curious" data-user="dev-alice"><span class="name">dev-alice</span><span class="findings">26 findings &middot; 4 PRs</span><span class="rate">81%</span></div><div class="p05-qc-row curious" data-user="dev-frank"><span class="name">dev-frank</span><span class="findings">24 findings &middot; 3 PRs</span><span class="rate">75%</span></div><div class="p05-qc-row curious" data-user="dev-judy"><span class="name">dev-judy</span><span class="findings">23 findings &middot; 2 PRs</span><span class="rate">78%</span></div><div class="p05-qc-row curious" data-user="dev-bob"><span class="name">dev-bob</span><span class="findings">15 findings &middot; 4 PRs</span><span class="rate">80%</span></div><div class="p05-qc-row curious" data-user="dev-kate"><span class="name">dev-kate</span><span class="findings">14 findings &middot; 3 PRs</span><span class="rate">71%</span></div><div class="p05-qc-row curious" data-user="dev-henry"><span class="name">dev-henry</span><span class="findings">13 findings &middot; 3 PRs</span><span class="rate">69%</span></div><div class="p05-qc-row curious" data-user="dev-carol"><span class="name">dev-carol</span><span class="findings">11 findings &middot; 3 PRs</span><span class="rate">82%</span></div><div class="p05-qc-row curious" data-user="dev-grace"><span class="name">dev-grace</span><span class="findings">7 findings &middot; 2 PRs</span><span class="rate">86%</span></div><div class="p05-qc-row curious" data-user="dev-dave"><span class="name">dev-dave</span><span class="findings">3 findings &middot; 1 PR</span><span class="rate">67%</span></div></div></div></div><div class="p05-quad-card absent"><div class="p05-qc-head"><div class="p05-qc-head-l"><div class="p05-qc-eyebrow"><span class="dot"></span>Re-engage</div><div class="p05-qc-title">Low usage</div><div class="p05-qc-deck"><b>Engaged but not implementing.</b> Some authors here receive findings regularly (&ge;122) but implement under 15%.</div></div><div class="p05-qc-stat"><div class="v">0</div><div class="u">authors</div></div></div><div class="p05-qc-body"><div class="p05-qc-action"><b>Action:</b> A direct check-in confirms whether Qodo is configured for their repos and whether they know how to act on findings.</div><div class="p05-qc-list"></div></div></div></div><script>(function(){const D = [{"user": "dev-ivan", "prs": 3, "repos": 1, "totalSug": 33, "totalImp": 26, "actReqSug": 15, "actReqImp": 12, "rate": 78.8, "actRate": 80.0, "quad": "curious"}, {"user": "dev-eve", "prs": 2, "repos": 1, "totalSug": 28, "totalImp": 23, "actReqSug": 12, "actReqImp": 10, "rate": 82.1, "actRate": 83.3, "quad": "curious"}, {"user": "dev-alice", "prs": 4, "repos": 2, "totalSug": 26, "totalImp": 21, "actReqSug": 10, "actReqImp": 9, "rate": 80.8, "actRate": 90.0, "quad": "curious"}, {"user": "dev-frank", "prs": 3, "repos": 2, "totalSug": 24, "totalImp": 18, "actReqSug": 10, "actReqImp": 7, "rate": 75.0, "actRate": 70.0, "quad": "curious"}, {"user": "dev-judy", "prs": 2, "repos": 1, "totalSug": 23, "totalImp": 18, "actReqSug": 10, "actReqImp": 8, "rate": 78.3, "actRate": 80.0, "quad": "curious"}, {"user": "dev-bob", "prs": 4, "repos": 3, "totalSug": 15, "totalImp": 12, "actReqSug": 6, "actReqImp": 5, "rate": 80.0, "actRate": 83.3, "quad": "curious"}, {"user": "dev-kate", "prs": 3, "repos": 1, "totalSug": 14, "totalImp": 10, "actReqSug": 6, "actReqImp": 4, "rate": 71.4, "actRate": 66.7, "quad": "curious"}, {"user": "dev-henry", "prs": 3, "repos": 1, "totalSug": 13, "totalImp": 9, "actReqSug": 5, "actReqImp": 3, "rate": 69.2, "actRate": 60.0, "quad": "curious"}, {"user": "dev-carol", "prs": 3, "repos": 2, "totalSug": 11, "totalImp": 9, "actReqSug": 4, "actReqImp": 3, "rate": 81.8, "actRate": 75.0, "quad": "curious"}, {"user": "dev-grace", "prs": 2, "repos": 1, "totalSug": 7, "totalImp": 6, "actReqSug": 3, "actReqImp": 3, "rate": 85.7, "actRate": 100.0, "quad": "curious"}, {"user": "dev-dave", "prs": 1, "repos": 1, "totalSug": 3, "totalImp": 2, "actReqSug": 1, "actReqImp": 1, "rate": 66.7, "actRate": 100.0, "quad": "curious"}];const QL = {"power": "Power user", "coach": "Coach", "curious": "Curious / new", "absent": "Low usage"};const M = Object.fromEntries(D.map(d => [d.user, d]));const svg = document.getElementById("p05-scatter");const tip = document.getElementById("p05-tip");if (!svg || !tip) return;function escH(s){return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}function render(d){  const cls = d.quad==="power"||d.quad==="curious"?"mint":d.quad==="coach"?"warn":"danger";  tip.innerHTML =     '<div class="name">'+escH(d.user)+' <span class="badge '+d.quad+'">'+QL[d.quad]+'</span></div>'    + '<div class="meta">'+d.prs+' PRs \u00b7 '+d.repos+' repo'+(d.repos>1?"s":"")+'</div>'    + '<div class="row"><span>Findings</span> <b>'+d.totalSug+'</b></div>'    + '<div class="row"><span>Implemented</span> <b>'+d.totalImp+'</b></div>'    + '<div class="row"><span>Overall impl rate</span> <b class="'+cls+'">'+d.rate.toFixed(1)+'%</b></div>'    + '<div class="divider"></div>'    + '<div class="row"><span>Action-required</span> <b>'+d.actReqSug+'</b></div>'    + '<div class="row"><span>Action-req rate</span> <b class="'+cls+'">'+(d.actRate===null?"\u2014":d.actRate.toFixed(1)+"%")+'</b></div>';  tip.classList.add("show");}function position(d, evt){  const wrap = svg.parentElement.getBoundingClientRect();  const tw = tip.offsetWidth || 220, th = tip.offsetHeight || 200;  let cx, cy;  if (evt) { cx = evt.clientX - wrap.left; cy = evt.clientY - wrap.top; }  else {    const sb = svg.getBoundingClientRect();    const g = svg.querySelector(".p05-bubble[data-user='"+CSS.escape(d.user)+"']");    if (!g) return;    const r = g.getBoundingClientRect();    cx = (r.left+r.width/2) - wrap.left;    cy = (r.top +r.height/2) - wrap.top;  }  let tx = cx+16, ty = cy+16;  if (tx+tw > wrap.width)  tx = cx-tw-12;  if (ty+th > wrap.height) ty = cy-th-12;  if (tx < 0) tx = 4; if (ty < 0) ty = 4;  tip.style.left = tx+"px"; tip.style.top = ty+"px";}function focus(user, evt){  const d = M[user]; if (!d) return;  svg.classList.add("has-hover");  svg.querySelectorAll(".p05-bubble").forEach(g => g.classList.toggle("is-hovered", g.dataset.user===user));  document.querySelectorAll("#p05-quad-grid .p05-qc-row").forEach(r => r.classList.toggle("is-hovered", r.dataset.user===user));  render(d); position(d, evt);}function clearFocus(){  svg.classList.remove("has-hover");  document.querySelectorAll(".p05-bubble.is-hovered, .p05-qc-row.is-hovered").forEach(e => e.classList.remove("is-hovered"));  tip.classList.remove("show");}svg.querySelectorAll(".p05-bubble").forEach(g => {  g.addEventListener("mouseenter", e => focus(g.dataset.user, e));  g.addEventListener("mousemove",  e => { const d = M[g.dataset.user]; if (d) position(d, e); });  g.addEventListener("mouseleave", clearFocus);});document.querySelectorAll("#p05-quad-grid .p05-qc-row").forEach(r => {  r.addEventListener("mouseenter", () => focus(r.dataset.user));  r.addEventListener("mouseleave", clearFocus);});})();</script></section><section class="r-section" id="hs-root"><div class="r-section-head"><div><div class="r-section-eyebrow">Hours Saved</div><div class="r-section-title">Senior&#8209;engineer hours offloaded</div><div class="r-section-deck">How much human review labor Qodo absorbed across the window. Tunable — toggle your team&rsquo;s pace, the outlier trim, or scale to a larger org to see how the claim changes.</div></div></div><div class="saved-grid"><div class="observed-col"><div class="saved-hero"><div class="saved-eyebrow" id="hs-observedEyebrow">Observed</div><div class="saved-big" style="margin-top:2px"><span class="n" id="hs-heroHours">&mdash;</span><span class="u" style="display:inline-flex;flex-direction:column;line-height:1.15;gap:2px;align-self:flex-end;padding-bottom:6px"><span>senior engineer hours</span><span style="font-size:11px;color:var(--fg-muted);font-weight:600;letter-spacing:.06em;text-transform:uppercase">offloaded by Qodo</span></span></div><p class="saved-lede" id="hs-ledeText"></p></div><div class="saved-breakdown"><div class="sbr-row big"><span class="sbr-tag lg norm">Team&rsquo;s review pace</span><div class="sbr-mid"><div class="top"><b id="hs-effortLabel"></b></div><span class="sub" id="hs-effortCite" style="color:var(--fg-subtle)"></span><span class="sub" style="margin-top:10px;display:block;color:var(--fg-muted)"><b style="color:var(--p-200);font-weight:600">Qodo always performs a thorough review.</b> This pace is <em>your team&rsquo;s</em> counterfactual &mdash; how thoroughly you&rsquo;d have reviewed the same code in&#8209;house.</span></div><div class="sbr-val" style="font-size:12px;color:var(--fg-muted);font-weight:500"><div class="hs-seg" id="hs-effortSeg" style="margin-top:0"><button type="button" data-effort="thorough">Thorough</button><button type="button" data-effort="moderate" class="on">Moderate</button><button type="button" data-effort="quick">Quick</button></div></div></div><div class="sbr-row big"><span class="sbr-tag lg warn">Outlier trim</span><div class="sbr-mid"><div class="top"><b id="hs-trimLabel"></b></div><span class="sub" id="hs-trimStats" style="margin-top:6px;display:block;font-variant-numeric:tabular-nums"></span><span class="sub" style="margin-top:8px;display:block">Some PRs are huge but require little review &mdash; vendored libraries, multimedia &amp; static assets, formatter sweeps, lockfile &amp; snapshot updates. Trim them so the headline stays defensible.</span></div><div class="sbr-val" style="font-size:12px;color:var(--fg-muted);font-weight:500"><div class="hs-seg" id="hs-trimSeg" style="margin-top:0"><button type="button" data-trim="none">All</button><button type="button" data-trim="p99">Top&nbsp;1%</button><button type="button" data-trim="p95" class="on">Top&nbsp;5%</button></div></div></div><div class="sbr-row bonus"><span class="sbr-tag">Defensibility</span><div class="sbr-mid"><div class="top"><b>Skeptics get a heavier number; honest teams get a smaller one.</b></div><span class="sub">A team that already does thorough review gets the biggest savings; a team that skims still gets the thorough review they weren&rsquo;t doing. Either way, Qodo&rsquo;s output is the same.</span></div><div class="sbr-val">&mdash;</div></div><div class="sbr-row big" style="display:none"><span class="sbr-tag lg norm">LOC total</span><div class="sbr-mid"><div class="top"><b id="hs-locTotalHrs">&mdash;</b></div></div><div class="sbr-val">&mdash;</div></div></div><div class="sbr-total" aria-live="polite"><span class="lbl">Observed</span><div class="mid"><b id="hs-totalHrsLine">&mdash;</b> &middot; <b id="hs-totalWeeksLine">&mdash;</b> &middot; at <b id="hs-totalRateLine">&mdash;</b></div><div class="v"><span id="hs-totalDollars">&mdash;</span></div></div><div class="saved-formula" id="hs-formula"></div></div><div class="scale-col"><div class="scale-eyebrow"><span class="live-dot"></span>Sustain &amp; Scale</div><div class="scale-headline"><div class="scale-amount"><span class="v" id="hs-scaleAmount">&mdash;</span><span class="yr">/ yr</span></div><div class="scale-sub" id="hs-scaleSub">&mdash;</div></div><p class="scale-context" id="hs-scaleContext"></p><div class="hs-scale-card"><div class="hs-scale-card-head"><span class="hs-scale-card-label">Project to N engineers</span><span class="hs-scale-card-val"><span id="hs-scaleDevsVal">&mdash;</span><span class="u">devs</span></span></div><div class="hs-scale-card-range"><input type="range" id="hs-totalDevsRange" min="1" max="5000" step="1" value="11" aria-label="Number of engineers in your target org"></div><div class="hs-scale-card-foot"><span>1</span><span>5,000</span></div></div><div class="hs-scale-card"><div class="hs-scale-card-head"><span class="hs-scale-card-label">Fully-loaded engineer cost</span><span class="hs-scale-card-val">$<span id="hs-rateRangeVal">180,000</span><span class="u">/yr</span></span></div><div class="hs-scale-card-range"><input type="range" id="hs-rateRange" min="60000" max="500000" step="5000" value="180000" aria-label="Fully-loaded annual cost per engineer"></div><div class="hs-scale-card-foot"><span>$60k</span><span>$500k</span></div></div><div class="scale-3yr"><span class="lbl">3-year value</span><span class="val" id="hs-scale3yrVal">&mdash;</span></div></div></div><script type="application/json" id="hs-data">{"WINDOW_DAYS": 365, "WINDOW_LABEL": "May 14 &ndash; May 14, 2026", "EVAL_DEVS": 11, "TOTALS": {"none": {"prs": 30, "loc": 5166, "label": "All PRs", "cutoff": 600}, "p99": {"prs": 30, "loc": 5166, "label": "Trim top 1% (PRs > 600 LOC)", "cutoff": 600}, "p95": {"prs": 29, "loc": 4566, "label": "Trim top 5% (PRs > 450 LOC)", "cutoff": 450}}}</script><script>
+(function(){
+  const root = document.getElementById('hs-root');
+  if(!root) return;
+  const data = JSON.parse(document.getElementById('hs-data').textContent);
+  const WINDOW_DAYS  = data.WINDOW_DAYS;
+  const WINDOW_LABEL = data.WINDOW_LABEL;
+  const EVAL_DEVS    = data.EVAL_DEVS;
+  const TOTALS       = data.TOTALS;
+
+  const EFFORT_PRESETS = {
+    thorough: { lph: 300,  label: 'Thorough', cite: 'Cisco / SmartBear formal-inspection rate' },
+    moderate: { lph: 600,  label: 'Moderate', cite: 'Modern team norm for non-safety-critical app code' },
+    quick:    { lph: 1200, label: 'Quick',    cite: 'Skim / LGTM pace — AI-codegen, refactors, vendored libraries' },
+  };
+  const DEFAULTS = {
+    rate: 180000,
+    totalDevs: EVAL_DEVS,
+    totalLoc: TOTALS.p95.loc,
+    locPerHr: 600,
+    trim: 'p95',
+    reviewEffort: 'moderate',
+    offloadPct: 50,
+  };
+  const state = {...DEFAULTS};
+  const HRS_PER_WEEK = 40;
+  const HRS_PER_YEAR = 1920;
+
+  const $ = id => document.getElementById('hs-' + id);
+  const fmtInt = n => Math.round(n).toLocaleString('en-US');
+  const fmt1   = n => (Math.round(n*10)/10).toLocaleString('en-US', {minimumFractionDigits:1, maximumFractionDigits:1});
+  const fmtMoney = n => {
+    if(n >= 1e6) return '~$' + (Math.round(n/1e4)/100).toFixed(2).replace(/\.?0+$/,'') + 'M';
+    if(n >= 1e4) return '~$' + Math.round(n/1000) + 'k';
+    return '~$' + (Math.round(n/100)*100).toLocaleString('en-US');
+  };
+  const fmtRate = n => '$' + (Math.round(n/HRS_PER_YEAR * 100)/100) + '/h';
+
+  function compute(){
+    const annualize = 365 / WINDOW_DAYS;
+    const devMult   = state.totalDevs / EVAL_DEVS;
+    const scale     = annualize * devMult;
+    const baselineH = state.totalLoc / state.locPerHr;
+    const observedH = baselineH * (state.offloadPct / 100);
+    const projectedH = observedH * scale;
+    const hourly = state.rate / HRS_PER_YEAR;
+    return {
+      baselineH, observedH,
+      observedDollars: observedH * hourly,
+      observedWeeks:   observedH / HRS_PER_WEEK,
+      projectedH,
+      projectedDollars: projectedH * hourly,
+      projectedFTE:     projectedH / HRS_PER_YEAR,
+      hourly, scale,
+    };
+  }
+
+  function makeRateChip(){
+    return `<span class="hs-live" data-live="rate" data-min="60000" data-max="500000" data-step="5000" style="--w:5ch">`
+         + `<span class="prefix">$</span><input type="text" value="${state.rate}" inputmode="numeric"><span class="suffix">/yr</span>`
+         + `</span>`;
+  }
+  function makeOffloadChip(){
+    return `<span class="hs-live" data-live="offloadPct" data-min="5" data-max="95" data-step="5" style="--w:2.5ch">`
+         + `<input type="text" value="${state.offloadPct}" inputmode="numeric"><span class="suffix">%</span></span>`;
+  }
+  function makeProjectionChip(){
+    return `<span class="hs-live" data-live="totalDevs" data-min="1" data-max="10000" data-step="1" style="--w:3ch">`
+         + `<input type="text" value="${state.totalDevs}" inputmode="numeric"><span class="suffix">&nbsp;engineers</span></span>`;
+  }
+  function makeEffortChip(){
+    const eff = EFFORT_PRESETS[state.reviewEffort];
+    return `<span class="hs-live hs-live-cycle" data-cycle="reviewEffort" tabindex="0" role="button" `
+         + `title="Click to cycle: Thorough → Moderate → Quick. Qodo always reviews thoroughly; this is your team's counterfactual." `
+         + `style="cursor:pointer;padding:1px 8px 1px 8px">`
+         + `<b style="color:inherit">${eff.label}</b>`
+         + `</span>`;
+  }
+
+  function render(){
+    // Preserve focus across innerHTML re-injection of lede/scaleContext.
+    const _activeEl    = document.activeElement;
+    const _activeContainer = _activeEl && _activeEl.closest && _activeEl.closest('#hs-ledeText, #hs-scaleContext');
+    const _restoreKey  = _activeContainer ? _activeEl.closest('.hs-live')?.dataset?.live : null;
+    const _restoreStart = _activeEl && _activeEl.selectionStart;
+    const _restoreEnd   = _activeEl && _activeEl.selectionEnd;
+    const _restoreContainerId = _activeContainer && _activeContainer.id;
+
+    const c = compute();
+    $('heroHours').textContent = fmtInt(c.observedH);
+    $('observedEyebrow').innerHTML =
+      `Observed <span style="color:var(--fg-subtle);margin:0 7px">&middot;</span> `
+      + `<b style="color:var(--fg-default);font-weight:700">${WINDOW_LABEL}</b> `
+      + `<span style="color:var(--fg-subtle);font-weight:500;letter-spacing:.04em">(${WINDOW_DAYS}&nbsp;days)</span>`;
+
+    const eff = EFFORT_PRESETS[state.reviewEffort];
+    const lede = `Qodo thoroughly reviewed <b>${fmtInt(state.totalLoc)}&nbsp;lines of code (LOC)</b> from <b>${EVAL_DEVS}&nbsp;engineers</b>. To match that volume in-house at `
+               + makeEffortChip()
+               + ` pace (<b>${eff.lph}&nbsp;LOC/h</b>), a senior engineer would have spent <b>~${fmtInt(c.baselineH)}&nbsp;hours</b>. Assuming Qodo offloads `
+               + makeOffloadChip()
+               + ` of the human code review effort, that&rsquo;s <b>~${fmtInt(c.observedH)}&nbsp;hours</b> returned, worth <b>${fmtMoney(c.observedDollars)}</b> at a fully-loaded cost of `
+               + makeRateChip()
+               + ` per engineer performing code reviews.`;
+    $('ledeText').innerHTML = lede;
+
+    $('scaleAmount').textContent  = fmtMoney(c.projectedDollars);
+    $('scaleSub').textContent     = `${fmtInt(c.projectedH)} h/yr · ${(Math.round(c.projectedFTE*100)/100).toFixed(2)} FTE`;
+    $('scaleContext').innerHTML   = `if sustained across ${makeProjectionChip()} for a full year at a fully-loaded cost of ${makeRateChip()} per engineer.`;
+    $('scaleDevsVal').textContent = state.totalDevs;
+    $('rateRangeVal').textContent = state.rate.toLocaleString('en-US');
+    $('scale3yrVal').textContent  = fmtMoney(c.projectedDollars * 3);
+
+    document.querySelectorAll('#hs-ledeText .hs-live, #hs-scaleContext .hs-live').forEach(bindLiveSpan);
+    document.querySelectorAll('#hs-ledeText .hs-live-cycle, #hs-scaleContext .hs-live-cycle').forEach(bindCycleChip);
+
+    if(_restoreKey){
+      const newInput = document.querySelector(`#${_restoreContainerId} [data-live="${_restoreKey}"] input`);
+      if(newInput && document.activeElement !== newInput){
+        newInput.focus();
+        const len = newInput.value.length;
+        const s = Math.min(_restoreStart ?? len, len), e = Math.min(_restoreEnd ?? len, len);
+        try { newInput.setSelectionRange(s, e); } catch(err){}
+      }
+    }
+
+    $('locTotalHrs').innerHTML = fmtInt(c.observedH) + '<span class="u">h</span>';
+    $('totalHrsLine').textContent   = fmtInt(c.observedH) + ' h';
+    $('totalWeeksLine').textContent = fmt1(c.observedWeeks) + ' wks';
+    $('totalRateLine').textContent  = fmtRate(state.rate);
+    $('totalDollars').textContent   = fmtMoney(c.observedDollars);
+
+    $('effortLabel').innerHTML = `<b>${eff.label}</b> &middot; <span style="font-family:'IBM Plex Mono',monospace;color:var(--fg-default);font-weight:500">${eff.lph}&nbsp;LOC/h</span>`;
+    $('effortCite').textContent = eff.cite;
+    document.querySelectorAll('#hs-effortSeg button').forEach(b =>
+      b.classList.toggle('on', b.dataset.effort === state.reviewEffort));
+    document.querySelectorAll('#hs-trimSeg button').forEach(b =>
+      b.classList.toggle('on', b.dataset.trim === state.trim));
+
+    const t = TOTALS[state.trim];
+    const total = TOTALS.none;
+    $('trimLabel').textContent = t.label;
+    $('trimStats').innerHTML =
+        `<b style="color:var(--fg-default);font-weight:600">${fmtInt(t.prs)}</b> of ${fmtInt(total.prs)} PRs`
+      + ` <span style="color:var(--fg-subtle);margin:0 6px">&middot;</span> `
+      + `<b style="color:var(--fg-default);font-weight:600">${fmtInt(t.loc)}</b> of ${fmtInt(total.loc)} LOC`;
+
+    $('formula').innerHTML =
+        `<b>observed</b> <span style="color:var(--fg-subtle)">=</span> (total_loc &divide; loc_per_hr) &times; offload_pct<br>`
+      + `<span style="color:var(--fg-subtle)">&rarr;</span> (<b>${fmtInt(state.totalLoc)}</b> &divide; <b>${state.locPerHr}</b>) &times; <b>${state.offloadPct}%</b> <span style="color:var(--fg-subtle)">=</span> <b>${fmt1(c.observedH)}&nbsp;h</b><br>`
+      + `<b>projected</b> <span style="color:var(--fg-subtle)">=</span> observed <span style="color:var(--fg-subtle)">&times;</span> <b>(365/${WINDOW_DAYS})</b> <span style="color:var(--fg-subtle)">&times;</span> <b>(${state.totalDevs}/${EVAL_DEVS})</b> <span style="color:var(--fg-subtle)">=</span> <b>${fmtInt(c.projectedH)}&nbsp;h/yr</b>`;
+  }
+
+  function sizeInput(input){
+    if(!input || input.type === 'range') return;
+    const v = input.value || input.placeholder || '';
+    input.style.width = Math.max(String(v).length, 1) + 0.5 + 'ch';
+  }
+  function setValue(key, v){
+    if(state[key] === v) return;
+    state[key] = v;
+    render();
+    syncSiblings(key, v);
+  }
+  function syncSiblings(key, v){
+    const targets = [];
+    if(key === 'rate'){
+      const r = document.getElementById('hs-rateRange'); if(r) targets.push(r);
+      document.querySelectorAll('[data-live="rate"] input').forEach(el => targets.push(el));
+    } else if(key === 'totalDevs'){
+      const r = document.getElementById('hs-totalDevsRange'); if(r) targets.push(r);
+      document.querySelectorAll('[data-live="totalDevs"] input').forEach(el => targets.push(el));
+    } else if(key === 'offloadPct'){
+      document.querySelectorAll('[data-live="offloadPct"] input').forEach(el => targets.push(el));
+    }
+    targets.forEach(el => {
+      if(el && String(el.value) !== String(v)){
+        el.value = v;
+        if(el.type === 'number') sizeInput(el);
+      }
+    });
+  }
+  function bindNumber(key, input, opts){
+    opts = opts || {};
+    const min = opts.min ?? -Infinity, max = opts.max ?? Infinity, step = opts.step ?? 1;
+    const onInput = e => {
+      let v = parseFloat(e.target.value);
+      if(!isFinite(v)) return;
+      setValue(key, v);
+      sizeInput(e.target);
+    };
+    const onChange = e => {
+      let v = parseFloat(e.target.value);
+      if(!isFinite(v)) v = DEFAULTS[key];
+      v = Math.min(max, Math.max(min, v));
+      e.target.value = v;
+      sizeInput(e.target);
+      setValue(key, v);
+    };
+    input.addEventListener('input', onInput);
+    input.addEventListener('change', onChange);
+    input.addEventListener('keydown', e => {
+      if(e.key === 'Enter'){ e.preventDefault(); e.target.blur(); return; }
+      if(input.type === 'text' && (e.key === 'ArrowUp' || e.key === 'ArrowDown')){
+        e.preventDefault();
+        const cur = parseFloat(input.value) || 0;
+        const d = e.key === 'ArrowUp' ? step : -step;
+        const v = Math.min(max, Math.max(min, cur + d));
+        input.value = v;
+        setValue(key, v);
+        sizeInput(input);
+      }
+    });
+    sizeInput(input);
+  }
+  function bindLiveSpan(wrap){
+    if(!wrap || wrap.dataset.bound) return;
+    wrap.dataset.bound = '1';
+    const key  = wrap.dataset.live;
+    const min  = wrap.dataset.min  ? +wrap.dataset.min  : undefined;
+    const max  = wrap.dataset.max  ? +wrap.dataset.max  : undefined;
+    const step = wrap.dataset.step ? +wrap.dataset.step : 1;
+    const input = wrap.querySelector('input');
+    if(!input) return;
+    bindNumber(key, input, {min, max, step});
+    input.addEventListener('focus', () => wrap.classList.add('is-focused'));
+    input.addEventListener('blur',  () => wrap.classList.remove('is-focused'));
+    wrap.addEventListener('click', e => { if(e.target !== input) input.focus(); });
+  }
+  function bindCycleChip(wrap){
+    if(!wrap || wrap.dataset.bound) return;
+    wrap.dataset.bound = '1';
+    const cycle = (dir) => {
+      const order = ['thorough','moderate','quick'];
+      const i = order.indexOf(state.reviewEffort);
+      setReviewEffort(order[(i + dir + order.length) % order.length]);
+    };
+    wrap.addEventListener('click', () => cycle(+1));
+    wrap.addEventListener('keydown', e => {
+      if(e.key === 'Enter' || e.key === ' ' || e.key === 'ArrowRight' || e.key === 'ArrowDown'){
+        e.preventDefault(); cycle(+1);
+      } else if(e.key === 'ArrowLeft' || e.key === 'ArrowUp'){
+        e.preventDefault(); cycle(-1);
+      }
+    });
+  }
+  function setReviewEffort(name){
+    const preset = EFFORT_PRESETS[name];
+    if(!preset) return;
+    state.reviewEffort = name;
+    state.locPerHr     = preset.lph;
+    render();
+  }
+  function setTrim(name){
+    const totals = TOTALS[name];
+    if(!totals) return;
+    state.trim = name;
+    state.totalLoc = totals.loc;
+    render();
+  }
+
+  // ── range bindings (rate, totalDevs in the scale-col) ──
+  bindNumber('rate',      document.getElementById('hs-rateRange'),      {min:60000, max:500000});
+  bindNumber('totalDevs', document.getElementById('hs-totalDevsRange'), {min:1,     max:10000});
+
+  // ── effort + trim segmented controls ──
+  document.querySelectorAll('#hs-effortSeg button').forEach(b => {
+    b.addEventListener('click', () => setReviewEffort(b.dataset.effort));
+  });
+  document.querySelectorAll('#hs-trimSeg button').forEach(b => {
+    b.addEventListener('click', () => setTrim(b.dataset.trim));
+  });
+
+  render();
+})();
+</script></section><footer class="r-footer">Generated <span class="mono">May 18, 2026</span> &middot; <span class="mono">acme-corp</span> &middot; 365-day lookback</footer></div></div>
 </body>
 </html>
