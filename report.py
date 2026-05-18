@@ -307,9 +307,8 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
         n = len(sorted_loc)
 
         def _trim(p: int, label_pct: Optional[int]) -> dict:
-            # Match the prototype's percentile fn: sorted[floor(n * p / 100)].
-            # "p" is the percentile cutoff itself (e.g. 95 for top-5% trim).
-            idx = min(n - 1, int(n * p / 100))
+            # ceil-based index ensures at least one element is excluded per trim level.
+            idx = max(0, math.ceil(n * p / 100) - 1)
             cutoff = sorted_loc[idx]
             kept_locs = [v for v in loc_per_pr if v <= cutoff]
             if label_pct is None:
@@ -325,7 +324,7 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
             "p99":  _trim(99, 1),
             "p95":  _trim(95, 5),
         }
-        kept = [v for v in loc_per_pr if v <= sorted_loc[min(n - 1, int(n * 95 / 100))]]
+        kept = [v for v in loc_per_pr if v <= sorted_loc[max(0, math.ceil(n * 95 / 100) - 1)]]
     else:
         kept = []
     total_loc_trimmed = sum(kept)
