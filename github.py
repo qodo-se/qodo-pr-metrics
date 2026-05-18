@@ -88,18 +88,44 @@ _HTML_TAG        = re.compile(r"<[^>]+>")
 _STRIKETHROUGH   = re.compile(r"~~(.+?)~~")
 
 _AI_BODY_PATTERNS = [
-    (re.compile(r"co-authored-by:[^\n]*github-copilot", re.IGNORECASE), "copilot"),
-    (re.compile(r"\bcopilot\b", re.IGNORECASE), "copilot"),
+    # GitHub Copilot — covers github-copilot[bot], copilot-swe-agent[bot], and plain Copilot
+    (re.compile(r"co-authored-by:[^\n]*copilot", re.IGNORECASE), "copilot"),
+    # Cursor
     (re.compile(r"co-authored-by:[^\n]*cursor", re.IGNORECASE), "cursor"),
-    (re.compile(r"generated.*with.*cursor", re.IGNORECASE), "cursor"),
+    (re.compile(r"generated\s+with\s+cursor", re.IGNORECASE), "cursor"),
+    # Claude / Claude Code
     (re.compile(r"co-authored-by:[^\n]*claude", re.IGNORECASE), "claude"),
-    (re.compile(r"generated.*with.*claude", re.IGNORECASE), "claude"),
+    (re.compile(r"claude\.com/claude-code", re.IGNORECASE), "claude"),
+    # Codex / OpenAI (Codex, ChatGPT, GPT — all use @openai.com email)
+    (re.compile(r"co-authored-by:[^\n]*(codex|@openai\.com|chatgpt)", re.IGNORECASE), "codex"),
+    # Kiro (Amazon)
+    (re.compile(r"co-authored-by:[^\n]*\bkiro\b", re.IGNORECASE), "kiro"),
+    (re.compile(r"@kiro-agent\b", re.IGNORECASE), "kiro"),
+    # Gemini Code Assist
+    (re.compile(r"co-authored-by:[^\n]*gemini", re.IGNORECASE), "gemini"),
+    # Windsurf / Codeium (Windsurf uses cascade@windsurf.ai or noreply@codeium.com)
+    (re.compile(r"co-authored-by:[^\n]*(windsurf|codeium)", re.IGNORECASE), "windsurf"),
+    # Devin
+    (re.compile(r"co-authored-by:[^\n]*devin-ai-integration", re.IGNORECASE), "devin"),
+    (re.compile(r"app\.devin\.ai/sessions/", re.IGNORECASE), "devin"),
+    # Aider (email is always aider@aider.chat)
+    (re.compile(r"co-authored-by:[^\n]*\baider\b", re.IGNORECASE), "aider"),
+    # Amazon Q Developer (prose attribution only — no git trailer in the wild)
+    (re.compile(r"co-authored\s+by\s+amazon\s+q\b", re.IGNORECASE), "amazon-q"),
 ]
 _AI_LABEL_NAMES = {
     "copilot": "copilot",
     "ai-generated": "ai",
     "cursor": "cursor",
     "claude": "claude",
+    "codex": "codex",
+    "kiro": "kiro",
+    "gemini": "gemini",
+    "windsurf": "windsurf",
+    "codeium": "windsurf",  # Codeium label → windsurf (same product family)
+    "devin": "devin",
+    "aider": "aider",
+    "amazon-q": "amazon-q",
 }
 
 _GQL_SEARCH_QUERY = (
