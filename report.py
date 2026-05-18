@@ -251,7 +251,7 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
     findings_by_week = _aggregate_findings_by_week(rows)
 
     # Funnel (Prototype 02) — conditional cuts from merged → high-impact fix
-    merged_prs_total = len(rows)
+    merged_prs_total = org_prs_total if org_prs_total is not None else len(rows)
     prs_with_findings = sum(
         1 for r in rows
         if r.get("Has Qodo Review", True) and r.get("Total Suggestions", 0) > 0
@@ -2730,7 +2730,7 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
     # ── Window-scaled thresholds ──
     days = max(1, span_days or 60)
     FINDINGS_CUT  = max(10, round(50 * days / 60))
-    RATE_CUT      = 50
+    RATE_CUT      = 30
     NOTABLE_FCUT  = max(8, round(20 * days / 60))
     NOTABLE_RCUT  = 15
 
