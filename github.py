@@ -716,8 +716,10 @@ def _build_anon_maps(rows):
     Blank approvers are excluded. Rows missing Final Approver key don't crash.
     """
     users = sorted(
-        {r.get("PR Creator", "") for r in rows} |
-        {r.get("Final Approver", "") for r in rows} - {""}
+        (
+            {r.get("PR Creator", "") for r in rows} |
+            {r.get("Final Approver", "") for r in rows}
+        ) - {""}
     )
     repos = sorted({r.get("Repo Name", "") for r in rows} - {""})
     user_map = {name: f"User {i + 1}" for i, name in enumerate(users)}

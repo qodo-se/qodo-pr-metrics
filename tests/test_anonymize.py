@@ -30,6 +30,13 @@ def test_build_anon_maps_blank_approver_excluded():
     assert "" not in user_map
 
 
+def test_build_anon_maps_blank_creator_excluded():
+    rows = [{"PR Creator": "", "Final Approver": "alice", "Repo Name": "backend"}]
+    user_map, _ = _build_anon_maps(rows)
+    assert "" not in user_map
+    assert user_map == {"alice": "User 1"}
+
+
 def test_build_anon_maps_approver_only_user_included():
     # Someone who only ever appears as approver (never as PR Creator) still gets a label
     rows = [
