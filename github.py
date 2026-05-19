@@ -1272,8 +1272,8 @@ def main():
     p.add_argument("--org", required=True, help="GitHub org login (e.g., acme-corp)")
     window = p.add_mutually_exclusive_group()
     window.add_argument("--since", type=date.fromisoformat, help="YYYY-MM-DD")
-    window.add_argument("--days", type=int, default=365,
-                        help="Lookback in days (default: 365)")
+    window.add_argument("--days", type=int, default=90,
+                        help="Lookback in days (default: 90)")
     p.add_argument("--inspect", action="store_true",
                    help="Print the first Qodo comment found and exit")
     p.add_argument("--verbose", action="store_true",

@@ -58,7 +58,7 @@ gh auth refresh -s repo
 **Mac/Linux:**
 
 ```bash
-# Full run, default 365-day lookback
+# Full run, default 90-day lookback
 python3 github.py --org acme-corp
 
 # Custom date window
@@ -150,7 +150,7 @@ The Velocity, High-Impact, Speed to First Fix, and Quality Signals sections are 
 |---|---|
 | `--org` | GitHub org login (required, e.g. `acme-corp`) |
 | `--since` | Start date in `YYYY-MM-DD` format |
-| `--days` | Lookback window in days (default: `365`; mutually exclusive with `--since`) |
+| `--days` | Lookback window in days (default: `90`; mutually exclusive with `--since`) |
 | `--inspect` | Print the raw body of the first Qodo comment found and exit |
 | `--verbose` | Print per-PR suggestion counts instead of just the final summary |
 | `--resume` | Resume from a previous checkpoint (`ORG-checkpoint.json`) |
