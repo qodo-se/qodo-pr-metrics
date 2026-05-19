@@ -724,6 +724,23 @@ def _build_anon_maps(rows):
     return user_map, repo_map
 
 
+def _apply_anonymization(rows, user_map, repo_map):
+    """Apply pseudonym substitutions in-place to row data.
+
+    Mutates rows in-place:
+    - PR Creator → user_map lookup
+    - Final Approver → user_map lookup (empty stays empty)
+    - Repo Name → repo_map lookup
+    - PR URL → replaced with #PR-{PR #}
+    """
+    for row in rows:
+        row["PR Creator"] = user_map.get(row.get("PR Creator", ""), row.get("PR Creator", ""))
+        approver = row.get("Final Approver", "")
+        row["Final Approver"] = user_map.get(approver, approver)
+        row["Repo Name"] = repo_map.get(row.get("Repo Name", ""), row.get("Repo Name", ""))
+        row["PR URL"] = f"#PR-{row.get('PR #', '')}"
+
+
 def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
                   timing: Optional[dict] = None,
                   extras: Optional[dict] = None) -> dict:

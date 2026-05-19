@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from github import _build_anon_maps
+from github import _build_anon_maps, _apply_anonymization
 
 
 def test_build_anon_maps_users_sorted_alphabetically():
@@ -53,3 +53,60 @@ def test_build_anon_maps_empty_rows():
     user_map, repo_map = _build_anon_maps([])
     assert user_map == {}
     assert repo_map == {}
+
+
+def test_apply_anonymization_replaces_creator_and_repo():
+    rows = [
+        {
+            "PR Creator": "alice", "Final Approver": "bob",
+            "Repo Name": "frontend", "PR URL": "https://github.com/org/frontend/pull/42",
+            "PR #": 42,
+        }
+    ]
+    user_map = {"alice": "User 1", "bob": "User 2"}
+    repo_map = {"frontend": "Repo 1"}
+    _apply_anonymization(rows, user_map, repo_map)
+    assert rows[0]["PR Creator"] == "User 1"
+    assert rows[0]["Final Approver"] == "User 2"
+    assert rows[0]["Repo Name"] == "Repo 1"
+
+
+def test_apply_anonymization_strips_pr_url():
+    rows = [
+        {
+            "PR Creator": "alice", "Final Approver": "",
+            "Repo Name": "backend", "PR URL": "https://github.com/org/backend/pull/7",
+            "PR #": 7,
+        }
+    ]
+    _apply_anonymization(rows, {"alice": "User 1"}, {"backend": "Repo 1"})
+    assert rows[0]["PR URL"] == "#PR-7"
+
+
+def test_apply_anonymization_empty_approver_stays_empty():
+    rows = [
+        {
+            "PR Creator": "alice", "Final Approver": "",
+            "Repo Name": "backend", "PR URL": "https://github.com/org/backend/pull/1",
+            "PR #": 1,
+        }
+    ]
+    _apply_anonymization(rows, {"alice": "User 1"}, {"backend": "Repo 1"})
+    assert rows[0]["Final Approver"] == ""
+
+
+def test_apply_anonymization_mutates_all_rows():
+    rows = [
+        {"PR Creator": "alice", "Final Approver": "", "Repo Name": "api",
+         "PR URL": "https://github.com/org/api/pull/1", "PR #": 1},
+        {"PR Creator": "bob", "Final Approver": "alice", "Repo Name": "ui",
+         "PR URL": "https://github.com/org/ui/pull/2", "PR #": 2},
+    ]
+    user_map = {"alice": "User 1", "bob": "User 2"}
+    repo_map = {"api": "Repo 1", "ui": "Repo 2"}
+    _apply_anonymization(rows, user_map, repo_map)
+    assert rows[0]["PR Creator"] == "User 1"
+    assert rows[1]["PR Creator"] == "User 2"
+    assert rows[1]["Final Approver"] == "User 1"
+    assert rows[0]["PR URL"] == "#PR-1"
+    assert rows[1]["PR URL"] == "#PR-2"
