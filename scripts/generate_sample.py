@@ -8,7 +8,7 @@ Run from the repo root:
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from report import generate_html
 
 SINCE = date(2025, 3, 20)
@@ -269,6 +269,13 @@ ROWS = [
 ]
 
 if __name__ == "__main__":
+    span = (UNTIL - SINCE).days
+    for i, row in enumerate(ROWS):
+        offset = i * span // len(ROWS)
+        merge = SINCE + timedelta(days=offset)
+        row["PR Merge Date"] = merge.strftime("%Y-%m-%dT14:00:00Z")
+        row["PR Creation Date"] = (merge - timedelta(days=1)).strftime("%Y-%m-%dT10:00:00Z")
+
     out = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "sample_report.html")
     logo = os.path.join(os.path.dirname(os.path.dirname(__file__)), "logo.svg")
     html = generate_html(ROWS, ORG, SINCE, UNTIL, logo_path=logo,
