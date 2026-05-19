@@ -759,7 +759,6 @@ def test_generate_html_quality_signal_hidden_when_both_zero():
     assert "Hotfixes" not in html
 
 
-import json as _json_mod
 import re as _re
 
 
@@ -783,7 +782,7 @@ def test_ar_only_excludes_devs_with_no_ar_suggestions():
                          logo_path=None, ar_only=True)
     match = _re.search(r'const D = (\[.*?\]);', html)
     assert match, "scatter tooltip JSON not found"
-    dev_data = _json_mod.loads(match.group(1))
+    dev_data = _json.loads(match.group(1))
     users = [d["user"] for d in dev_data]
     assert "alice" in users
     assert "bob" not in users
@@ -798,6 +797,6 @@ def test_ar_only_rate_reflects_ar_metrics_not_total():
                          logo_path=None, ar_only=True)
     match = _re.search(r'const D = (\[.*?\]);', html)
     assert match, "scatter tooltip JSON not found"
-    dev_data = _json_mod.loads(match.group(1))
+    dev_data = _json.loads(match.group(1))
     alice = next(d for d in dev_data if d["user"] == "alice")
     assert alice["rate"] == 80.0, f"expected AR rate 80.0, got {alice['rate']}"
