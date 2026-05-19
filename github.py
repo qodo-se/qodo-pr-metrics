@@ -696,14 +696,15 @@ def compute_timing(pr: dict, comments: list) -> dict:
     return {"qodo_min": qodo_min, "human_min": human_min, "has_human": has_human}
 
 
-def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] = None) -> str:
+def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] = None, anonymize: bool = False) -> str:
     """Return the base filename (no extension) for output files."""
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
+    suffix = "_anon" if anonymize else ""
     if repos:
         n = len(repos)
         repo_segment = f"{n}-repo" if n == 1 else f"{n}-repos"
-        return f"{safe_org}_{repo_segment}_{since.isoformat()}_{until.isoformat()}"
-    return f"{safe_org}_{since.isoformat()}_{until.isoformat()}"
+        return f"{safe_org}_{repo_segment}_{since.isoformat()}_{until.isoformat()}{suffix}"
+    return f"{safe_org}_{since.isoformat()}_{until.isoformat()}{suffix}"
 
 
 def _build_anon_maps(rows):
