@@ -696,10 +696,15 @@ def compute_timing(pr: dict, comments: list) -> dict:
     return {"qodo_min": qodo_min, "human_min": human_min, "has_human": has_human}
 
 
-def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] = None, anonymize=None) -> str:
+def _output_stem(org: str, since: date, until: date,
+                 repos: Optional[List[str]] = None,
+                 anonymize=None,
+                 ar_only: bool = False) -> str:
     """Return the base filename (no extension) for output files."""
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
     suffix = "_anon" if anonymize else ""
+    if ar_only:
+        suffix += "_ar-only"
     if repos:
         n = len(repos)
         repo_segment = f"{n}-repo" if n == 1 else f"{n}-repos"
@@ -1244,7 +1249,8 @@ def cmd_count(args):
         user_map, repo_map = _build_anon_maps(rows)
         _apply_anonymization(rows, user_map, repo_map, scope=args.anonymize)
 
-    stem = _output_stem(args.org, args.since, today, repos=args.repos, anonymize=args.anonymize)
+    stem = _output_stem(args.org, args.since, today, repos=args.repos,
+                        anonymize=args.anonymize, ar_only=args.ar_only)
     base = Path.cwd()
 
     csv_path = base / f"{stem}.csv"
@@ -1264,6 +1270,7 @@ def cmd_count(args):
                 weekly_coverage=weekly_coverage,
                 revert_count=revert_count,
                 hotfix_count=hotfix_count,
+                ar_only=args.ar_only,
             ),
             encoding="utf-8",
         )
@@ -1332,6 +1339,8 @@ def main():
                         "SCOPE: 'users' (PR Creator / Final Approver only), "
                         "'repos' (Repo Name / PR URL only), "
                         "or omit SCOPE to anonymize both.")
+    p.add_argument("--ar-only", action="store_true", default=False,
+                   help="Adoption matrix uses only Action Required findings (higher impl rates)")
     p.add_argument("--test-hotfix-signals", action="store_true",
                    help="Smoke-test hotfix detection signals (branch/label/title) and exit")
     args = p.parse_args()
