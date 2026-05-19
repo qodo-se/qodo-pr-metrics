@@ -762,24 +762,22 @@ def test_generate_html_quality_signal_hidden_when_both_zero():
 import re as _re
 
 
-def test_ar_only_x_axis_label():
-    """ar_only=True renders 'Action-required findings' on the X axis."""
+def test_adoption_matrix_x_axis_label():
+    """Adoption matrix always renders 'Action-required findings' on the X axis."""
     from report import generate_html
     rows = [_row(creator="alice", ar_sug=5, ar_imp=3, suggestions=8, implemented=4)]
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1),
-                         logo_path=None, ar_only=True)
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
     assert "Action-required findings" in html
 
 
-def test_ar_only_excludes_devs_with_no_ar_suggestions():
-    """Devs with 0 AR suggestions are absent from the scatter tooltip data when ar_only=True."""
+def test_adoption_matrix_excludes_devs_with_no_ar_suggestions():
+    """Devs with 0 AR suggestions are absent from the scatter tooltip data."""
     from report import generate_html
     rows = [
         _row(creator="alice", ar_sug=5, ar_imp=3, suggestions=8, implemented=4),
         _row(creator="bob",   ar_sug=0, ar_imp=0, suggestions=4, implemented=2),
     ]
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1),
-                         logo_path=None, ar_only=True)
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
     match = _re.search(r'const D = (\[.*?\]);', html)
     assert match, "scatter tooltip JSON not found"
     dev_data = _json.loads(match.group(1))
@@ -788,13 +786,12 @@ def test_ar_only_excludes_devs_with_no_ar_suggestions():
     assert "bob" not in users
 
 
-def test_ar_only_rate_reflects_ar_metrics_not_total():
-    """ar_only=True: per-dev 'rate' in the scatter data is AR rate, not overall rate."""
+def test_adoption_matrix_rate_reflects_ar_metrics():
+    """Adoption matrix per-dev 'rate' is AR rate, not overall rate."""
     from report import generate_html
     # alice: 80% AR rate (4/5), 50% overall rate (5/10)
     rows = [_row(creator="alice", ar_sug=5, ar_imp=4, suggestions=10, implemented=5)]
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1),
-                         logo_path=None, ar_only=True)
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
     match = _re.search(r'const D = (\[.*?\]);', html)
     assert match, "scatter tooltip JSON not found"
     dev_data = _json.loads(match.group(1))

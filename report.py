@@ -2716,14 +2716,14 @@ def _bd_item(klass: str, name: str, total: int, implemented: int) -> str:
     )
 
 
-def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = False) -> str:
+def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
     """Prototype 05 — Developer adoption matrix.
 
-    Scatter of every author by findings received (X, log scale) vs
-    implementation rate (Y). Four quadrants map to four personas:
-    Power users, Coach, Curious / new, and Low usage.
+    Scatter of every author by action-required findings received (X, log
+    scale) vs AR implementation rate (Y). Four quadrants map to four
+    personas: Power users, Coach, Curious / new, and Low usage.
 
-    Thresholds scale with the window length: 50 findings is the anchor
+    Thresholds scale with the window length: 25 AR findings is the anchor
     for a 60-day window; we recompute for any other ``span_days``.
     """
     if not agg.adoption_devs:
@@ -2731,32 +2731,23 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
 
     # ── Window-scaled thresholds ──
     days = max(1, span_days or 60)
-    if ar_only:
-        FINDINGS_CUT = max(5, round(25 * days / 60))
-        NOTABLE_FCUT = max(3, round(8 * days / 60))
-    else:
-        FINDINGS_CUT = max(10, round(50 * days / 60))
-        NOTABLE_FCUT = max(8, round(20 * days / 60))
+    FINDINGS_CUT = max(5, round(25 * days / 60))
+    NOTABLE_FCUT = max(3, round(8 * days / 60))
     RATE_CUT      = 30
     NOTABLE_RCUT  = 15
 
-    # ── Derive rate / actRate / quad per dev (don't mutate the originals) ──
-    source = [d for d in agg.adoption_devs if d["actReqSug"] > 0] if ar_only else agg.adoption_devs
+    # ── Derive AR rate / quad per dev — only devs with AR findings ──
+    source = [d for d in agg.adoption_devs if d["actReqSug"] > 0]
     devs = []
     for d in source:
-        if ar_only:
-            rate = round(100 * d["actReqImp"] / d["actReqSug"], 1) if d["actReqSug"] else 0.0
-            hv   = d["actReqSug"] >= FINDINGS_CUT
-        else:
-            rate = round(100 * d["totalImp"] / d["totalSug"], 1) if d["totalSug"] else 0.0
-            hv   = d["totalSug"] >= FINDINGS_CUT
-        actRate = (round(100 * d["actReqImp"] / d["actReqSug"], 1)
-                   if d["actReqSug"] else None)
+        rate = round(100 * d["actReqImp"] / d["actReqSug"], 1) if d["actReqSug"] else 0.0
+        hv   = d["actReqSug"] >= FINDINGS_CUT
+        actRate = rate  # rate is already AR rate; kept for tooltip parity
         hr = rate >= RATE_CUT
         quad = "power" if hv and hr else "coach" if hv else "curious" if hr else "absent"
         devs.append({**d, "rate": rate, "actRate": actRate, "quad": quad})
 
-    if ar_only and not devs:
+    if not devs:
         return '<p style="padding:1rem;color:var(--fg-muted)">No action-required findings in this window.</p>'
 
     # ── Org-wide action-required rate (the hero topline) ──
@@ -2767,7 +2758,7 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
     # ── Quadrant groupings ──
     by_quad = {k: [d for d in devs if d["quad"] == k]
                for k in ("power", "coach", "curious", "absent")}
-    _vol = (lambda d: d["actReqSug"]) if ar_only else (lambda d: d["totalSug"])
+    _vol = lambda d: d["actReqSug"]
     for k in by_quad:
         by_quad[k].sort(key=_vol, reverse=True)
 
@@ -2867,7 +2858,7 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
     W, H = 1180, 600
     PAD_L, PAD_R, PAD_T, PAD_B = 70, 30, 50, 60
     PW, PH = W - PAD_L - PAD_R, H - PAD_T - PAD_B
-    X_MIN, X_MAX = 1, max(200 if ar_only else 600, max(_vol(d) for d in devs) * 1.1)
+    X_MIN, X_MAX = 1, max(200, max(_vol(d) for d in devs) * 1.1)
 
     def _x(v: float) -> float:
         lo, hi = math.log10(X_MIN), math.log10(X_MAX)
@@ -2905,7 +2896,7 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
             f'</g>'
         )
         # Inline labels for the upper-volume bubbles.
-        if _vol(d) >= max(5 if ar_only else 20, FINDINGS_CUT // 2):
+        if _vol(d) >= max(5, FINDINGS_CUT // 2):
             label_y = py - r - 6
             bubbles_html.append(
                 f'<text class="p05-bubble-label" x="{px:.1f}" y="{label_y:.1f}" '
@@ -2962,7 +2953,7 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
         f'{x_ticks}{y_ticks}'
         # Axis labels
         f'<text x="{PAD_L + PW/2:.1f}" y="{H - 12}" text-anchor="middle" '
-        f'font-family="Inter" font-size="11" fill="#6E6E6E">{"Action-required findings" if ar_only else "Findings received"} &nbsp;(log scale)</text>'
+        f'font-family="Inter" font-size="11" fill="#6E6E6E">Action-required findings &nbsp;(log scale)</text>'
         f'<text x="22" y="{PAD_T + PH/2:.1f}" text-anchor="middle" '
         f'font-family="Inter" font-size="11" fill="#6E6E6E" '
         f'transform="rotate(-90 22 {PAD_T + PH/2:.1f})">Implementation rate</text>'
@@ -3077,10 +3068,8 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
         for d in devs
     ])
     quad_labels_payload = json.dumps({k: v[2] for k, v in qc.items()})
-    ar_flag = "true" if ar_only else "false"
     tip_script = (
         '<script>(function(){'
-        f'const AR = {ar_flag};'
         f'const D = {dev_payload};'
         f'const QL = {quad_labels_payload};'
         'const M = Object.fromEntries(D.map(d => [d.user, d]));'
@@ -3093,10 +3082,9 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
         '  tip.innerHTML = '
         '    \'<div class="name">\'+escH(d.user)+\' <span class="badge \'+d.quad+\'">\'+QL[d.quad]+\'</span></div>\''
         '    + \'<div class="meta">\'+d.prs+\' PRs \\u00b7 \'+d.repos+\' repo\'+(d.repos>1?"s":"")+\'</div>\''
-        '    + \'<div class="row"><span>Findings</span> <b>\'+(AR?d.actReqSug:d.totalSug)+\'</b></div>\''
-        '    + \'<div class="row"><span>Implemented</span> <b>\'+(AR?d.actReqImp:d.totalImp)+\'</b></div>\''
-        '    + \'<div class="row"><span>\'+(AR?"AR impl rate":"Overall impl rate")+\'</span> <b class="\'+cls+\'">\'+d.rate.toFixed(1)+\'%</b></div>\''
-        '    + (AR?"":\'<div class="divider"></div><div class="row"><span>Action-required</span> <b>\'+d.actReqSug+\'</b></div><div class="row"><span>Action-req rate</span> <b class="\'+cls+\'">\'+(d.actRate===null?"\\u2014":d.actRate.toFixed(1)+"%")+\'</b></div>\');'
+        '    + \'<div class="row"><span>Action-required findings</span> <b>\'+d.actReqSug+\'</b></div>\''
+        '    + \'<div class="row"><span>Implemented</span> <b>\'+d.actReqImp+\'</b></div>\''
+        '    + \'<div class="row"><span>AR impl rate</span> <b class="\'+cls+\'">\'+d.rate.toFixed(1)+\'%</b></div>\';'
         '  tip.classList.add("show");'
         '}'
         'function position(d, evt){'
@@ -3148,11 +3136,11 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
         '<div class="r-section-eyebrow">Adoption matrix</div>'
         '<div class="r-section-title">Developer adoption matrix &mdash; volume vs implementation rate</div>'
         '<div class="r-section-deck">'
-        f'Every author plotted by {"action-required findings (log scale)" if ar_only else "findings received (log scale)"} and implementation rate. '
+        f'Every author plotted by action-required findings (log scale) and implementation rate. '
         f'Four quadrants surface four different conversations: power users to learn from, '
         f'coach candidates to unblock, curious new joiners to observe, and a low-usage '
         f'group to re-engage. {len(devs)} of {agg.adoption_authors_total} authors received '
-        f'at least one {"action-required " if ar_only else ""}finding in this window.'
+        f'at least one action-required finding in this window.'
         '</div>'
         '</div></div>'
         f'<div class="p05-hero">{"".join(stats_html)}</div>'
@@ -3301,7 +3289,6 @@ def generate_html(
     weekly_coverage: Optional[list] = None,
     revert_count: Optional[int] = None,
     hotfix_count: Optional[int] = None,
-    ar_only: bool = False,
 ) -> str:
     agg = aggregate(rows, org_prs_total=org_pr_count, org_pr_authors_total=org_author_count,
                     weekly_coverage=weekly_coverage, revert_count=revert_count,
@@ -3328,7 +3315,7 @@ def generate_html(
         f'{_section_spotlight(agg)}'
         f'{_section_breakdown(agg)}'
         f'{_section_velocity(agg)}'
-        f'{_section_adoption_matrix(agg, span_days, ar_only=ar_only)}'
+        f'{_section_adoption_matrix(agg, span_days)}'
         f'{_section_hours_saved(agg, span_days, since, until)}'
         f'{_section_footer(org, span_days)}'
         f'</div></div>\n'
