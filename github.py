@@ -16,7 +16,7 @@ Usage:
   # Inspect ONE real Qodo comment to verify the parser matches your output
   ./qodo_pr_stats.py --org acme-corp --inspect
 
-  # Full run, default 365-day lookback
+  # Full run, default 90-day lookback
   ./qodo_pr_stats.py --org acme-corp
 
   # Custom window
