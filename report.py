@@ -1608,13 +1608,20 @@ def _section_hero(agg: ReportData, span_days: int) -> str:
     )
 
 
-def _section_acts() -> str:
+def _section_acts(show_trend: bool = True) -> str:
     """Four-part outline — sets expectations for what follows.
 
     Sits between the hero and the KPI strip. Wrapped in a labeled panel so
     it reads clearly as a table of contents distinct from the metric strip
     below.
     """
+    trend_act = (
+        '<a class="act" href="#sec-trend">'
+        '<div class="act-num">Part I</div>'
+        '<div class="act-title">At a glance</div>'
+        '<div class="act-list">The headline numbers and how they’re trending.</div>'
+        '</a>'
+    ) if show_trend else ''
     return (
         '<div class="toc">'
         '<div class="toc-head">'
@@ -1623,11 +1630,7 @@ def _section_acts() -> str:
         '<span class="toc-hint">Click any part to jump</span>'
         '</div>'
         '<div class="acts">'
-        '<a class="act" href="#sec-trend">'
-        '<div class="act-num">Part I</div>'
-        '<div class="act-title">At a glance</div>'
-        '<div class="act-list">The headline numbers and how they’re trending.</div>'
-        '</a>'
+        + trend_act +
         '<a class="act" href="#sec-funnel">'
         '<div class="act-num">Part II</div>'
         '<div class="act-title">Code quality impact</div>'
@@ -3305,6 +3308,7 @@ def generate_html(
                     hotfix_count=hotfix_count)
     logo_tag = _embed_logo(logo_path)
     span_days = (until - since).days
+    trend_html = _section_trend(agg)
 
     return (
         f'<!DOCTYPE html>\n'
@@ -3317,9 +3321,9 @@ def generate_html(
         f'<div class="shell"><div class="report">'
         f'{_section_header(org, since, until, logo_tag)}'
         f'{_section_hero(agg, span_days)}'
-        f'{_section_acts()}'
+        f'{_section_acts(show_trend=bool(trend_html))}'
         f'{_section_kpis(agg)}'
-        f'{_section_trend(agg)}'
+        f'{trend_html}'
         f'{_section_funnel(agg)}'
         f'{_section_spotlight(agg)}'
         f'{_section_breakdown(agg)}'
