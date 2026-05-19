@@ -2842,7 +2842,7 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
             f'</div>'
         )
     else:
-        top3 = devs[:3]
+        top3 = sorted(devs, key=_vol, reverse=True)[:3]
         tot_findings = sum(_vol(d) for d in devs)
         top3_sum = sum(_vol(d) for d in top3)
         top3_pct = round(100 * top3_sum / tot_findings) if tot_findings else 0
