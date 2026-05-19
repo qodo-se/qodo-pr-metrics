@@ -102,6 +102,41 @@ def test_apply_anonymization_empty_approver_stays_empty():
     assert rows[0]["Final Approver"] == ""
 
 
+def test_apply_anonymization_scope_users_only():
+    rows = [{"PR Creator": "alice", "Final Approver": "bob",
+             "Repo Name": "frontend", "PR URL": "https://github.com/org/frontend/pull/1", "PR #": 1}]
+    user_map = {"alice": "User 1", "bob": "User 2"}
+    repo_map = {"frontend": "Repo 1"}
+    _apply_anonymization(rows, user_map, repo_map, scope="users")
+    assert rows[0]["PR Creator"] == "User 1"
+    assert rows[0]["Final Approver"] == "User 2"
+    assert rows[0]["Repo Name"] == "frontend"
+    assert rows[0]["PR URL"] == "https://github.com/org/frontend/pull/1"
+
+
+def test_apply_anonymization_scope_repos_only():
+    rows = [{"PR Creator": "alice", "Final Approver": "bob",
+             "Repo Name": "frontend", "PR URL": "https://github.com/org/frontend/pull/1", "PR #": 1}]
+    user_map = {"alice": "User 1", "bob": "User 2"}
+    repo_map = {"frontend": "Repo 1"}
+    _apply_anonymization(rows, user_map, repo_map, scope="repos")
+    assert rows[0]["PR Creator"] == "alice"
+    assert rows[0]["Final Approver"] == "bob"
+    assert rows[0]["Repo Name"] == "Repo 1"
+    assert rows[0]["PR URL"] == "#PR-1"
+
+
+def test_apply_anonymization_scope_all_equivalent_to_default():
+    rows_default = [{"PR Creator": "alice", "Final Approver": "",
+                     "Repo Name": "api", "PR URL": "https://github.com/org/api/pull/5", "PR #": 5}]
+    rows_all = [r.copy() for r in rows_default]
+    user_map = {"alice": "User 1"}
+    repo_map = {"api": "Repo 1"}
+    _apply_anonymization(rows_default, user_map, repo_map)
+    _apply_anonymization(rows_all, user_map, repo_map, scope="all")
+    assert rows_default == rows_all
+
+
 def test_apply_anonymization_mutates_all_rows():
     rows = [
         {"PR Creator": "alice", "Final Approver": "", "Repo Name": "api",

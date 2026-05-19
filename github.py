@@ -696,7 +696,7 @@ def compute_timing(pr: dict, comments: list) -> dict:
     return {"qodo_min": qodo_min, "human_min": human_min, "has_human": has_human}
 
 
-def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] = None, anonymize: bool = False) -> str:
+def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] = None, anonymize=None) -> str:
     """Return the base filename (no extension) for output files."""
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
     suffix = "_anon" if anonymize else ""
@@ -727,21 +727,19 @@ def _build_anon_maps(rows):
     return user_map, repo_map
 
 
-def _apply_anonymization(rows, user_map, repo_map):
+def _apply_anonymization(rows, user_map, repo_map, scope="all"):
     """Apply pseudonym substitutions in-place to row data.
 
-    Mutates rows in-place:
-    - PR Creator → user_map lookup
-    - Final Approver → user_map lookup (empty stays empty)
-    - Repo Name → repo_map lookup
-    - PR URL → replaced with #PR-{PR #}
+    scope: "all" → users and repos; "users" → user columns only; "repos" → repo columns only.
     """
     for row in rows:
-        row["PR Creator"] = user_map.get(row.get("PR Creator", ""), row.get("PR Creator", ""))
-        approver = row.get("Final Approver", "")
-        row["Final Approver"] = user_map.get(approver, approver)
-        row["Repo Name"] = repo_map.get(row.get("Repo Name", ""), row.get("Repo Name", ""))
-        row["PR URL"] = f"#PR-{row.get('PR #', '')}"
+        if scope in ("all", "users"):
+            row["PR Creator"] = user_map.get(row.get("PR Creator", ""), row.get("PR Creator", ""))
+            approver = row.get("Final Approver", "")
+            row["Final Approver"] = user_map.get(approver, approver)
+        if scope in ("all", "repos"):
+            row["Repo Name"] = repo_map.get(row.get("Repo Name", ""), row.get("Repo Name", ""))
+            row["PR URL"] = f"#PR-{row.get('PR #', '')}"
 
 
 def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
@@ -1244,7 +1242,7 @@ def cmd_count(args):
 
     if args.anonymize:
         user_map, repo_map = _build_anon_maps(rows)
-        _apply_anonymization(rows, user_map, repo_map)
+        _apply_anonymization(rows, user_map, repo_map, scope=args.anonymize)
 
     stem = _output_stem(args.org, args.since, today, repos=args.repos, anonymize=args.anonymize)
     base = Path.cwd()
@@ -1327,8 +1325,12 @@ def main():
         "--repos", nargs="+", metavar="REPO",
         help="Limit to specific repos (e.g. --repos frontend-app backend-api)",
     )
-    p.add_argument("--anonymize", action="store_true",
-                   help="Replace developer and repo names with stable pseudonyms (User 1, Repo 1, …) in all output files")
+    p.add_argument("--anonymize", nargs="?", const="all", default=None,
+                   metavar="SCOPE",
+                   help="Replace identifying data with stable pseudonyms. "
+                        "SCOPE: 'users' (PR Creator / Final Approver only), "
+                        "'repos' (Repo Name / PR URL only), "
+                        "or omit SCOPE to anonymize both.")
     p.add_argument("--test-hotfix-signals", action="store_true",
                    help="Smoke-test hotfix detection signals (branch/label/title) and exit")
     args = p.parse_args()
