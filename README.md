@@ -67,6 +67,9 @@ python3 github.py --org acme-corp --days 90
 
 # Scope to specific repos
 python3 github.py --org acme-corp --repos frontend-app backend-api
+
+# Anonymize developer and repo names for external sharing
+python3 github.py --org acme-corp --anonymize
 ```
 
 **Windows:**
@@ -155,4 +158,5 @@ The Velocity, High-Impact, Speed to First Fix, and Quality Signals sections are 
 | `--verbose` | Print per-PR suggestion counts instead of just the final summary |
 | `--resume` | Resume from a previous checkpoint (`ORG-checkpoint.json`) |
 | `--repos` | Space-delimited list of repo names to scope the run (e.g. `--repos frontend-app backend-api`); omit to scan the full org |
+| `--anonymize` | Replace developer usernames and repo names with stable pseudonyms (`User 1`, `Repo 1`, …) in all output files; output filenames get an `_anon` suffix |
 | `--test-hotfix-signals` | Smoke-test hotfix detection signals against the org and exit. Prints counts for each signal (branch, label, title) and the combined OR query, and confirms that OR deduplication is working correctly. |

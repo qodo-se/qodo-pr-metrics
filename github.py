@@ -1239,7 +1239,12 @@ def cmd_count(args):
         print(file=sys.stderr)  # end the rolling status line
 
     today = date.today()
-    stem = _output_stem(args.org, args.since, today, repos=args.repos)
+
+    if args.anonymize:
+        user_map, repo_map = _build_anon_maps(rows)
+        _apply_anonymization(rows, user_map, repo_map)
+
+    stem = _output_stem(args.org, args.since, today, repos=args.repos, anonymize=args.anonymize)
     base = Path.cwd()
 
     csv_path = base / f"{stem}.csv"
@@ -1320,6 +1325,8 @@ def main():
         "--repos", nargs="+", metavar="REPO",
         help="Limit to specific repos (e.g. --repos frontend-app backend-api)",
     )
+    p.add_argument("--anonymize", action="store_true",
+                   help="Replace developer and repo names with stable pseudonyms (User 1, Repo 1, …) in all output files")
     p.add_argument("--test-hotfix-signals", action="store_true",
                    help="Smoke-test hotfix detection signals (branch/label/title) and exit")
     args = p.parse_args()
