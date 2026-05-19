@@ -16,7 +16,7 @@ Usage:
   # Inspect ONE real Qodo comment to verify the parser matches your output
   ./qodo_pr_stats.py --org acme-corp --inspect
 
-  # Full run, default 365-day lookback
+  # Full run, default 90-day lookback
   ./qodo_pr_stats.py --org acme-corp
 
   # Custom window
@@ -696,14 +696,50 @@ def compute_timing(pr: dict, comments: list) -> dict:
     return {"qodo_min": qodo_min, "human_min": human_min, "has_human": has_human}
 
 
-def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] = None) -> str:
+def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] = None, anonymize=None) -> str:
     """Return the base filename (no extension) for output files."""
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
+    suffix = "_anon" if anonymize else ""
     if repos:
         n = len(repos)
         repo_segment = f"{n}-repo" if n == 1 else f"{n}-repos"
-        return f"{safe_org}_{repo_segment}_{since.isoformat()}_{until.isoformat()}"
-    return f"{safe_org}_{since.isoformat()}_{until.isoformat()}"
+        return f"{safe_org}_{repo_segment}_{since.isoformat()}_{until.isoformat()}{suffix}"
+    return f"{safe_org}_{since.isoformat()}_{until.isoformat()}{suffix}"
+
+
+def _build_anon_maps(rows):
+    """Build deterministic user and repo pseudonym mappings from row data.
+
+    Returns tuple (user_map, repo_map) where each is a dict mapping
+    original names to pseudonyms (User 1, User 2, ..., Repo 1, Repo 2, ...).
+
+    Blank approvers are excluded. Rows missing Final Approver key don't crash.
+    """
+    users = sorted(
+        (
+            {r.get("PR Creator", "") for r in rows} |
+            {r.get("Final Approver", "") for r in rows}
+        ) - {""}
+    )
+    repos = sorted({r.get("Repo Name", "") for r in rows} - {""})
+    user_map = {name: f"User {i + 1}" for i, name in enumerate(users)}
+    repo_map = {name: f"Repo {i + 1}" for i, name in enumerate(repos)}
+    return user_map, repo_map
+
+
+def _apply_anonymization(rows, user_map, repo_map, scope="all"):
+    """Apply pseudonym substitutions in-place to row data.
+
+    scope: "all" → users and repos; "users" → user columns only; "repos" → repo columns only.
+    """
+    for row in rows:
+        if scope in ("all", "users"):
+            row["PR Creator"] = user_map.get(row.get("PR Creator", ""), row.get("PR Creator", ""))
+            approver = row.get("Final Approver", "")
+            row["Final Approver"] = user_map.get(approver, approver)
+        if scope in ("all", "repos"):
+            row["Repo Name"] = repo_map.get(row.get("Repo Name", ""), row.get("Repo Name", ""))
+            row["PR URL"] = f"#PR-{row.get('PR #', '')}"
 
 
 def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
@@ -1203,7 +1239,12 @@ def cmd_count(args):
         print(file=sys.stderr)  # end the rolling status line
 
     today = date.today()
-    stem = _output_stem(args.org, args.since, today, repos=args.repos)
+
+    if args.anonymize:
+        user_map, repo_map = _build_anon_maps(rows)
+        _apply_anonymization(rows, user_map, repo_map, scope=args.anonymize)
+
+    stem = _output_stem(args.org, args.since, today, repos=args.repos, anonymize=args.anonymize)
     base = Path.cwd()
 
     csv_path = base / f"{stem}.csv"
@@ -1272,8 +1313,8 @@ def main():
     p.add_argument("--org", required=True, help="GitHub org login (e.g., acme-corp)")
     window = p.add_mutually_exclusive_group()
     window.add_argument("--since", type=date.fromisoformat, help="YYYY-MM-DD")
-    window.add_argument("--days", type=int, default=365,
-                        help="Lookback in days (default: 365)")
+    window.add_argument("--days", type=int, default=90,
+                        help="Lookback in days (default: 90)")
     p.add_argument("--inspect", action="store_true",
                    help="Print the first Qodo comment found and exit")
     p.add_argument("--verbose", action="store_true",
@@ -1284,6 +1325,13 @@ def main():
         "--repos", nargs="+", metavar="REPO",
         help="Limit to specific repos (e.g. --repos frontend-app backend-api)",
     )
+    p.add_argument("--anonymize", nargs="?", const="all", default=None,
+                   choices=["all", "users", "repos"],
+                   metavar="SCOPE",
+                   help="Replace identifying data with stable pseudonyms. "
+                        "SCOPE: 'users' (PR Creator / Final Approver only), "
+                        "'repos' (Repo Name / PR URL only), "
+                        "or omit SCOPE to anonymize both.")
     p.add_argument("--test-hotfix-signals", action="store_true",
                    help="Smoke-test hotfix detection signals (branch/label/title) and exit")
     args = p.parse_args()

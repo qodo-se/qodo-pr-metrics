@@ -58,7 +58,7 @@ gh auth refresh -s repo
 **Mac/Linux:**
 
 ```bash
-# Full run, default 365-day lookback
+# Full run, default 90-day lookback
 python3 github.py --org acme-corp
 
 # Custom date window
@@ -67,6 +67,15 @@ python3 github.py --org acme-corp --days 90
 
 # Scope to specific repos
 python3 github.py --org acme-corp --repos frontend-app backend-api
+
+# Anonymize developer and repo names for external sharing
+python3 github.py --org acme-corp --anonymize
+
+# Anonymize only developer names (keep repo names visible)
+python3 github.py --org acme-corp --anonymize users
+
+# Anonymize only repo names (keep developer names visible)
+python3 github.py --org acme-corp --anonymize repos
 ```
 
 **Windows:**
@@ -150,9 +159,10 @@ The Velocity, High-Impact, Speed to First Fix, and Quality Signals sections are 
 |---|---|
 | `--org` | GitHub org login (required, e.g. `acme-corp`) |
 | `--since` | Start date in `YYYY-MM-DD` format |
-| `--days` | Lookback window in days (default: `365`; mutually exclusive with `--since`) |
+| `--days` | Lookback window in days (default: `90`; mutually exclusive with `--since`) |
 | `--inspect` | Print the raw body of the first Qodo comment found and exit |
 | `--verbose` | Print per-PR suggestion counts instead of just the final summary |
 | `--resume` | Resume from a previous checkpoint (`ORG-checkpoint.json`) |
 | `--repos` | Space-delimited list of repo names to scope the run (e.g. `--repos frontend-app backend-api`); omit to scan the full org |
+| `--anonymize [SCOPE]` | Replace identifying data with stable pseudonyms in all output files; output filenames get an `_anon` suffix. `SCOPE`: `users` (PR Creator / Final Approver only), `repos` (Repo Name / PR URL only), or omit `SCOPE` to anonymize both |
 | `--test-hotfix-signals` | Smoke-test hotfix detection signals against the org and exit. Prints counts for each signal (branch, label, title) and the combined OR query, and confirms that OR deduplication is working correctly. |

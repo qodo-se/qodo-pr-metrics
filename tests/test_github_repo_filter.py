@@ -462,3 +462,16 @@ def test_get_weekly_pr_counts_with_repos_uses_repo_qualifier(monkeypatch):
     get_weekly_pr_counts("acme", d.today() - timedelta(days=1), repos=["frontend"])
     q_args = [a for a in captured if a.startswith("q=")]
     assert any("repo:acme/frontend" in q for q in q_args)
+
+
+def test_output_stem_anon_suffix():
+    assert _output_stem("acme-corp", _SINCE, _UNTIL, anonymize=True) == "acme-corp_2025-05-12_2026-05-12_anon"
+
+
+def test_output_stem_anon_with_repos():
+    result = _output_stem("acme-corp", _SINCE, _UNTIL, repos=["frontend-app"], anonymize=True)
+    assert result == "acme-corp_1-repo_2025-05-12_2026-05-12_anon"
+
+
+def test_output_stem_no_anon_unchanged():
+    assert _output_stem("acme-corp", _SINCE, _UNTIL, anonymize=False) == "acme-corp_2025-05-12_2026-05-12"
