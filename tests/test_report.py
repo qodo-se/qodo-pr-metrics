@@ -757,3 +757,43 @@ def test_generate_html_quality_signal_hidden_when_both_zero():
                          revert_count=0, hotfix_count=0)
     assert "Reverts" not in html
     assert "Hotfixes" not in html
+
+
+import re as _re
+
+
+def test_adoption_matrix_x_axis_label():
+    """Adoption matrix always renders 'Action-required findings' on the X axis."""
+    from report import generate_html
+    rows = [_row(creator="alice", ar_sug=5, ar_imp=3, suggestions=8, implemented=4)]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    assert "Action-required findings" in html
+
+
+def test_adoption_matrix_excludes_devs_with_no_ar_suggestions():
+    """Devs with 0 AR suggestions are absent from the scatter tooltip data."""
+    from report import generate_html
+    rows = [
+        _row(creator="alice", ar_sug=5, ar_imp=3, suggestions=8, implemented=4),
+        _row(creator="bob",   ar_sug=0, ar_imp=0, suggestions=4, implemented=2),
+    ]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    match = _re.search(r'const D = (\[.*?\]);', html)
+    assert match, "scatter tooltip JSON not found"
+    dev_data = _json.loads(match.group(1))
+    users = [d["user"] for d in dev_data]
+    assert "alice" in users
+    assert "bob" not in users
+
+
+def test_adoption_matrix_rate_reflects_ar_metrics():
+    """Adoption matrix per-dev 'rate' is AR rate, not overall rate."""
+    from report import generate_html
+    # alice: 80% AR rate (4/5), 50% overall rate (5/10)
+    rows = [_row(creator="alice", ar_sug=5, ar_imp=4, suggestions=10, implemented=5)]
+    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
+    match = _re.search(r'const D = (\[.*?\]);', html)
+    assert match, "scatter tooltip JSON not found"
+    dev_data = _json.loads(match.group(1))
+    alice = next(d for d in dev_data if d["user"] == "alice")
+    assert alice["rate"] == 80.0, f"expected AR rate 80.0, got {alice['rate']}"
