@@ -2753,6 +2753,9 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
         quad = "power" if hv and hr else "coach" if hv else "curious" if hr else "absent"
         devs.append({**d, "rate": rate, "actRate": actRate, "quad": quad})
 
+    if ar_only and not devs:
+        return '<p style="padding:1rem;color:var(--fg-muted)">No action-required findings in this window.</p>'
+
     # ── Org-wide action-required rate (the hero topline) ──
     tot_ar_sug = sum(d["actReqSug"] for d in devs)
     tot_ar_imp = sum(d["actReqImp"] for d in devs)
@@ -3071,8 +3074,10 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
         for d in devs
     ])
     quad_labels_payload = json.dumps({k: v[2] for k, v in qc.items()})
+    ar_flag = "true" if ar_only else "false"
     tip_script = (
         '<script>(function(){'
+        f'const AR = {ar_flag};'
         f'const D = {dev_payload};'
         f'const QL = {quad_labels_payload};'
         'const M = Object.fromEntries(D.map(d => [d.user, d]));'
@@ -3085,12 +3090,10 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
         '  tip.innerHTML = '
         '    \'<div class="name">\'+escH(d.user)+\' <span class="badge \'+d.quad+\'">\'+QL[d.quad]+\'</span></div>\''
         '    + \'<div class="meta">\'+d.prs+\' PRs \\u00b7 \'+d.repos+\' repo\'+(d.repos>1?"s":"")+\'</div>\''
-        '    + \'<div class="row"><span>Findings</span> <b>\'+d.totalSug+\'</b></div>\''
-        '    + \'<div class="row"><span>Implemented</span> <b>\'+d.totalImp+\'</b></div>\''
-        '    + \'<div class="row"><span>Overall impl rate</span> <b class="\'+cls+\'">\'+d.rate.toFixed(1)+\'%</b></div>\''
-        '    + \'<div class="divider"></div>\''
-        '    + \'<div class="row"><span>Action-required</span> <b>\'+d.actReqSug+\'</b></div>\''
-        '    + \'<div class="row"><span>Action-req rate</span> <b class="\'+cls+\'">\'+(d.actRate===null?"\\u2014":d.actRate.toFixed(1)+"%")+\'</b></div>\';'
+        '    + \'<div class="row"><span>Findings</span> <b>\'+(AR?d.actReqSug:d.totalSug)+\'</b></div>\''
+        '    + \'<div class="row"><span>Implemented</span> <b>\'+(AR?d.actReqImp:d.totalImp)+\'</b></div>\''
+        '    + \'<div class="row"><span>\'+(AR?"AR impl rate":"Overall impl rate")+\'</span> <b class="\'+cls+\'">\'+d.rate.toFixed(1)+\'%</b></div>\''
+        '    + (AR?"":\'<div class="divider"></div><div class="row"><span>Action-required</span> <b>\'+d.actReqSug+\'</b></div><div class="row"><span>Action-req rate</span> <b class="\'+cls+\'">\'+(d.actRate===null?"\\u2014":d.actRate.toFixed(1)+"%")+\'</b></div>\');'
         '  tip.classList.add("show");'
         '}'
         'function position(d, evt){'

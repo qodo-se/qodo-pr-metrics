@@ -1326,6 +1326,7 @@ def main():
         help="Limit to specific repos (e.g. --repos frontend-app backend-api)",
     )
     p.add_argument("--anonymize", nargs="?", const="all", default=None,
+                   choices=["all", "users", "repos"],
                    metavar="SCOPE",
                    help="Replace identifying data with stable pseudonyms. "
                         "SCOPE: 'users' (PR Creator / Final Approver only), "
