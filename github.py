@@ -706,6 +706,24 @@ def _output_stem(org: str, since: date, until: date, repos: Optional[List[str]] 
     return f"{safe_org}_{since.isoformat()}_{until.isoformat()}"
 
 
+def _build_anon_maps(rows):
+    """Build deterministic user and repo pseudonym mappings from row data.
+
+    Returns tuple (user_map, repo_map) where each is a dict mapping
+    original names to pseudonyms (User 1, User 2, ..., Repo 1, Repo 2, ...).
+
+    Blank approvers are excluded. Rows missing Final Approver key don't crash.
+    """
+    users = sorted(
+        {r.get("PR Creator", "") for r in rows} |
+        {r.get("Final Approver", "") for r in rows} - {""}
+    )
+    repos = sorted({r.get("Repo Name", "") for r in rows} - {""})
+    user_map = {name: f"User {i + 1}" for i, name in enumerate(users)}
+    repo_map = {name: f"Repo {i + 1}" for i, name in enumerate(repos)}
+    return user_map, repo_map
+
+
 def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
                   timing: Optional[dict] = None,
                   extras: Optional[dict] = None) -> dict:
