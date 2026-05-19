@@ -2966,14 +2966,14 @@ def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = Fa
         f'<text x="22" y="{PAD_T + PH/2:.1f}" text-anchor="middle" '
         f'font-family="Inter" font-size="11" fill="#6E6E6E" '
         f'transform="rotate(-90 22 {PAD_T + PH/2:.1f})">Implementation rate</text>'
-        # Quadrant labels
-        f'<text x="{cutX + 14:.1f}" y="{PAD_T + 22}" font-family="Inter" font-size="11" '
+        # Quadrant labels — positioned in the outermost corners so bubbles can't block them
+        f'<text x="{W - PAD_R - 12:.1f}" y="{PAD_T + 22}" text-anchor="end" font-family="Inter" font-size="11" '
         f'font-weight="700" fill="rgba(6,228,174,.55)" letter-spacing=".06em">POWER USERS</text>'
-        f'<text x="{cutX - 14:.1f}" y="{PAD_T + 22}" text-anchor="end" font-family="Inter" '
+        f'<text x="{PAD_L + 12:.1f}" y="{PAD_T + 22}" text-anchor="start" font-family="Inter" '
         f'font-size="11" font-weight="700" fill="rgba(168,161,253,.55)" letter-spacing=".06em">CURIOUS / NEW</text>'
-        f'<text x="{cutX + 14:.1f}" y="{H - PAD_B - 14}" font-family="Inter" font-size="11" '
+        f'<text x="{W - PAD_R - 12:.1f}" y="{H - PAD_B - 14}" text-anchor="end" font-family="Inter" font-size="11" '
         f'font-weight="700" fill="rgba(245,181,68,.65)" letter-spacing=".06em">COACH</text>'
-        f'<text x="{cutX - 14:.1f}" y="{H - PAD_B - 14}" text-anchor="end" font-family="Inter" '
+        f'<text x="{PAD_L + 12:.1f}" y="{H - PAD_B - 14}" text-anchor="start" font-family="Inter" '
         f'font-size="11" font-weight="700" fill="rgba(229,72,77,.55)" letter-spacing=".06em">LOW USAGE</text>'
         + "".join(bubbles_html) +
         f'</svg>'
