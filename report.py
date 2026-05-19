@@ -2713,7 +2713,7 @@ def _bd_item(klass: str, name: str, total: int, implemented: int) -> str:
     )
 
 
-def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
+def _section_adoption_matrix(agg: ReportData, span_days: int, ar_only: bool = False) -> str:
     """Prototype 05 — Developer adoption matrix.
 
     Scatter of every author by findings received (X, log scale) vs
@@ -2728,18 +2728,27 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
 
     # ── Window-scaled thresholds ──
     days = max(1, span_days or 60)
-    FINDINGS_CUT  = max(10, round(50 * days / 60))
+    if ar_only:
+        FINDINGS_CUT = max(5, round(25 * days / 60))
+        NOTABLE_FCUT = max(3, round(8 * days / 60))
+    else:
+        FINDINGS_CUT = max(10, round(50 * days / 60))
+        NOTABLE_FCUT = max(8, round(20 * days / 60))
     RATE_CUT      = 30
-    NOTABLE_FCUT  = max(8, round(20 * days / 60))
     NOTABLE_RCUT  = 15
 
     # ── Derive rate / actRate / quad per dev (don't mutate the originals) ──
+    source = [d for d in agg.adoption_devs if d["actReqSug"] > 0] if ar_only else agg.adoption_devs
     devs = []
-    for d in agg.adoption_devs:
-        rate    = round(100 * d["totalImp"] / d["totalSug"], 1) if d["totalSug"] else 0.0
+    for d in source:
+        if ar_only:
+            rate = round(100 * d["actReqImp"] / d["actReqSug"], 1) if d["actReqSug"] else 0.0
+            hv   = d["actReqSug"] >= FINDINGS_CUT
+        else:
+            rate = round(100 * d["totalImp"] / d["totalSug"], 1) if d["totalSug"] else 0.0
+            hv   = d["totalSug"] >= FINDINGS_CUT
         actRate = (round(100 * d["actReqImp"] / d["actReqSug"], 1)
                    if d["actReqSug"] else None)
-        hv = d["totalSug"] >= FINDINGS_CUT
         hr = rate >= RATE_CUT
         quad = "power" if hv and hr else "coach" if hv else "curious" if hr else "absent"
         devs.append({**d, "rate": rate, "actRate": actRate, "quad": quad})
@@ -2752,13 +2761,13 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
     # ── Quadrant groupings ──
     by_quad = {k: [d for d in devs if d["quad"] == k]
                for k in ("power", "coach", "curious", "absent")}
+    _vol = (lambda d: d["actReqSug"]) if ar_only else (lambda d: d["totalSug"])
     for k in by_quad:
-        by_quad[k].sort(key=lambda d: d["totalSug"], reverse=True)
+        by_quad[k].sort(key=_vol, reverse=True)
 
     notable = sorted(
-        [d for d in devs
-         if d["totalSug"] >= NOTABLE_FCUT and d["rate"] < NOTABLE_RCUT],
-        key=lambda d: d["totalSug"], reverse=True,
+        [d for d in devs if _vol(d) >= NOTABLE_FCUT and d["rate"] < NOTABLE_RCUT],
+        key=_vol, reverse=True,
     )
 
     # ── Hero stat cards (3 cards, conditional copy) ──
@@ -2790,8 +2799,8 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
         )
     elif by_quad["power"]:
         pc = len(by_quad["power"])
-        p_findings = sum(d["totalSug"] for d in by_quad["power"])
-        tot_findings = sum(d["totalSug"] for d in devs)
+        p_findings = sum(_vol(d) for d in by_quad["power"])
+        tot_findings = sum(_vol(d) for d in devs)
         p_share = round(100 * p_findings / tot_findings) if tot_findings else 0
         stats_html.append(
             f'<div class="p05-stat">'
@@ -2812,7 +2821,7 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
     # Card 3: low-usage outliers, or fallback to curious / concentration
     if notable:
         listed = " and ".join(
-            f'<b>{_h(d["user"])}</b> ({d["totalSug"]} findings, {d["rate"]:.0f}% impl)'
+            f'<b>{_h(d["user"])}</b> ({_vol(d)} findings, {d["rate"]:.0f}% impl)'
             for d in notable[:2]
         )
         more = f', plus {len(notable) - 2} more' if len(notable) > 2 else ""
@@ -2837,8 +2846,8 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
         )
     else:
         top3 = devs[:3]
-        tot_findings = sum(d["totalSug"] for d in devs)
-        top3_sum = sum(d["totalSug"] for d in top3)
+        tot_findings = sum(_vol(d) for d in devs)
+        top3_sum = sum(_vol(d) for d in top3)
         top3_pct = round(100 * top3_sum / tot_findings) if tot_findings else 0
         stats_html.append(
             f'<div class="p05-stat">'
@@ -2852,7 +2861,7 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
     W, H = 1180, 600
     PAD_L, PAD_R, PAD_T, PAD_B = 70, 30, 50, 60
     PW, PH = W - PAD_L - PAD_R, H - PAD_T - PAD_B
-    X_MIN, X_MAX = 1, max(600, max(d["totalSug"] for d in devs) * 1.1)
+    X_MIN, X_MAX = 1, max(200 if ar_only else 600, max(_vol(d) for d in devs) * 1.1)
 
     def _x(v: float) -> float:
         lo, hi = math.log10(X_MIN), math.log10(X_MAX)
@@ -2877,11 +2886,11 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
     grid_y_vals = [0, 25, 50, 75, 100]
 
     # Build bubble + label markup, biggest first (so small ones land on top)
-    pts = sorted(devs, key=lambda d: d["totalSug"], reverse=True)
+    pts = sorted(devs, key=_vol, reverse=True)
     bubbles_html = []
     for d in pts:
         stroke, fill, _label = qc[d["quad"]]
-        px, py, r = _x(d["totalSug"]), _y(d["rate"]), _r(d["prs"])
+        px, py, r = _x(_vol(d)), _y(d["rate"]), _r(d["prs"])
         bubbles_html.append(
             f'<g class="p05-bubble" data-user="{_h(d["user"])}" '
             f'transform="translate({px:.1f} {py:.1f})">'
@@ -2890,13 +2899,13 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
             f'</g>'
         )
         # Inline labels for the upper-volume bubbles.
-        if d["totalSug"] >= max(20, FINDINGS_CUT // 2):
+        if _vol(d) >= max(5 if ar_only else 20, FINDINGS_CUT // 2):
             label_y = py - r - 6
             bubbles_html.append(
                 f'<text class="p05-bubble-label" x="{px:.1f}" y="{label_y:.1f}" '
                 f'text-anchor="middle">{_h(d["user"])}</text>'
                 f'<text class="p05-bubble-sub" x="{px:.1f}" y="{label_y + 11:.1f}" '
-                f'text-anchor="middle" fill="{stroke}">{d["totalSug"]} \u00b7 {d["rate"]:.0f}%</text>'
+                f'text-anchor="middle" fill="{stroke}">{_vol(d)} \u00b7 {d["rate"]:.0f}%</text>'
             )
 
     grid_x_lines = "".join(
@@ -2947,7 +2956,7 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
         f'{x_ticks}{y_ticks}'
         # Axis labels
         f'<text x="{PAD_L + PW/2:.1f}" y="{H - 12}" text-anchor="middle" '
-        f'font-family="Inter" font-size="11" fill="#6E6E6E">Findings received &nbsp;(log scale)</text>'
+        f'font-family="Inter" font-size="11" fill="#6E6E6E">{"Action-required findings" if ar_only else "Findings received"} &nbsp;(log scale)</text>'
         f'<text x="22" y="{PAD_T + PH/2:.1f}" text-anchor="middle" '
         f'font-family="Inter" font-size="11" fill="#6E6E6E" '
         f'transform="rotate(-90 22 {PAD_T + PH/2:.1f})">Implementation rate</text>'
@@ -3022,7 +3031,7 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
         rows = "".join(
             f'<div class="p05-qc-row {k}" data-user="{_h(d["user"])}">'
             f'<span class="name">{_h(d["user"])}</span>'
-            f'<span class="findings">{d["totalSug"]} findings &middot; {d["prs"]} PR'
+            f'<span class="findings">{_vol(d)} findings &middot; {d["prs"]} PR'
             f'{"s" if d["prs"] != 1 else ""}</span>'
             f'<span class="rate">{d["rate"]:.0f}%</span>'
             f'</div>'
@@ -3133,11 +3142,11 @@ def _section_adoption_matrix(agg: ReportData, span_days: int) -> str:
         '<div class="r-section-eyebrow">Adoption matrix</div>'
         '<div class="r-section-title">Developer adoption matrix &mdash; volume vs implementation rate</div>'
         '<div class="r-section-deck">'
-        f'Every author plotted by findings received (log scale) and implementation rate. '
+        f'Every author plotted by {"action-required findings (log scale)" if ar_only else "findings received (log scale)"} and implementation rate. '
         f'Four quadrants surface four different conversations: power users to learn from, '
         f'coach candidates to unblock, curious new joiners to observe, and a low-usage '
         f'group to re-engage. {len(devs)} of {agg.adoption_authors_total} authors received '
-        f'at least one finding in this window.'
+        f'at least one {"action-required " if ar_only else ""}finding in this window.'
         '</div>'
         '</div></div>'
         f'<div class="p05-hero">{"".join(stats_html)}</div>'
@@ -3286,6 +3295,7 @@ def generate_html(
     weekly_coverage: Optional[list] = None,
     revert_count: Optional[int] = None,
     hotfix_count: Optional[int] = None,
+    ar_only: bool = False,
 ) -> str:
     agg = aggregate(rows, org_prs_total=org_pr_count, org_pr_authors_total=org_author_count,
                     weekly_coverage=weekly_coverage, revert_count=revert_count,
@@ -3311,7 +3321,7 @@ def generate_html(
         f'{_section_spotlight(agg)}'
         f'{_section_breakdown(agg)}'
         f'{_section_velocity(agg)}'
-        f'{_section_adoption_matrix(agg, span_days)}'
+        f'{_section_adoption_matrix(agg, span_days, ar_only=ar_only)}'
         f'{_section_hours_saved(agg, span_days, since, until)}'
         f'{_section_footer(org, span_days)}'
         f'</div></div>\n'
