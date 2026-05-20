@@ -96,6 +96,10 @@ class ReportData:
     revert_count: Optional[int]
     hotfix_count: Optional[int]
     findings_by_week: list
+    # ── dismissed tracking ───────────────────────────────────────────────
+    total_dismissed: int = 0
+    action_required_dismissed: int = 0
+    review_recommended_dismissed: int = 0
     # ── funnel (Prototype 02) ─────────────────────────────────────────
     merged_prs_total: int = 0
     prs_with_findings: int = 0
@@ -152,14 +156,17 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
 
     ar_sug = sum(r.get("Action Required Suggestions", 0) for r in rows)
     ar_imp = sum(r.get("Action Required Implemented", 0) for r in rows)
+    ar_dis = sum(r.get("Action Required Dismissed", 0) for r in rows)
     rr_sug = sum(r.get("Review Recommended Suggestions", 0) for r in rows)
     rr_imp = sum(r.get("Review Recommended Implemented", 0) for r in rows)
+    rr_dis = sum(r.get("Review Recommended Dismissed", 0) for r in rows)
     bugs_sug = sum(r.get("Bugs Suggested", 0) for r in rows)
     bugs_imp = sum(r.get("Bugs Implemented", 0) for r in rows)
     rule_sug = sum(r.get("Rule Violations Suggested", 0) for r in rows)
     rule_imp = sum(r.get("Rule Violations Implemented", 0) for r in rows)
     req_sug = sum(r.get("Requirement Gaps Suggested", 0) for r in rows)
     req_imp = sum(r.get("Requirement Gaps Implemented", 0) for r in rows)
+    total_dis = sum(r.get("Total Dismissed", 0) for r in rows)
 
     repo_acc: dict = defaultdict(lambda: {"prs": 0, "suggestions": 0, "implemented": 0})
     dev_acc: dict = defaultdict(lambda: {"prs": 0, "suggestions": 0, "implemented": 0})
@@ -372,12 +379,15 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
         prs_with_qodo=prs_with_qodo,
         total_suggestions=total_sug,
         total_implemented=total_imp,
+        total_dismissed=total_dis,
         overall_impl_rate_pct=_rate(total_imp, total_sug),
         action_required_suggested=ar_sug,
         action_required_implemented=ar_imp,
+        action_required_dismissed=ar_dis,
         action_required_rate_pct=_rate(ar_imp, ar_sug),
         review_recommended_suggested=rr_sug,
         review_recommended_implemented=rr_imp,
+        review_recommended_dismissed=rr_dis,
         review_recommended_rate_pct=_rate(rr_imp, rr_sug),
         bugs_suggested=bugs_sug,
         bugs_implemented=bugs_imp,

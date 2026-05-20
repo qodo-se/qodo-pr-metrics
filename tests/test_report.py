@@ -255,6 +255,32 @@ def test_aggregate_empty_new_fields():
     assert agg.developers_engaged == 0
 
 
+def test_aggregate_dismissed_totals():
+    rows = [
+        {
+            "Repo Name": "backend", "PR #": 1, "PR URL": "https://github.com/test",
+            "PR Creator": "alice",
+            "Total Suggestions": 4, "Total Implemented": 1, "Total Dismissed": 2,
+            "Action Required Suggestions": 2, "Action Required Implemented": 1, "Action Required Dismissed": 1,
+            "Review Recommended Suggestions": 2, "Review Recommended Implemented": 0, "Review Recommended Dismissed": 1,
+            "Bugs Suggested": 0, "Bugs Implemented": 0,
+            "Rule Violations Suggested": 0, "Rule Violations Implemented": 0,
+            "Requirement Gaps Suggested": 0, "Requirement Gaps Implemented": 0,
+            "Has Human Comment": False, "Is AI Authored": False, "AI Author Type": "",
+            "Reviewer Count": 0, "Had Request Changes": False, "Final Approver": "",
+            "CI Status": "", "Commits After Qodo": 0, "Speed to First Fix (min)": "",
+            "Time to First Qodo Comment (min)": "", "Time to First Human Comment (min)": "",
+            "Spotlight Issues": "[]",
+        }
+    ]
+    data = aggregate(rows)
+    assert data.total_dismissed == 2
+    assert data.action_required_dismissed == 1
+    assert data.review_recommended_dismissed == 1
+    # Implementation rate must reflect only fixed items
+    assert data.overall_impl_rate_pct == 25.0   # 1/4
+
+
 def test_generate_html_includes_velocity_section():
     from report import generate_html
     rows = [
