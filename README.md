@@ -108,8 +108,10 @@ Each row in the CSV contains 35 columns with per-PR data:
 | Has Qodo Review | `True` if Qodo posted a review on this PR |
 | Action Required Suggestions | Count of "Action Required" suggestions |
 | Action Required Implemented | Count of implemented "Action Required" suggestions |
+| Action Required Dismissed | Count of "Action Required" suggestions the developer explicitly dismissed (strikethrough + ✗ Dismissed badge). These are NOT included in `Action Required Implemented`. |
 | Review Recommended Suggestions | Count of "Review Recommended" suggestions |
 | Review Recommended Implemented | Count of implemented "Review Recommended" suggestions |
+| Review Recommended Dismissed | Count of "Review Recommended" suggestions explicitly dismissed. |
 | Bugs Suggested | Count of bug suggestions |
 | Bugs Implemented | Count of implemented bug suggestions |
 | Rule Violations Suggested | Count of rule-violation suggestions |
@@ -118,6 +120,7 @@ Each row in the CSV contains 35 columns with per-PR data:
 | Requirement Gaps Implemented | Count of implemented requirement-gap suggestions |
 | Total Suggestions | Sum of all suggestion categories |
 | Total Implemented | Sum of all implemented categories |
+| Total Dismissed | Total suggestions dismissed across all sections. `Implementation Rate (%)` reflects only suggestions that were actually fixed, not dismissed ones. |
 | Implementation Rate (%) | `Total Implemented / Total Suggestions × 100`, blank when 0 suggestions |
 | Suggestions per 100 Lines | `Total Suggestions / Lines Changed × 100`, blank when lines = 0 or suggestions = 0 |
 | Time to First Qodo Comment (min) | Minutes from PR creation to Qodo's first comment; blank if no Qodo comment |
