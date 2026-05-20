@@ -666,3 +666,42 @@ def test_build_csv_row_speed_to_fix_none_becomes_empty():
     row = build_csv_row(_pr(), lines_changed=100, stats=None, extras=extras)
     assert row["Speed to First Fix (min)"] == ""
     assert row["CI Status"] == ""
+
+
+# ---------------------------------------------------------------------------
+# build_csv_row — dismissed columns
+# ---------------------------------------------------------------------------
+
+def test_build_csv_row_dismissed_columns_present():
+    """New dismissed columns must appear in the output row."""
+    stats = QodoStats(
+        action_required_total=3,
+        action_required_implemented=1,
+        action_required_dismissed=1,
+        review_recommended_total=1,
+        review_recommended_implemented=0,
+        review_recommended_dismissed=1,
+        total_suggestions=4,
+        total_implemented=1,
+        total_dismissed=2,
+    )
+    row = build_csv_row(_pr(), lines_changed=400, stats=stats)
+    assert row["Action Required Dismissed"] == 1
+    assert row["Review Recommended Dismissed"] == 1
+    assert row["Total Dismissed"] == 2
+
+def test_build_csv_row_dismissed_zero_when_no_qodo():
+    row = build_csv_row(_pr(), lines_changed=100, stats=None)
+    assert row["Action Required Dismissed"] == 0
+    assert row["Review Recommended Dismissed"] == 0
+    assert row["Total Dismissed"] == 0
+
+def test_build_csv_row_impl_rate_excludes_dismissed():
+    """Implementation rate must only count fixed items, not dismissed."""
+    stats = QodoStats(
+        total_suggestions=4,
+        total_implemented=1,   # 1 fixed
+        total_dismissed=2,     # 2 dismissed
+    )
+    row = build_csv_row(_pr(), lines_changed=400, stats=stats)
+    assert row["Implementation Rate (%)"] == "25.0"   # 1/4, not 3/4

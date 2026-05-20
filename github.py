@@ -61,6 +61,10 @@ SUGGESTION_LINE = re.compile(
 #   - the ballot-box-check emoji Qodo adds next to fixed items
 IMPLEMENTED_MARKERS = ("~~", "<s>", "<del>", "<strike>", "\u2611")  # ☑
 
+# Indicates the user explicitly dismissed a suggestion (✗ Dismissed badge).
+# A dismissed item has strikethrough but must NOT count as implemented.
+DISMISSED_MARKER = "✗ Dismissed"   # ✗ = U+2717
+
 # Section header patterns — match both markdown headings (##, **) and the
 # <img> tags Qodo currently uses for section banners (e.g. action-required.png).
 # Anchored via .match() so suggestion titles containing these words don't
@@ -146,8 +150,10 @@ _GQL_SEARCH_QUERY = (
 class QodoStats:
     action_required_total: int = 0
     action_required_implemented: int = 0
+    action_required_dismissed: int = 0
     review_recommended_total: int = 0
     review_recommended_implemented: int = 0
+    review_recommended_dismissed: int = 0
     bugs_suggested: int = 0
     bugs_implemented: int = 0
     rule_violations_suggested: int = 0
@@ -158,6 +164,7 @@ class QodoStats:
     # no section headers still produce correct Total Suggestions counts.
     total_suggestions: int = 0
     total_implemented: int = 0
+    total_dismissed: int = 0
     security_suggested: int = 0
     security_implemented: int = 0
     correctness_suggested: int = 0
@@ -467,23 +474,33 @@ def parse_qodo_comment(body: str) -> "QodoStats":
         # Match all numbered suggestion patterns on this line
         for m in SUGGESTION_LINE.finditer(line):
             title = m.group(1)
-            is_implemented = any(marker in title for marker in IMPLEMENTED_MARKERS)
+            is_dismissed = DISMISSED_MARKER in title
+            is_implemented = (
+                any(marker in title for marker in IMPLEMENTED_MARKERS)
+                and not is_dismissed
+            )
             cat = _classify_category(title)
 
             # Always increment global totals (covers PRs with no section headers)
             stats.total_suggestions += 1
             if is_implemented:
                 stats.total_implemented += 1
+            if is_dismissed:
+                stats.total_dismissed += 1
 
             # Section counts
             if section == "action_required":
                 stats.action_required_total += 1
                 if is_implemented:
                     stats.action_required_implemented += 1
+                if is_dismissed:
+                    stats.action_required_dismissed += 1
             elif section == "review_recommended":
                 stats.review_recommended_total += 1
                 if is_implemented:
                     stats.review_recommended_implemented += 1
+                if is_dismissed:
+                    stats.review_recommended_dismissed += 1
 
             # Category counts
             if cat == "bug":
@@ -624,12 +641,12 @@ def compute_speed_to_fix(qodo_ts: Optional[str], commits: list) -> dict:
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
     "Hours to Merge", "PR Creator", "Lines Changed",
-    "Action Required Suggestions", "Action Required Implemented",
-    "Review Recommended Suggestions", "Review Recommended Implemented",
+    "Action Required Suggestions", "Action Required Implemented", "Action Required Dismissed",
+    "Review Recommended Suggestions", "Review Recommended Implemented", "Review Recommended Dismissed",
     "Bugs Suggested", "Bugs Implemented",
     "Rule Violations Suggested", "Rule Violations Implemented",
     "Requirement Gaps Suggested", "Requirement Gaps Implemented",
-    "Total Suggestions", "Total Implemented",
+    "Total Suggestions", "Total Implemented", "Total Dismissed",
     "Implementation Rate (%)", "Suggestions per 100 Lines",
     "Time to First Qodo Comment (min)", "Time to First Human Comment (min)",
     "Has Human Comment", "Spotlight Issues",
@@ -775,8 +792,10 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
         "Lines Changed":                        lines_changed,
         "Action Required Suggestions":          stats.action_required_total if has_qodo else 0,
         "Action Required Implemented":          stats.action_required_implemented if has_qodo else 0,
+        "Action Required Dismissed":            stats.action_required_dismissed if has_qodo else 0,
         "Review Recommended Suggestions":       stats.review_recommended_total if has_qodo else 0,
         "Review Recommended Implemented":       stats.review_recommended_implemented if has_qodo else 0,
+        "Review Recommended Dismissed":         stats.review_recommended_dismissed if has_qodo else 0,
         "Bugs Suggested":                       stats.bugs_suggested if has_qodo else 0,
         "Bugs Implemented":                     stats.bugs_implemented if has_qodo else 0,
         "Rule Violations Suggested":            stats.rule_violations_suggested if has_qodo else 0,
@@ -785,6 +804,7 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
         "Requirement Gaps Implemented":         stats.requirement_gaps_implemented if has_qodo else 0,
         "Total Suggestions":                    total,
         "Total Implemented":                    implemented,
+        "Total Dismissed":                      stats.total_dismissed if has_qodo else 0,
         "Implementation Rate (%)":              impl_rate,
         "Suggestions per 100 Lines":            per_100,
         "Time to First Qodo Comment (min)":     qodo_min if qodo_min is not None else "",
