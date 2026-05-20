@@ -93,7 +93,7 @@ The script generates two output files:
 
 For example, running `python3 github.py --org acme-corp` creates `acme-corp_2025-05-12_2026-05-12.csv` and `acme-corp_2025-05-12_2026-05-12.html`.
 
-Each row in the CSV contains 35 columns with per-PR data:
+Each row in the CSV contains 37 columns with per-PR data:
 
 | Column | Description |
 |---|---|
