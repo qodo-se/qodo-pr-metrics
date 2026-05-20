@@ -474,23 +474,33 @@ def parse_qodo_comment(body: str) -> "QodoStats":
         # Match all numbered suggestion patterns on this line
         for m in SUGGESTION_LINE.finditer(line):
             title = m.group(1)
-            is_implemented = any(marker in title for marker in IMPLEMENTED_MARKERS)
+            is_dismissed = DISMISSED_MARKER in title
+            is_implemented = (
+                any(marker in title for marker in IMPLEMENTED_MARKERS)
+                and not is_dismissed
+            )
             cat = _classify_category(title)
 
             # Always increment global totals (covers PRs with no section headers)
             stats.total_suggestions += 1
             if is_implemented:
                 stats.total_implemented += 1
+            if is_dismissed:
+                stats.total_dismissed += 1
 
             # Section counts
             if section == "action_required":
                 stats.action_required_total += 1
                 if is_implemented:
                     stats.action_required_implemented += 1
+                if is_dismissed:
+                    stats.action_required_dismissed += 1
             elif section == "review_recommended":
                 stats.review_recommended_total += 1
                 if is_implemented:
                     stats.review_recommended_implemented += 1
+                if is_dismissed:
+                    stats.review_recommended_dismissed += 1
 
             # Category counts
             if cat == "bug":
