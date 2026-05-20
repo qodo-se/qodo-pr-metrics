@@ -166,3 +166,46 @@ def test_spotlight_empty_when_no_match():
     stats = parse_qodo_comment(_CORRECTNESS_BODY)
     # Correctness items present but none implemented → no spotlight
     assert stats.spotlight_issues == []
+
+
+# ---------------------------------------------------------------------------
+# Dismissed detection
+# ---------------------------------------------------------------------------
+
+_DISMISSED_BODY = """
+<h3>Code Review by Qodo</h3>
+<img src="https://www.qodo.ai/wp-content/uploads/2026/01/action-required.png" height="20" alt="Action required">
+<details>
+<summary>  1.  Fix null pointer <code>🐞 Bug</code> <code>≡ Correctness</code></summary>
+</details>
+<details>
+<summary>  2.  <s>AR-only CSV None crash</s> <code>✗ Dismissed</code> <code>🐞 Bug</code> <code>☼ Reliability</code></summary>
+</details>
+<details>
+<summary>  3.  <s>AR-only tooltip mismatch</s> <code>✓ Resolved</code> <code>🐞 Bug</code> <code>≡ Correctness</code></summary>
+</details>
+<img src="https://www.qodo.ai/wp-content/uploads/2026/01/review-recommended.png" height="20" alt="Remediation recommended">
+<details>
+<summary>  4.  <s>Anonymize scope unvalidated</s> <code>✗ Dismissed</code> <code>🐞 Bug</code> <code>☼ Reliability</code></summary>
+</details>
+"""
+
+def test_dismissed_not_counted_as_implemented():
+    stats = parse_qodo_comment(_DISMISSED_BODY)
+    # items 2 and 4 are dismissed — must NOT count as implemented
+    assert stats.total_implemented == 1   # only item 3
+    assert stats.total_dismissed == 2     # items 2 and 4
+
+def test_dismissed_total_suggestions_unchanged():
+    stats = parse_qodo_comment(_DISMISSED_BODY)
+    assert stats.total_suggestions == 4   # all 4 items counted
+
+def test_dismissed_section_buckets():
+    stats = parse_qodo_comment(_DISMISSED_BODY)
+    assert stats.action_required_dismissed == 1    # item 2
+    assert stats.review_recommended_dismissed == 1 # item 4
+
+def test_dismissed_does_not_appear_in_implemented_buckets():
+    stats = parse_qodo_comment(_DISMISSED_BODY)
+    assert stats.action_required_implemented == 1  # only item 3
+    assert stats.review_recommended_implemented == 0

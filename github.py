@@ -61,6 +61,10 @@ SUGGESTION_LINE = re.compile(
 #   - the ballot-box-check emoji Qodo adds next to fixed items
 IMPLEMENTED_MARKERS = ("~~", "<s>", "<del>", "<strike>", "\u2611")  # ☑
 
+# Indicates the user explicitly dismissed a suggestion (✗ Dismissed badge).
+# A dismissed item has strikethrough but must NOT count as implemented.
+DISMISSED_MARKER = "✗ Dismissed"   # ✗ = U+2717
+
 # Section header patterns — match both markdown headings (##, **) and the
 # <img> tags Qodo currently uses for section banners (e.g. action-required.png).
 # Anchored via .match() so suggestion titles containing these words don't
@@ -146,8 +150,10 @@ _GQL_SEARCH_QUERY = (
 class QodoStats:
     action_required_total: int = 0
     action_required_implemented: int = 0
+    action_required_dismissed: int = 0
     review_recommended_total: int = 0
     review_recommended_implemented: int = 0
+    review_recommended_dismissed: int = 0
     bugs_suggested: int = 0
     bugs_implemented: int = 0
     rule_violations_suggested: int = 0
@@ -158,6 +164,7 @@ class QodoStats:
     # no section headers still produce correct Total Suggestions counts.
     total_suggestions: int = 0
     total_implemented: int = 0
+    total_dismissed: int = 0
     security_suggested: int = 0
     security_implemented: int = 0
     correctness_suggested: int = 0
