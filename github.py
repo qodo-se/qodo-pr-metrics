@@ -145,6 +145,15 @@ _GQL_SEARCH_QUERY = (
     "}}}}"
 )
 
+_GQL_LOC_SEARCH_QUERY = (
+    "query($q:String!,$cursor:String){"
+    "search(query:$q,type:ISSUE,first:100,after:$cursor){"
+    "pageInfo{hasNextPage endCursor}"
+    "nodes{...on PullRequest{"
+    "additions"
+    "}}}}"
+)
+
 
 @dataclass
 class QodoStats:
@@ -971,6 +980,47 @@ def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) 
         return int(out.strip())
     except ValueError:
         return None
+
+
+def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None) -> Optional[int]:
+    """Return total additions across all merged PRs in the window."""
+    today = date.today()
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
+    cursor = since
+    total = 0
+    try:
+        while cursor <= today:
+            chunk_end = min(cursor + timedelta(days=30), today)
+            for qual in qualifiers:
+                q = (
+                    f"{qual} is:pr is:merged "
+                    f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
+                )
+                end_cursor = None
+                while True:
+                    gh_args = [
+                        "api", "graphql",
+                        "-f", f"query={_GQL_LOC_SEARCH_QUERY}",
+                        "-f", f"q={q}",
+                    ]
+                    if end_cursor:
+                        gh_args += ["-f", f"cursor={end_cursor}"]
+                    else:
+                        gh_args += ["-F", "cursor=null"]
+                    out = run_gh(gh_args)
+                    data = json.loads(out)
+                    search = data["data"]["search"]
+                    for node in search["nodes"]:
+                        if not node:
+                            continue
+                        total += node.get("additions") or 0
+                    if not search["pageInfo"]["hasNextPage"]:
+                        break
+                    end_cursor = search["pageInfo"]["endCursor"]
+            cursor = chunk_end + timedelta(days=1)
+    except Exception:
+        return None
+    return total
 
 
 def get_revert_pr_count(org: str, since: date,
