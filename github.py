@@ -1169,6 +1169,7 @@ def cmd_count(args):
     suggestions_implemented = 0
     graphql_nodes = 0
     rows: List[dict] = []
+    all_pr_loc: Optional[int] = None
 
     if args.resume:
         data = load_checkpoint(args.org)
@@ -1209,6 +1210,10 @@ def cmd_count(args):
     revert_count = get_revert_pr_count(args.org, args.since, repos=args.repos)
     hotfix_count = get_hotfix_pr_count(args.org, args.since, repos=args.repos)
     print(f" {revert_count} reverts, {hotfix_count} hotfixes", file=sys.stderr)
+
+    print("  Fetching total org LOC...", end="", file=sys.stderr, flush=True)
+    all_pr_loc = get_all_pr_loc(args.org, args.since, repos=args.repos)
+    print(f" {all_pr_loc:,}" if all_pr_loc is not None else " (unavailable)", file=sys.stderr)
 
     all_qodo_prs = list(search_merged_prs(args.org, args.since, repos=args.repos))
     pending = [
