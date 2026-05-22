@@ -649,7 +649,7 @@ def compute_speed_to_fix(qodo_ts: Optional[str], commits: list) -> dict:
 
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
-    "Hours to Merge", "PR Creator", "Lines Changed",
+    "Hours to Merge", "PR Creator", "Lines Added",
     "Action Required Suggestions", "Action Required Implemented", "Action Required Dismissed",
     "Review Recommended Suggestions", "Review Recommended Implemented", "Review Recommended Dismissed",
     "Bugs Suggested", "Bugs Implemented",
@@ -770,7 +770,7 @@ def _apply_anonymization(rows, user_map, repo_map, scope="all"):
             row["PR URL"] = f"#PR-{row.get('PR #', '')}"
 
 
-def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
+def build_csv_row(pr: dict, lines_added: int, stats: Optional["QodoStats"],
                   timing: Optional[dict] = None,
                   extras: Optional[dict] = None) -> dict:
     has_qodo = stats is not None
@@ -781,7 +781,7 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
 
     impl_rate = f"{100 * implemented / total:.1f}" if total > 0 else ""
     per_100 = (
-        f"{100 * total / lines_changed:.1f}" if lines_changed > 0 and total > 0 else ""
+        f"{100 * total / lines_added:.1f}" if lines_added > 0 and total > 0 else ""
     )
 
     qodo_min = timing.get("qodo_min")
@@ -798,7 +798,7 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
                                                     pr.get("merged_at", ""),
                                                 ),
         "PR Creator":                           pr.get("creator", ""),
-        "Lines Changed":                        lines_changed,
+        "Lines Added":                          lines_added,
         "Action Required Suggestions":          stats.action_required_total if has_qodo else 0,
         "Action Required Implemented":          stats.action_required_implemented if has_qodo else 0,
         "Action Required Dismissed":            stats.action_required_dismissed if has_qodo else 0,
@@ -982,12 +982,15 @@ def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) 
         return None
 
 
-def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: int = 30) -> Optional[int]:
+def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: int = 30, total_prs: Optional[int] = None) -> Optional[int]:
     """Return total additions across all merged PRs in the window."""
     today = date.today()
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     cursor = since
     total = 0
+    pr_count = 0
+    _frac = f"0/{total_prs}" if total_prs is not None else "0"
+    print(f"\r  [{_frac} PRs] Fetching total org LOC...\033[K", end="", file=sys.stderr, flush=True)
     try:
         while cursor <= today:
             chunk_end = min(cursor + timedelta(days=chunk_days), today)
@@ -1014,6 +1017,9 @@ def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chu
                         if not node:
                             continue
                         total += node.get("additions") or 0
+                        pr_count += 1
+                    _frac = f"{pr_count}/{total_prs}" if total_prs is not None else str(pr_count)
+                    print(f"\r  [{_frac} PRs] Fetching total org LOC...\033[K", end="", file=sys.stderr, flush=True)
                     if not search["pageInfo"]["hasNextPage"]:
                         break
                     end_cursor = search["pageInfo"]["endCursor"]
@@ -1213,9 +1219,9 @@ def cmd_count(args):
     hotfix_count = get_hotfix_pr_count(args.org, args.since, repos=args.repos)
     print(f" {revert_count} reverts, {hotfix_count} hotfixes", file=sys.stderr)
 
-    print("  Fetching total org LOC...", end="", file=sys.stderr, flush=True)
-    all_pr_loc = get_all_pr_loc(args.org, args.since, repos=args.repos)
-    print(f" {all_pr_loc:,}" if all_pr_loc is not None else " (unavailable)", file=sys.stderr)
+    all_pr_loc = get_all_pr_loc(args.org, args.since, repos=args.repos, total_prs=org_pr_count)
+    loc_str = f"{all_pr_loc:,}" if all_pr_loc is not None else "(unavailable)"
+    print(f"\r  Fetching total org LOC... {loc_str}\033[K", file=sys.stderr)
 
     all_qodo_prs = list(search_merged_prs(args.org, args.since, repos=args.repos))
     pending = [
@@ -1254,7 +1260,7 @@ def cmd_count(args):
                 continue
 
             comments = pr_data["comments"]
-            lines_changed = pr_data["additions"] + pr_data["deletions"]
+            lines_added = pr_data["additions"]
             qodo = find_qodo_comment(comments)
             timing = compute_timing(pr, comments)
 
@@ -1263,7 +1269,7 @@ def cmd_count(args):
                 pr_data = fetch_pr_data(owner, repo, number, comments_limit=100)
                 graphql_nodes += 100
                 comments = pr_data["comments"]
-                lines_changed = pr_data["additions"] + pr_data["deletions"]
+                lines_added = pr_data["additions"]
                 qodo = find_qodo_comment(comments)
                 timing = compute_timing(pr, comments)
                 if not qodo:
@@ -1303,7 +1309,7 @@ def cmd_count(args):
                 "speed_to_fix_min": speed_info["speed_to_fix_min"],
             }
 
-            rows.append(build_csv_row(pr, lines_changed, stats, timing, extras=extras))
+            rows.append(build_csv_row(pr, lines_added, stats, timing, extras=extras))
 
             processed.add((owner, repo, str(number)))
             save_checkpoint(args.org, {
