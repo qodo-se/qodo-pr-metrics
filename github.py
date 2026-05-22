@@ -135,6 +135,7 @@ _AI_LABEL_NAMES = {
 _GQL_SEARCH_QUERY = (
     "query($q:String!,$cursor:String){"
     "search(query:$q,type:ISSUE,first:100,after:$cursor){"
+    "issueCount "
     "pageInfo{hasNextPage endCursor}"
     "nodes{...on PullRequest{"
     "number id "
@@ -148,11 +149,26 @@ _GQL_SEARCH_QUERY = (
 _GQL_LOC_SEARCH_QUERY = (
     "query($q:String!,$cursor:String){"
     "search(query:$q,type:ISSUE,first:100,after:$cursor){"
+    "issueCount "
     "pageInfo{hasNextPage endCursor}"
     "nodes{...on PullRequest{"
     "additions"
     "}}}}"
 )
+
+
+def _safe_chunk_days(known_count: Optional[int], since: date, target: int = 800) -> int:
+    """Compute chunk_days to keep search results safely under GitHub's 1000-result cap.
+
+    Targets `target` results per chunk. Falls back to 30 when count is unknown.
+    """
+    if not known_count:
+        return 30
+    span = max(1, (date.today() - since).days)
+    daily_rate = known_count / span
+    if daily_rate <= 0:
+        return 30
+    return max(1, min(30, int(target / daily_rate)))
 
 
 @dataclass
@@ -253,7 +269,7 @@ def _parse_search_gql_nodes(nodes):
     return results
 
 
-def search_merged_prs(org, since, chunk_days=30, repos=None):
+def search_merged_prs(org, since, chunk_days=None, repos=None, total_prs=None):
     """Yield a dict of PR metadata for every merged PR in the window.
 
     Each yielded dict contains: owner, repo, number, node_id, url, creator,
@@ -263,9 +279,12 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
     (Search API, 30 req/min) to avoid rate limiting on large orgs.
 
     Chunked by date range to stay under GitHub's 1000-result search query cap.
+    Pass total_prs to enable dynamic chunk sizing for high-volume orgs.
     """
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     today = date.today()
+    if chunk_days is None:
+        chunk_days = _safe_chunk_days(total_prs, since)
     total_days = max(1, (today - since).days)
     total_chunks = ((total_days + chunk_days - 1) // chunk_days) * len(qualifiers)
     cursor = since
@@ -289,6 +308,7 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
             )
             end_cursor = None
             chunk_count = 0
+            issue_count = 0
             while True:
                 gh_args = [
                     "api", "graphql",
@@ -302,6 +322,7 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
                 out = run_gh(gh_args)
                 data = json.loads(out)
                 search = data["data"]["search"]
+                issue_count = search.get("issueCount", 0)
                 for pr in _parse_search_gql_nodes(search["nodes"]):
                     key = (pr["owner"], pr["repo"], pr["number"])
                     if key in seen:
@@ -313,6 +334,13 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
                     break
                 end_cursor = search["pageInfo"]["endCursor"]
             print(f" {chunk_count} PRs", file=sys.stderr)
+            if issue_count > chunk_count:
+                print(
+                    f"  Warning: search cap hit for Qodo PR chunk "
+                    f"{cursor}..{chunk_end}: fetched {chunk_count}/{issue_count} PRs"
+                    f" — some reviewed PRs may be missing. Try a shorter --since window.",
+                    file=sys.stderr,
+                )
         cursor = chunk_end + timedelta(days=1)
 
 
@@ -869,13 +897,16 @@ def save_checkpoint(org, state):
     checkpoint_path(org).write_text(json.dumps(state, indent=2))
 
 
-def get_org_author_count(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: int = 30) -> Optional[int]:
+def get_org_author_count(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: Optional[int] = None, total_prs: Optional[int] = None) -> Optional[int]:
     """Return count of unique PR authors who merged a PR in the window (Qodo or not).
 
     Uses date chunking to stay under GitHub Search API's 1000-result cap,
     matching the approach used by search_merged_prs.
+    Pass total_prs to enable dynamic chunk sizing for high-volume orgs.
     """
     today = date.today()
+    if chunk_days is None:
+        chunk_days = _safe_chunk_days(total_prs, since)
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     authors: set = set()
     cursor = since
@@ -982,9 +1013,14 @@ def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) 
         return None
 
 
-def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: int = 30, total_prs: Optional[int] = None) -> Optional[int]:
-    """Return total additions across all merged PRs in the window."""
+def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: Optional[int] = None, total_prs: Optional[int] = None) -> Optional[int]:
+    """Return total additions across all merged PRs in the window.
+
+    Pass total_prs to enable dynamic chunk sizing for high-volume orgs.
+    """
     today = date.today()
+    if chunk_days is None:
+        chunk_days = _safe_chunk_days(total_prs, since)
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     cursor = since
     total = 0
@@ -1000,6 +1036,8 @@ def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chu
                     f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
                 )
                 end_cursor = None
+                chunk_pr_count = 0
+                issue_count = 0
                 while True:
                     gh_args = [
                         "api", "graphql",
@@ -1013,16 +1051,25 @@ def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chu
                     out = run_gh(gh_args)
                     data = json.loads(out)
                     search = data["data"]["search"]
+                    issue_count = search.get("issueCount", 0)
                     for node in search["nodes"]:
                         if not node:
                             continue
                         total += node.get("additions") or 0
                         pr_count += 1
+                        chunk_pr_count += 1
                     _frac = f"{pr_count}/{total_prs}" if total_prs is not None else str(pr_count)
                     print(f"\r  [{_frac} PRs] Fetching total org LOC...\033[K", end="", file=sys.stderr, flush=True)
                     if not search["pageInfo"]["hasNextPage"]:
                         break
                     end_cursor = search["pageInfo"]["endCursor"]
+                if issue_count > chunk_pr_count:
+                    print(
+                        f"\n  Warning: search cap hit for LOC chunk "
+                        f"{cursor}..{chunk_end}: fetched {chunk_pr_count}/{issue_count} PRs"
+                        f" — total LOC may be understated. Try a shorter --since window.",
+                        file=sys.stderr,
+                    )
             cursor = chunk_end + timedelta(days=1)
     except Exception:
         return None
@@ -1223,7 +1270,7 @@ def cmd_count(args):
     loc_str = f"{all_pr_loc:,}" if all_pr_loc is not None else "(unavailable)"
     print(f"\r  Fetching total org LOC... {loc_str}\033[K", file=sys.stderr)
 
-    all_qodo_prs = list(search_merged_prs(args.org, args.since, repos=args.repos))
+    all_qodo_prs = list(search_merged_prs(args.org, args.since, repos=args.repos, total_prs=org_pr_count))
     pending = [
         pr for pr in all_qodo_prs
         if (pr["owner"], pr["repo"], str(pr["number"])) not in processed
