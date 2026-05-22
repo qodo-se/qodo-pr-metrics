@@ -1297,15 +1297,14 @@ _HOURS_SAVED_JS = r"""
   const TOTALS       = data.TOTALS;
 
   const EFFORT_PRESETS = {
-    thorough: { lph: 300,  label: 'Thorough', cite: 'Cisco / SmartBear formal-inspection rate' },
-    moderate: { lph: 600,  label: 'Moderate', cite: 'Modern team norm for non-safety-critical app code' },
+    thorough: { lph: 400,  label: 'Thorough', cite: 'SmartBear recommended rate — quality degrades above 500 LOC/h' },
+    moderate: { lph: 800,  label: 'Moderate', cite: 'Common team norm for non-safety-critical app code' },
     quick:    { lph: 1200, label: 'Quick',    cite: 'Skim / LGTM pace — AI-codegen, refactors, vendored libraries' },
   };
   const DEFAULTS = {
     rate: 180000,
     totalDevs: EVAL_DEVS,
     totalLoc: TOTALS.p95.loc,
-    locPerHr: 600,
     trim: 'p95',
     reviewEffort: 'moderate',
     offloadPct: 50,
@@ -1328,7 +1327,7 @@ _HOURS_SAVED_JS = r"""
     const annualize = 365 / WINDOW_DAYS;
     const devMult   = state.totalDevs / EVAL_DEVS;
     const scale     = annualize * devMult;
-    const baselineH = state.totalLoc / state.locPerHr;
+    const baselineH = state.totalLoc / EFFORT_PRESETS[state.reviewEffort].lph;
     const observedH = baselineH * (state.offloadPct / 100);
     const projectedH = observedH * scale;
     const hourly = state.rate / HRS_PER_YEAR;
@@ -1434,7 +1433,7 @@ _HOURS_SAVED_JS = r"""
 
     $('formula').innerHTML =
         `<b>observed</b> <span style="color:var(--fg-subtle)">=</span> (total_loc &divide; loc_per_hr) &times; offload_pct<br>`
-      + `<span style="color:var(--fg-subtle)">&rarr;</span> (<b>${fmtInt(state.totalLoc)}</b> &divide; <b>${state.locPerHr}</b>) &times; <b>${state.offloadPct}%</b> <span style="color:var(--fg-subtle)">=</span> <b>${fmt1(c.observedH)}&nbsp;h</b><br>`
+      + `<span style="color:var(--fg-subtle)">&rarr;</span> (<b>${fmtInt(state.totalLoc)}</b> &divide; <b>${EFFORT_PRESETS[state.reviewEffort].lph}</b>) &times; <b>${state.offloadPct}%</b> <span style="color:var(--fg-subtle)">=</span> <b>${fmt1(c.observedH)}&nbsp;h</b><br>`
       + `<b>projected</b> <span style="color:var(--fg-subtle)">=</span> observed <span style="color:var(--fg-subtle)">&times;</span> <b>(365/${WINDOW_DAYS})</b> <span style="color:var(--fg-subtle)">&times;</span> <b>(${state.totalDevs}/${EVAL_DEVS})</b> <span style="color:var(--fg-subtle)">=</span> <b>${fmtInt(c.projectedH)}&nbsp;h/yr</b>`;
   }
 
@@ -1535,7 +1534,6 @@ _HOURS_SAVED_JS = r"""
     const preset = EFFORT_PRESETS[name];
     if(!preset) return;
     state.reviewEffort = name;
-    state.locPerHr     = preset.lph;
     render();
   }
   function setTrim(name){
