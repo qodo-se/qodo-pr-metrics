@@ -1167,6 +1167,7 @@ def cmd_count(args):
     skipped_prs = 0
     suggestions_total = 0
     suggestions_implemented = 0
+    qodo_loc_total = 0
     graphql_nodes = 0
     rows: List[dict] = []
     all_pr_loc: Optional[int] = None
@@ -1271,6 +1272,7 @@ def cmd_count(args):
                     )
                     continue
 
+            qodo_loc_total += pr_data["additions"]
             stats = parse_qodo_comment(qodo["body"])
             suggestions_total += stats.total_suggestions
             suggestions_implemented += stats.total_implemented
