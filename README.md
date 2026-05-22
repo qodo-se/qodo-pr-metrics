@@ -53,6 +53,11 @@ gh auth refresh -s repo
 
 > **Note:** Results are always scoped to repos the authenticated token can access. If you suspect missing repos, compare the "Repos in results" list printed at the end of a run against your expected scope, or use `--repos` to declare the repos explicitly.
 
+After a run completes, the script prints a terminal summary that includes:
+
+- **Total LOC added (all PRs):** sum of lines added across every merged PR in the window
+- **Qodo-reviewed LOC:** lines added in Qodo-reviewed PRs, with its share of the total
+
 ## Usage
 
 **Mac/Linux:**

@@ -1369,6 +1369,13 @@ def cmd_count(args):
     if suggestions_total:
         rate = 100 * suggestions_implemented / suggestions_total
         print(f"Implementation rate:         {rate:.1f}%")
+    if all_pr_loc is not None:
+        print(f"Total LOC added (all PRs):   {all_pr_loc:,}")
+        if all_pr_loc > 0:
+            pct = 100 * qodo_loc_total / all_pr_loc
+            print(f"Qodo-reviewed LOC:           {qodo_loc_total:,}  ({pct:.1f}% of total)")
+        else:
+            print(f"Qodo-reviewed LOC:           {qodo_loc_total:,}")
 
     elapsed = time.monotonic() - start_time
     minutes, seconds = divmod(int(elapsed), 60)
