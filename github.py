@@ -167,7 +167,12 @@ def _gql_loc_query(page_size: int) -> str:
 
 
 class TransientHttpError(Exception):
-    """Raised by run_gh when 5xx retries are exhausted and the caller opted in to recover."""
+    """Raised by run_gh when transient-error retries are exhausted and the caller opted in to recover.
+
+    Covers HTTP 5xx responses and HTTP/2 stream CANCEL/INTERNAL_ERROR frames
+    (see _TRANSIENT_HTTP), both of which GitHub's edge can emit for expensive
+    GraphQL queries on large orgs.
+    """
 
 
 def _safe_chunk_days(known_count: Optional[int], since: date, target: int = 800) -> int:
@@ -223,11 +228,15 @@ def _rate_limit_reset_epoch():
 
 
 def run_gh(args, paginate=False, raise_on_5xx=False):
-    """Run `gh` and return stdout. Retries on rate limits and transient HTTP 5xx errors.
+    """Run `gh` and return stdout. Retries on rate limits and transient HTTP errors.
 
-    If `raise_on_5xx` is True, raises TransientHttpError after 5xx retries are
-    exhausted instead of calling sys.exit, so the caller can adapt and retry
-    (e.g. by shrinking page size).
+    Transient errors include HTTP 5xx responses and HTTP/2 stream
+    CANCEL/INTERNAL_ERROR frames (see _TRANSIENT_HTTP).
+
+    If `raise_on_5xx` is True, raises TransientHttpError after transient
+    retries are exhausted instead of calling sys.exit, so the caller can
+    adapt and retry (e.g. by shrinking page size). The kwarg name is kept
+    for backward compatibility; it gates the stream-error path too.
     """
     cmd = ["gh"] + args
     if paginate and "--paginate" not in cmd:
