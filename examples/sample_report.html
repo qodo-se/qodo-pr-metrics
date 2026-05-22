@@ -629,7 +629,6 @@ table.top-prs .mini-bar.purple > i{background:var(--p-400)}
     rate: 180000,
     totalDevs: EVAL_DEVS,
     totalLoc: TOTALS.p95.loc,
-    locPerHr: 800,
     trim: 'p95',
     reviewEffort: 'moderate',
     offloadPct: 50,
@@ -652,7 +651,7 @@ table.top-prs .mini-bar.purple > i{background:var(--p-400)}
     const annualize = 365 / WINDOW_DAYS;
     const devMult   = state.totalDevs / EVAL_DEVS;
     const scale     = annualize * devMult;
-    const baselineH = state.totalLoc / state.locPerHr;
+    const baselineH = state.totalLoc / EFFORT_PRESETS[state.reviewEffort].lph;
     const observedH = baselineH * (state.offloadPct / 100);
     const projectedH = observedH * scale;
     const hourly = state.rate / HRS_PER_YEAR;
@@ -758,7 +757,7 @@ table.top-prs .mini-bar.purple > i{background:var(--p-400)}
 
     $('formula').innerHTML =
         `<b>observed</b> <span style="color:var(--fg-subtle)">=</span> (total_loc &divide; loc_per_hr) &times; offload_pct<br>`
-      + `<span style="color:var(--fg-subtle)">&rarr;</span> (<b>${fmtInt(state.totalLoc)}</b> &divide; <b>${state.locPerHr}</b>) &times; <b>${state.offloadPct}%</b> <span style="color:var(--fg-subtle)">=</span> <b>${fmt1(c.observedH)}&nbsp;h</b><br>`
+      + `<span style="color:var(--fg-subtle)">&rarr;</span> (<b>${fmtInt(state.totalLoc)}</b> &divide; <b>${EFFORT_PRESETS[state.reviewEffort].lph}</b>) &times; <b>${state.offloadPct}%</b> <span style="color:var(--fg-subtle)">=</span> <b>${fmt1(c.observedH)}&nbsp;h</b><br>`
       + `<b>projected</b> <span style="color:var(--fg-subtle)">=</span> observed <span style="color:var(--fg-subtle)">&times;</span> <b>(365/${WINDOW_DAYS})</b> <span style="color:var(--fg-subtle)">&times;</span> <b>(${state.totalDevs}/${EVAL_DEVS})</b> <span style="color:var(--fg-subtle)">=</span> <b>${fmtInt(c.projectedH)}&nbsp;h/yr</b>`;
   }
 
@@ -859,7 +858,6 @@ table.top-prs .mini-bar.purple > i{background:var(--p-400)}
     const preset = EFFORT_PRESETS[name];
     if(!preset) return;
     state.reviewEffort = name;
-    state.locPerHr     = preset.lph;
     render();
   }
   function setTrim(name){
