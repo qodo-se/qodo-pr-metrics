@@ -1297,15 +1297,15 @@ _HOURS_SAVED_JS = r"""
   const TOTALS       = data.TOTALS;
 
   const EFFORT_PRESETS = {
-    thorough: { lph: 300,  label: 'Thorough', cite: 'Cisco / SmartBear formal-inspection rate' },
-    moderate: { lph: 600,  label: 'Moderate', cite: 'Modern team norm for non-safety-critical app code' },
+    thorough: { lph: 400,  label: 'Thorough', cite: 'SmartBear recommended rate — quality degrades above 500 LOC/h' },
+    moderate: { lph: 800,  label: 'Moderate', cite: 'Common team norm for non-safety-critical app code' },
     quick:    { lph: 1200, label: 'Quick',    cite: 'Skim / LGTM pace — AI-codegen, refactors, vendored libraries' },
   };
   const DEFAULTS = {
     rate: 180000,
     totalDevs: EVAL_DEVS,
     totalLoc: TOTALS.p95.loc,
-    locPerHr: 600,
+    locPerHr: 800,
     trim: 'p95',
     reviewEffort: 'moderate',
     offloadPct: 50,
