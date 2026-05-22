@@ -258,7 +258,7 @@ def run_gh(args, paginate=False, raise_on_5xx=False):
             time.sleep(wait)
             continue
         if m and raise_on_5xx:
-            raise TransientHttpError(stderr)
+            raise TransientHttpError(f"`{' '.join(cmd)}` failed:\n{stderr}")
         sys.exit(f"`{' '.join(cmd)}` failed:\n{stderr}")
 
 
@@ -1101,7 +1101,7 @@ def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chu
                     )
             cursor = chunk_end + timedelta(days=1)
     except Exception as exc:
-        print(f"\n  Warning: LOC fetch failed: {exc!r}", file=sys.stderr)
+        print(f"\n  Warning: LOC fetch failed: {exc}", file=sys.stderr)
         return None
     return total
 
