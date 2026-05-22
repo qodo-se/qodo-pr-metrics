@@ -358,6 +358,35 @@ def test_fetch_pr_data_batch_returns_ci_status_and_commits(monkeypatch):
     assert result["PR_ghi"]["commits"][0]["committedDate"] == "2026-01-01T11:00:00Z"
 
 
+def test_fetch_pr_data_batch_propagates_raise_on_5xx(monkeypatch):
+    """raise_on_5xx=True must reach run_gh so callers can recover from persistent 5xx."""
+    captured = {}
+
+    def fake_run_gh(args, **kw):
+        captured.update(kw)
+        return _batch_response([])
+
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    prs = [{"node_id": "PR_abc", "owner": "a", "repo": "r", "number": 1}]
+    fetch_pr_data_batch(prs, raise_on_5xx=True)
+    assert captured.get("raise_on_5xx") is True
+
+
+def test_fetch_pr_data_batch_default_does_not_raise_on_5xx(monkeypatch):
+    """Without opting in, the function preserves legacy sys.exit-on-5xx behavior."""
+    captured = {}
+
+    def fake_run_gh(args, **kw):
+        captured.update(kw)
+        return _batch_response([])
+
+    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    prs = [{"node_id": "PR_abc", "owner": "a", "repo": "r", "number": 1}]
+    fetch_pr_data_batch(prs)
+    # Either absent or explicitly False — both mean run_gh keeps the default behavior.
+    assert not captured.get("raise_on_5xx", False)
+
+
 from github import get_revert_pr_count, get_hotfix_pr_count
 
 
