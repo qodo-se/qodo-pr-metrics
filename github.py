@@ -1352,7 +1352,7 @@ def cmd_count(args):
                     f"batch size {pr_batch_size}: {exc}",
                     file=sys.stderr, flush=True,
                 )
-                raise
+                sys.exit(1)
             new_size = max(_PR_BATCH_SIZE_MIN, pr_batch_size // 2)
             print(
                 f"\n  Persistent API errors on PR-data query — shrinking batch size "
