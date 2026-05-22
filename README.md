@@ -53,6 +53,11 @@ gh auth refresh -s repo
 
 > **Note:** Results are always scoped to repos the authenticated token can access. If you suspect missing repos, compare the "Repos in results" list printed at the end of a run against your expected scope, or use `--repos` to declare the repos explicitly.
 
+After a run completes, the script prints a terminal summary that includes:
+
+- **Total LOC added (all PRs):** sum of lines added across every merged PR in the window
+- **Qodo-reviewed LOC:** lines added in Qodo-reviewed PRs, with its share of the total
+
 ## Usage
 
 **Mac/Linux:**
@@ -104,7 +109,7 @@ Each row in the CSV contains 37 columns with per-PR data:
 | PR Merge Date | ISO-8601 timestamp when the PR was merged |
 | Hours to Merge | Whole hours from creation to merge |
 | PR Creator | GitHub login of the PR author |
-| Lines Changed | Total lines added + deleted |
+| Lines Added | Total lines added |
 | Action Required Suggestions | Count of "Action Required" suggestions |
 | Action Required Implemented | Count of implemented "Action Required" suggestions |
 | Action Required Dismissed | Count of "Action Required" suggestions the developer explicitly dismissed (strikethrough + ✗ Dismissed badge). These are NOT included in `Action Required Implemented`. |
@@ -121,7 +126,7 @@ Each row in the CSV contains 37 columns with per-PR data:
 | Total Implemented | Sum of all implemented categories |
 | Total Dismissed | Total suggestions dismissed across all sections. `Implementation Rate (%)` reflects only suggestions that were actually fixed, not dismissed ones. |
 | Implementation Rate (%) | `Total Implemented / Total Suggestions × 100`, blank when 0 suggestions |
-| Suggestions per 100 Lines | `Total Suggestions / Lines Changed × 100`, blank when lines = 0 or suggestions = 0 |
+| Suggestions per 100 Lines | `Total Suggestions / Lines Added × 100`, blank when lines = 0 or suggestions = 0 |
 | Time to First Qodo Comment (min) | Minutes from PR creation to Qodo's first comment; blank if no Qodo comment |
 | Time to First Human Comment (min) | Minutes from PR creation to the first non-Qodo comment; blank if none |
 | Has Human Comment | `True` if any non-Qodo comment exists on the PR |

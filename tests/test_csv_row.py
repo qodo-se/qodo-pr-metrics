@@ -72,11 +72,11 @@ def _pr(overrides=None):
     return base
 
 def test_build_csv_row_no_qodo():
-    row = build_csv_row(_pr(), lines_changed=200, stats=None)
+    row = build_csv_row(_pr(), lines_added=200, stats=None)
     assert row["Repo Name"] == "backend"
     assert row["PR #"] == 99
     assert row["PR Creator"] == "alice"
-    assert row["Lines Changed"] == 200
+    assert row["Lines Added"] == 200
     assert row["Hours to Merge"] == 48
     assert row["Total Suggestions"] == 0
     assert row["Implementation Rate (%)"] == ""
@@ -90,17 +90,17 @@ def test_build_csv_row_with_qodo():
         rule_violations_suggested=1, rule_violations_implemented=1,
         total_suggestions=4, total_implemented=3,
     )
-    row = build_csv_row(_pr(), lines_changed=400, stats=stats)
+    row = build_csv_row(_pr(), lines_added=400, stats=stats)
     assert row["Total Suggestions"] == 4
     assert row["Total Implemented"] == 3
     assert row["Implementation Rate (%)"] == "75.0"
     assert row["Suggestions per 100 Lines"] == "1.0"
 
 def test_build_csv_row_zero_lines():
-    """No division by zero when lines_changed is 0."""
+    """No division by zero when lines_added is 0."""
     stats = QodoStats(action_required_total=2, action_required_implemented=1,
                       total_suggestions=2, total_implemented=1)
-    row = build_csv_row(_pr(), lines_changed=0, stats=stats)
+    row = build_csv_row(_pr(), lines_added=0, stats=stats)
     assert row["Suggestions per 100 Lines"] == ""
 
 
@@ -283,21 +283,21 @@ def test_compute_timing_falls_back_to_created_at_when_no_real_edit():
 
 def test_build_csv_row_timing_columns_populated():
     timing = {"qodo_min": 8, "human_min": 270, "has_human": True}
-    row = build_csv_row(_pr(), lines_changed=100, stats=None, timing=timing)
+    row = build_csv_row(_pr(), lines_added=100, stats=None, timing=timing)
     assert row["Time to First Qodo Comment (min)"] == 8
     assert row["Time to First Human Comment (min)"] == 270
     assert row["Has Human Comment"] is True
 
 def test_build_csv_row_timing_none_becomes_empty():
     timing = {"qodo_min": None, "human_min": None, "has_human": False}
-    row = build_csv_row(_pr(), lines_changed=100, stats=None, timing=timing)
+    row = build_csv_row(_pr(), lines_added=100, stats=None, timing=timing)
     assert row["Time to First Qodo Comment (min)"] == ""
     assert row["Time to First Human Comment (min)"] == ""
     assert row["Has Human Comment"] is False
 
 def test_build_csv_row_no_timing_arg():
     # backward-compatible: timing defaults to None, new columns default to empty
-    row = build_csv_row(_pr(), lines_changed=100, stats=None)
+    row = build_csv_row(_pr(), lines_added=100, stats=None)
     assert row["Time to First Qodo Comment (min)"] == ""
     assert "Spotlight Issues" in row
 
@@ -306,13 +306,13 @@ def test_build_csv_row_spotlight_issues_serialised():
         total_suggestions=2, total_implemented=1,
         spotlight_issues=[{"title": "API key leak", "category": "bug", "sub_label": "Security"}],
     )
-    row = build_csv_row(_pr(), lines_changed=100, stats=stats)
+    row = build_csv_row(_pr(), lines_added=100, stats=stats)
     issues = json.loads(row["Spotlight Issues"])
     assert len(issues) == 1
     assert issues[0]["title"] == "API key leak"
 
 def test_build_csv_row_no_spotlight_issues_empty_json():
-    row = build_csv_row(_pr(), lines_changed=100, stats=None)
+    row = build_csv_row(_pr(), lines_added=100, stats=None)
     assert row["Spotlight Issues"] == "[]"
 
 
@@ -638,7 +638,7 @@ def test_build_csv_row_extras_populated():
         "commits_after_qodo": 3,
         "speed_to_fix_min": 45,
     }
-    row = build_csv_row(_pr(), lines_changed=100, stats=None, extras=extras)
+    row = build_csv_row(_pr(), lines_added=100, stats=None, extras=extras)
     assert row["Is AI Authored"] is True
     assert row["AI Author Type"] == "copilot"
     assert row["Reviewer Count"] == 2
@@ -650,7 +650,7 @@ def test_build_csv_row_extras_populated():
 
 
 def test_build_csv_row_extras_none_defaults():
-    row = build_csv_row(_pr(), lines_changed=100, stats=None)
+    row = build_csv_row(_pr(), lines_added=100, stats=None)
     assert row["Is AI Authored"] is False
     assert row["AI Author Type"] == ""
     assert row["Reviewer Count"] == 0
@@ -663,7 +663,7 @@ def test_build_csv_row_extras_none_defaults():
 
 def test_build_csv_row_speed_to_fix_none_becomes_empty():
     extras = {"speed_to_fix_min": None, "ci_status": None}
-    row = build_csv_row(_pr(), lines_changed=100, stats=None, extras=extras)
+    row = build_csv_row(_pr(), lines_added=100, stats=None, extras=extras)
     assert row["Speed to First Fix (min)"] == ""
     assert row["CI Status"] == ""
 
@@ -685,13 +685,13 @@ def test_build_csv_row_dismissed_columns_present():
         total_implemented=1,
         total_dismissed=2,
     )
-    row = build_csv_row(_pr(), lines_changed=400, stats=stats)
+    row = build_csv_row(_pr(), lines_added=400, stats=stats)
     assert row["Action Required Dismissed"] == 1
     assert row["Review Recommended Dismissed"] == 1
     assert row["Total Dismissed"] == 2
 
 def test_build_csv_row_dismissed_zero_when_no_qodo():
-    row = build_csv_row(_pr(), lines_changed=100, stats=None)
+    row = build_csv_row(_pr(), lines_added=100, stats=None)
     assert row["Action Required Dismissed"] == 0
     assert row["Review Recommended Dismissed"] == 0
     assert row["Total Dismissed"] == 0
@@ -703,5 +703,5 @@ def test_build_csv_row_impl_rate_excludes_dismissed():
         total_implemented=1,   # 1 fixed
         total_dismissed=2,     # 2 dismissed
     )
-    row = build_csv_row(_pr(), lines_changed=400, stats=stats)
+    row = build_csv_row(_pr(), lines_added=400, stats=stats)
     assert row["Implementation Rate (%)"] == "25.0"   # 1/4, not 3/4

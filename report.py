@@ -106,8 +106,8 @@ class ReportData:
     prs_with_any_fix: int = 0
     prs_with_spotlight_fix: int = 0
     # ── hours saved (Prototype 03) ──────────────────────────
-    total_loc: int = 0                 # Σ Lines Changed across all rows
-    total_loc_trimmed: int = 0         # Σ Lines Changed after dropping the top 5% of PRs by size
+    total_loc: int = 0                 # Σ Lines Added across all rows
+    total_loc_trimmed: int = 0         # Σ Lines Added after dropping the top 5% of PRs by size
     trimmed_pr_count: int = 0          # PRs kept after the same trim
     unique_developers: int = 0         # distinct PR Creators (matches the prototype's EVAL_DEVS)
     # Per-trim variants for the live tunable controls in the Hours-Saved section.
@@ -299,10 +299,10 @@ def aggregate(rows: list, org_prs_total: Optional[int] = None,
     # ── Hours-Saved (Prototype 03) inputs ──────────────────────────────────
     # Pull per-PR LOC into a list so we can compute the headline (Σ) and the
     # outlier-trimmed variant the section actually quotes. The trim matches
-    # the prototype: keep PRs with Lines Changed ≤ the 95th-percentile cutoff.
+    # the prototype: keep PRs with Lines Added ≤ the 95th-percentile cutoff.
     loc_per_pr: list = []
     for r in rows:
-        v = r.get("Lines Changed", 0)
+        v = r.get("Lines Added", 0)
         try:
             loc_per_pr.append(int(v) if v not in (None, "") else 0)
         except (TypeError, ValueError):

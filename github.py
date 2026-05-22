@@ -135,6 +135,7 @@ _AI_LABEL_NAMES = {
 _GQL_SEARCH_QUERY = (
     "query($q:String!,$cursor:String){"
     "search(query:$q,type:ISSUE,first:100,after:$cursor){"
+    "issueCount "
     "pageInfo{hasNextPage endCursor}"
     "nodes{...on PullRequest{"
     "number id "
@@ -144,6 +145,30 @@ _GQL_SEARCH_QUERY = (
     "createdAt mergedAt"
     "}}}}"
 )
+
+_GQL_LOC_SEARCH_QUERY = (
+    "query($q:String!,$cursor:String){"
+    "search(query:$q,type:ISSUE,first:100,after:$cursor){"
+    "issueCount "
+    "pageInfo{hasNextPage endCursor}"
+    "nodes{...on PullRequest{"
+    "additions"
+    "}}}}"
+)
+
+
+def _safe_chunk_days(known_count: Optional[int], since: date, target: int = 800) -> int:
+    """Compute chunk_days to keep search results safely under GitHub's 1000-result cap.
+
+    Targets `target` results per chunk. Falls back to 30 when count is unknown.
+    """
+    if not known_count:
+        return 30
+    span = max(1, (date.today() - since).days)
+    daily_rate = known_count / span
+    if daily_rate <= 0:
+        return 30
+    return max(1, min(30, int(target / daily_rate)))
 
 
 @dataclass
@@ -244,7 +269,7 @@ def _parse_search_gql_nodes(nodes):
     return results
 
 
-def search_merged_prs(org, since, chunk_days=30, repos=None):
+def search_merged_prs(org, since, chunk_days=None, repos=None, total_prs=None):
     """Yield a dict of PR metadata for every merged PR in the window.
 
     Each yielded dict contains: owner, repo, number, node_id, url, creator,
@@ -254,9 +279,12 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
     (Search API, 30 req/min) to avoid rate limiting on large orgs.
 
     Chunked by date range to stay under GitHub's 1000-result search query cap.
+    Pass total_prs to enable dynamic chunk sizing for high-volume orgs.
     """
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     today = date.today()
+    if chunk_days is None:
+        chunk_days = _safe_chunk_days(total_prs, since)
     total_days = max(1, (today - since).days)
     total_chunks = ((total_days + chunk_days - 1) // chunk_days) * len(qualifiers)
     cursor = since
@@ -280,6 +308,7 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
             )
             end_cursor = None
             chunk_count = 0
+            issue_count = 0
             while True:
                 gh_args = [
                     "api", "graphql",
@@ -293,6 +322,7 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
                 out = run_gh(gh_args)
                 data = json.loads(out)
                 search = data["data"]["search"]
+                issue_count = search.get("issueCount", 0)
                 for pr in _parse_search_gql_nodes(search["nodes"]):
                     key = (pr["owner"], pr["repo"], pr["number"])
                     if key in seen:
@@ -304,6 +334,13 @@ def search_merged_prs(org, since, chunk_days=30, repos=None):
                     break
                 end_cursor = search["pageInfo"]["endCursor"]
             print(f" {chunk_count} PRs", file=sys.stderr)
+            if issue_count > chunk_count:
+                print(
+                    f"  Warning: search cap hit for Qodo PR chunk "
+                    f"{cursor}..{chunk_end}: fetched {chunk_count}/{issue_count} PRs"
+                    f" — some reviewed PRs may be missing. Try a shorter --since window.",
+                    file=sys.stderr,
+                )
         cursor = chunk_end + timedelta(days=1)
 
 
@@ -640,7 +677,7 @@ def compute_speed_to_fix(qodo_ts: Optional[str], commits: list) -> dict:
 
 CSV_COLUMNS = [
     "Repo Name", "PR #", "PR URL", "PR Creation Date", "PR Merge Date",
-    "Hours to Merge", "PR Creator", "Lines Changed",
+    "Hours to Merge", "PR Creator", "Lines Added",
     "Action Required Suggestions", "Action Required Implemented", "Action Required Dismissed",
     "Review Recommended Suggestions", "Review Recommended Implemented", "Review Recommended Dismissed",
     "Bugs Suggested", "Bugs Implemented",
@@ -761,7 +798,7 @@ def _apply_anonymization(rows, user_map, repo_map, scope="all"):
             row["PR URL"] = f"#PR-{row.get('PR #', '')}"
 
 
-def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
+def build_csv_row(pr: dict, lines_added: int, stats: Optional["QodoStats"],
                   timing: Optional[dict] = None,
                   extras: Optional[dict] = None) -> dict:
     has_qodo = stats is not None
@@ -772,7 +809,7 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
 
     impl_rate = f"{100 * implemented / total:.1f}" if total > 0 else ""
     per_100 = (
-        f"{100 * total / lines_changed:.1f}" if lines_changed > 0 and total > 0 else ""
+        f"{100 * total / lines_added:.1f}" if lines_added > 0 and total > 0 else ""
     )
 
     qodo_min = timing.get("qodo_min")
@@ -789,7 +826,7 @@ def build_csv_row(pr: dict, lines_changed: int, stats: Optional["QodoStats"],
                                                     pr.get("merged_at", ""),
                                                 ),
         "PR Creator":                           pr.get("creator", ""),
-        "Lines Changed":                        lines_changed,
+        "Lines Added":                          lines_added,
         "Action Required Suggestions":          stats.action_required_total if has_qodo else 0,
         "Action Required Implemented":          stats.action_required_implemented if has_qodo else 0,
         "Action Required Dismissed":            stats.action_required_dismissed if has_qodo else 0,
@@ -860,13 +897,16 @@ def save_checkpoint(org, state):
     checkpoint_path(org).write_text(json.dumps(state, indent=2))
 
 
-def get_org_author_count(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: int = 30) -> Optional[int]:
+def get_org_author_count(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: Optional[int] = None, total_prs: Optional[int] = None) -> Optional[int]:
     """Return count of unique PR authors who merged a PR in the window (Qodo or not).
 
     Uses date chunking to stay under GitHub Search API's 1000-result cap,
     matching the approach used by search_merged_prs.
+    Pass total_prs to enable dynamic chunk sizing for high-volume orgs.
     """
     today = date.today()
+    if chunk_days is None:
+        chunk_days = _safe_chunk_days(total_prs, since)
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
     authors: set = set()
     cursor = since
@@ -971,6 +1011,70 @@ def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) 
         return int(out.strip())
     except ValueError:
         return None
+
+
+def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: Optional[int] = None, total_prs: Optional[int] = None) -> Optional[int]:
+    """Return total additions across all merged PRs in the window.
+
+    Pass total_prs to enable dynamic chunk sizing for high-volume orgs.
+    """
+    today = date.today()
+    if chunk_days is None:
+        chunk_days = _safe_chunk_days(total_prs, since)
+    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
+    cursor = since
+    total = 0
+    pr_count = 0
+    _frac = f"0/{total_prs}" if total_prs is not None else "0"
+    print(f"\r  [{_frac} PRs] Fetching total org LOC...\033[K", end="", file=sys.stderr, flush=True)
+    try:
+        while cursor <= today:
+            chunk_end = min(cursor + timedelta(days=chunk_days), today)
+            for qual in qualifiers:
+                q = (
+                    f"{qual} is:pr is:merged "
+                    f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
+                )
+                end_cursor = None
+                chunk_pr_count = 0
+                issue_count = 0
+                while True:
+                    gh_args = [
+                        "api", "graphql",
+                        "-f", f"query={_GQL_LOC_SEARCH_QUERY}",
+                        "-f", f"q={q}",
+                    ]
+                    if end_cursor:
+                        gh_args += ["-f", f"cursor={end_cursor}"]
+                    else:
+                        gh_args += ["-F", "cursor=null"]
+                    out = run_gh(gh_args)
+                    data = json.loads(out)
+                    search = data["data"]["search"]
+                    issue_count = search.get("issueCount", 0)
+                    for node in search["nodes"]:
+                        if not node:
+                            continue
+                        total += node.get("additions") or 0
+                        pr_count += 1
+                        chunk_pr_count += 1
+                    _frac = f"{pr_count}/{total_prs}" if total_prs is not None else str(pr_count)
+                    print(f"\r  [{_frac} PRs] Fetching total org LOC...\033[K", end="", file=sys.stderr, flush=True)
+                    if not search["pageInfo"]["hasNextPage"]:
+                        break
+                    end_cursor = search["pageInfo"]["endCursor"]
+                if issue_count > chunk_pr_count:
+                    print(
+                        f"\n  Warning: search cap hit for LOC chunk "
+                        f"{cursor}..{chunk_end}: fetched {chunk_pr_count}/{issue_count} PRs"
+                        f" — total LOC may be understated. Try a shorter --since window.",
+                        file=sys.stderr,
+                    )
+            cursor = chunk_end + timedelta(days=1)
+    except Exception as exc:
+        print(f"\n  Warning: LOC fetch failed: {exc!r}", file=sys.stderr)
+        return None
+    return total
 
 
 def get_revert_pr_count(org: str, since: date,
@@ -1117,8 +1221,10 @@ def cmd_count(args):
     skipped_prs = 0
     suggestions_total = 0
     suggestions_implemented = 0
+    qodo_loc_total = 0
     graphql_nodes = 0
     rows: List[dict] = []
+    all_pr_loc: Optional[int] = None
 
     if args.resume:
         data = load_checkpoint(args.org)
@@ -1136,6 +1242,7 @@ def cmd_count(args):
                 pr_total = data["pr_total"]
                 suggestions_total = data["suggestions_total"]
                 suggestions_implemented = data["suggestions_implemented"]
+                qodo_loc_total = data.get("qodo_loc_total", 0)
                 processed = {tuple(x) for x in data["processed"]}
                 rows = data.get("rows", [])
                 since_str = data.get("since", args.since.isoformat())
@@ -1160,7 +1267,11 @@ def cmd_count(args):
     hotfix_count = get_hotfix_pr_count(args.org, args.since, repos=args.repos)
     print(f" {revert_count} reverts, {hotfix_count} hotfixes", file=sys.stderr)
 
-    all_qodo_prs = list(search_merged_prs(args.org, args.since, repos=args.repos))
+    all_pr_loc = get_all_pr_loc(args.org, args.since, repos=args.repos, total_prs=org_pr_count)
+    loc_str = f"{all_pr_loc:,}" if all_pr_loc is not None else "(unavailable)"
+    print(f"\r  Fetching total org LOC... {loc_str}\033[K", file=sys.stderr)
+
+    all_qodo_prs = list(search_merged_prs(args.org, args.since, repos=args.repos, total_prs=org_pr_count))
     pending = [
         pr for pr in all_qodo_prs
         if (pr["owner"], pr["repo"], str(pr["number"])) not in processed
@@ -1197,7 +1308,7 @@ def cmd_count(args):
                 continue
 
             comments = pr_data["comments"]
-            lines_changed = pr_data["additions"] + pr_data["deletions"]
+            lines_added = pr_data["additions"]
             qodo = find_qodo_comment(comments)
             timing = compute_timing(pr, comments)
 
@@ -1206,7 +1317,7 @@ def cmd_count(args):
                 pr_data = fetch_pr_data(owner, repo, number, comments_limit=100)
                 graphql_nodes += 100
                 comments = pr_data["comments"]
-                lines_changed = pr_data["additions"] + pr_data["deletions"]
+                lines_added = pr_data["additions"]
                 qodo = find_qodo_comment(comments)
                 timing = compute_timing(pr, comments)
                 if not qodo:
@@ -1216,6 +1327,7 @@ def cmd_count(args):
                     )
                     continue
 
+            qodo_loc_total += pr_data["additions"]
             stats = parse_qodo_comment(qodo["body"])
             suggestions_total += stats.total_suggestions
             suggestions_implemented += stats.total_implemented
@@ -1245,7 +1357,7 @@ def cmd_count(args):
                 "speed_to_fix_min": speed_info["speed_to_fix_min"],
             }
 
-            rows.append(build_csv_row(pr, lines_changed, stats, timing, extras=extras))
+            rows.append(build_csv_row(pr, lines_added, stats, timing, extras=extras))
 
             processed.add((owner, repo, str(number)))
             save_checkpoint(args.org, {
@@ -1253,6 +1365,7 @@ def cmd_count(args):
                 "pr_total": pr_total,
                 "suggestions_total": suggestions_total,
                 "suggestions_implemented": suggestions_implemented,
+                "qodo_loc_total": qodo_loc_total,
                 "processed": list(processed),
                 "rows": rows,
                 "repos": sorted(args.repos) if args.repos else None,
@@ -1312,6 +1425,13 @@ def cmd_count(args):
     if suggestions_total:
         rate = 100 * suggestions_implemented / suggestions_total
         print(f"Implementation rate:         {rate:.1f}%")
+    if all_pr_loc is not None:
+        print(f"Total LOC added (all PRs):   {all_pr_loc:,}")
+        if all_pr_loc > 0:
+            pct = min(100.0, 100 * qodo_loc_total / all_pr_loc)
+            print(f"Qodo-reviewed LOC:           {qodo_loc_total:,}  ({pct:.1f}% of total)")
+        else:
+            print(f"Qodo-reviewed LOC:           {qodo_loc_total:,}")
 
     elapsed = time.monotonic() - start_time
     minutes, seconds = divmod(int(elapsed), 60)
