@@ -223,3 +223,59 @@ def test_get_all_pr_loc_queries_each_repo(monkeypatch):
     assert result == 20  # 10 per repo
     assert any("frontend" in call for call in captured)
     assert any("backend" in call for call in captured)
+
+
+from github import _TRANSIENT_HTTP
+
+
+def test_transient_http_matches_5xx():
+    assert _TRANSIENT_HTTP.search("HTTP 502 Bad Gateway")
+    assert _TRANSIENT_HTTP.search("HTTP 503")
+    assert _TRANSIENT_HTTP.search("HTTP 504 Gateway Timeout")
+    assert _TRANSIENT_HTTP.search("HTTP 500 Internal Server Error")
+
+
+def test_transient_http_matches_http2_stream_cancel():
+    # gh emits this when GitHub's edge cancels the GraphQL stream mid-response
+    # (seen on very large-org LOC fetches where the additions query is too expensive).
+    msg = "stream error: stream ID 1; CANCEL; received from peer"
+    assert _TRANSIENT_HTTP.search(msg)
+
+
+def test_transient_http_matches_http2_internal_error():
+    assert _TRANSIENT_HTTP.search("stream error: stream ID 5; INTERNAL_ERROR")
+
+
+def test_transient_http_ignores_4xx_and_unrelated():
+    assert _TRANSIENT_HTTP.search("HTTP 404 Not Found") is None
+    assert _TRANSIENT_HTTP.search("HTTP 401 Unauthorized") is None
+    assert _TRANSIENT_HTTP.search("could not resolve host") is None
+
+
+def test_get_all_pr_loc_honors_page_size_override(monkeypatch):
+    captured = []
+
+    def capture_gh(args, **kw):
+        captured.append(" ".join(str(a) for a in args))
+        return _loc_response([10])
+
+    monkeypatch.setattr("github.run_gh", capture_gh)
+    result = get_all_pr_loc(
+        "acme", date(2026, 5, 20), repos=["frontend"], page_size=25
+    )
+    assert result == 10
+    # The GraphQL query should embed the caller-supplied page size.
+    assert any("first:25" in call for call in captured)
+    assert not any("first:50" in call for call in captured)
+
+
+def test_get_all_pr_loc_defaults_to_50_when_no_override(monkeypatch):
+    captured = []
+
+    def capture_gh(args, **kw):
+        captured.append(" ".join(str(a) for a in args))
+        return _loc_response([10])
+
+    monkeypatch.setattr("github.run_gh", capture_gh)
+    get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
+    assert any("first:50" in call for call in captured)
