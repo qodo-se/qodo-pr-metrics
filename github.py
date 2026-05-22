@@ -153,6 +153,14 @@ _LOC_PAGE_SIZE_DEFAULT = 50
 _LOC_PAGE_SIZE_MIN = 10
 _LOC_PAGE_SIZE_MAX = 100  # GitHub GraphQL `first:` hard cap
 
+# Starting batch size for the per-PR GraphQL `nodes(ids:[...])` lookup that
+# pulls comments/reviews/commits. This query is heavier than the LOC search,
+# so we keep the default lower and the floor smaller to recover from edge 5xx
+# on large orgs.
+_PR_BATCH_SIZE_DEFAULT = 25
+_PR_BATCH_SIZE_MIN = 5
+_PR_BATCH_SIZE_MAX = 50
+
 
 def _gql_loc_query(page_size: int) -> str:
     return (
@@ -450,11 +458,15 @@ def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) 
     }
 
 
-def fetch_pr_data_batch(prs: list, batch_size: int = 50) -> dict:
+def fetch_pr_data_batch(prs: list, batch_size: int = 50, raise_on_5xx: bool = False) -> dict:
     """Fetch PR data for multiple PRs in batched GraphQL calls.
 
     prs: list of dicts with a "node_id" key (from search_merged_prs).
     Returns: dict mapping node_id -> {"comments": [...], "additions": int, "deletions": int}.
+
+    If `raise_on_5xx` is True, transient 5xx / stream-cancel errors that
+    survive run_gh's retries propagate as TransientHttpError instead of
+    exiting, so the caller can adapt (e.g. shrink batch size and retry).
     """
     results = {}
     for i in range(0, len(prs), batch_size):
@@ -475,7 +487,7 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 50) -> dict:
             "}}"
             "}"
         )
-        out = run_gh(["api", "graphql", "-f", f"query={query}"])
+        out = run_gh(["api", "graphql", "-f", f"query={query}"], raise_on_5xx=raise_on_5xx)
         data = json.loads(out)
         for node in data["data"]["nodes"]:
             if not node:
@@ -1327,9 +1339,28 @@ def cmd_count(args):
     for week in weekly_coverage:
         week["qodo"] = qodo_by_week.get(week["week_start"], 0)
 
-    for i in range(0, len(pending), 25):
-        batch = pending[i:i + 25]
-        pr_data_map = fetch_pr_data_batch(batch)
+    pr_batch_size = args.pr_batch_size if args.pr_batch_size is not None else _PR_BATCH_SIZE_DEFAULT
+    i = 0
+    while i < len(pending):
+        batch = pending[i:i + pr_batch_size]
+        try:
+            pr_data_map = fetch_pr_data_batch(batch, raise_on_5xx=True)
+        except TransientHttpError as exc:
+            if pr_batch_size <= _PR_BATCH_SIZE_MIN:
+                print(
+                    f"\n  Persistent API errors on PR-data query at floor "
+                    f"batch size {pr_batch_size}: {exc}",
+                    file=sys.stderr, flush=True,
+                )
+                sys.exit(1)
+            new_size = max(_PR_BATCH_SIZE_MIN, pr_batch_size // 2)
+            print(
+                f"\n  Persistent API errors on PR-data query — shrinking batch size "
+                f"{pr_batch_size} → {new_size} and retrying the same batch.",
+                file=sys.stderr, flush=True,
+            )
+            pr_batch_size = new_size
+            continue
         graphql_nodes += len(batch) * 20
         for pr in batch:
             owner, repo, number = pr["owner"], pr["repo"], pr["number"]
@@ -1414,6 +1445,7 @@ def cmd_count(args):
                 "rows": rows,
                 "repos": sorted(args.repos) if args.repos else None,
             })
+        i += len(batch)
     if not args.verbose:
         print(file=sys.stderr)  # end the rolling status line
 
@@ -1530,6 +1562,15 @@ def main():
             "persistent 5xx or stream-cancel errors on the LOC fetch."
         ),
     )
+    p.add_argument(
+        "--pr-batch-size", type=int, default=None, metavar="N",
+        help=(
+            f"Starting batch size for the per-PR GraphQL data lookup "
+            f"(default: {_PR_BATCH_SIZE_DEFAULT}, range: {_PR_BATCH_SIZE_MIN}-{_PR_BATCH_SIZE_MAX}). "
+            "Lower it for very large orgs where GitHub returns persistent 5xx "
+            "or stream-cancel errors during the main PR walk."
+        ),
+    )
     args = p.parse_args()
 
     if args.loc_page_size is not None and not (
@@ -1538,6 +1579,14 @@ def main():
         p.error(
             f"--loc-page-size must be between {_LOC_PAGE_SIZE_MIN} and "
             f"{_LOC_PAGE_SIZE_MAX} (got {args.loc_page_size})"
+        )
+
+    if args.pr_batch_size is not None and not (
+        _PR_BATCH_SIZE_MIN <= args.pr_batch_size <= _PR_BATCH_SIZE_MAX
+    ):
+        p.error(
+            f"--pr-batch-size must be between {_PR_BATCH_SIZE_MIN} and "
+            f"{_PR_BATCH_SIZE_MAX} (got {args.pr_batch_size})"
         )
 
     if not args.since:
