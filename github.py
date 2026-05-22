@@ -1071,7 +1071,8 @@ def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chu
                         file=sys.stderr,
                     )
             cursor = chunk_end + timedelta(days=1)
-    except Exception:
+    except Exception as exc:
+        print(f"\n  Warning: LOC fetch failed: {exc!r}", file=sys.stderr)
         return None
     return total
 
