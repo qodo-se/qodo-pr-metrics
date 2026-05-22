@@ -1,6 +1,9 @@
 import sys, os
+import json
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from github import _qodo_counts_by_week
+from github import get_all_pr_loc
+from datetime import date
 
 
 def test_empty_list_returns_empty_dict():
@@ -95,11 +98,6 @@ def test_parse_nodes_empty_list():
     assert _parse_search_gql_nodes([]) == []
 
 
-from github import get_all_pr_loc
-from datetime import date
-import json
-
-
 def _loc_response(additions_list, has_next=False, end_cursor=None):
     nodes = [{"additions": a} for a in additions_list]
     return json.dumps({
@@ -181,3 +179,16 @@ def test_get_all_pr_loc_returns_zero_for_empty_window(monkeypatch):
     monkeypatch.setattr("github.run_gh", lambda _args: _loc_response([]))
     result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
     assert result == 0
+
+
+def test_get_all_pr_loc_uses_org_qualifier_when_no_repos(monkeypatch):
+    captured = []
+
+    def capture_gh(args):
+        captured.extend(args)
+        return _loc_response([50])
+
+    monkeypatch.setattr("github.run_gh", capture_gh)
+    result = get_all_pr_loc("acme", date(2026, 5, 20))
+    assert result == 50
+    assert any("org:acme" in str(arg) for arg in captured)

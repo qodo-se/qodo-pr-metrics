@@ -982,7 +982,7 @@ def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) 
         return None
 
 
-def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None) -> Optional[int]:
+def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: int = 30) -> Optional[int]:
     """Return total additions across all merged PRs in the window."""
     today = date.today()
     qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
@@ -990,7 +990,7 @@ def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None) -> 
     total = 0
     try:
         while cursor <= today:
-            chunk_end = min(cursor + timedelta(days=30), today)
+            chunk_end = min(cursor + timedelta(days=chunk_days), today)
             for qual in qualifiers:
                 q = (
                     f"{qual} is:pr is:merged "
