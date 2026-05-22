@@ -1188,6 +1188,7 @@ def cmd_count(args):
                 pr_total = data["pr_total"]
                 suggestions_total = data["suggestions_total"]
                 suggestions_implemented = data["suggestions_implemented"]
+                qodo_loc_total = data.get("qodo_loc_total", 0)
                 processed = {tuple(x) for x in data["processed"]}
                 rows = data.get("rows", [])
                 since_str = data.get("since", args.since.isoformat())
@@ -1310,6 +1311,7 @@ def cmd_count(args):
                 "pr_total": pr_total,
                 "suggestions_total": suggestions_total,
                 "suggestions_implemented": suggestions_implemented,
+                "qodo_loc_total": qodo_loc_total,
                 "processed": list(processed),
                 "rows": rows,
                 "repos": sorted(args.repos) if args.repos else None,
@@ -1372,7 +1374,7 @@ def cmd_count(args):
     if all_pr_loc is not None:
         print(f"Total LOC added (all PRs):   {all_pr_loc:,}")
         if all_pr_loc > 0:
-            pct = 100 * qodo_loc_total / all_pr_loc
+            pct = min(100.0, 100 * qodo_loc_total / all_pr_loc)
             print(f"Qodo-reviewed LOC:           {qodo_loc_total:,}  ({pct:.1f}% of total)")
         else:
             print(f"Qodo-reviewed LOC:           {qodo_loc_total:,}")

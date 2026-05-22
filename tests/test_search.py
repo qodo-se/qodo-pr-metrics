@@ -111,9 +111,26 @@ def _loc_response(additions_list, has_next=False, end_cursor=None):
 
 
 def test_get_all_pr_loc_sums_additions(monkeypatch):
+    # Basic test: single chunk with multiple PRs
     monkeypatch.setattr("github.run_gh", lambda _args: _loc_response([100, 200, 50]))
     result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
     assert result == 350
+
+
+def test_get_all_pr_loc_sums_across_chunks(monkeypatch):
+    # chunk_days=1 with a 2-day window forces two separate API calls (chunks),
+    # verifying the outer date loop accumulates correctly across both.
+    calls = []
+
+    def mock_gh(_args):
+        calls.append(1)
+        return _loc_response([100, 50])  # 150 per chunk
+
+    monkeypatch.setattr("github.run_gh", mock_gh)
+    # date(2026, 5, 19) to today (2026-05-21) = 2 days → 2 chunks with chunk_days=1
+    result = get_all_pr_loc("acme", date(2026, 5, 19), repos=["frontend"], chunk_days=1)
+    assert result == 300   # 150 per chunk × 2 chunks
+    assert len(calls) == 2
 
 
 def test_get_all_pr_loc_skips_empty_nodes(monkeypatch):
@@ -192,3 +209,17 @@ def test_get_all_pr_loc_uses_org_qualifier_when_no_repos(monkeypatch):
     result = get_all_pr_loc("acme", date(2026, 5, 20))
     assert result == 50
     assert any("org:acme" in str(arg) for arg in captured)
+
+
+def test_get_all_pr_loc_queries_each_repo(monkeypatch):
+    captured = []
+
+    def capture_gh(args):
+        captured.append(" ".join(str(a) for a in args))
+        return _loc_response([10])
+
+    monkeypatch.setattr("github.run_gh", capture_gh)
+    result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend", "backend"])
+    assert result == 20  # 10 per repo
+    assert any("frontend" in call for call in captured)
+    assert any("backend" in call for call in captured)
