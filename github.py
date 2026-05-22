@@ -45,7 +45,10 @@ import report
 # Stable marker in Qodo Merge's review comment, independent of bot account name.
 QODO_MARKER = re.compile(r"Code Review by Qodo", re.IGNORECASE)
 
-_TRANSIENT_HTTP = re.compile(r"HTTP 5\d\d")
+# Matches gh/GitHub transient failures worth retrying: HTTP 5xx from the REST/GraphQL
+# endpoint, and HTTP/2 "stream error ... CANCEL/INTERNAL_ERROR" frames sent by GitHub's
+# edge when a GraphQL query is too expensive (seen on large-org LOC fetches).
+_TRANSIENT_HTTP = re.compile(r"HTTP 5\d\d|stream error.*(?:CANCEL|INTERNAL_ERROR)")
 
 # A numbered suggestion line. Qodo wraps each in <details><summary>...</summary>,
 # but we also match raw "N. ..." lines as a fallback in case the format changes.
@@ -148,6 +151,7 @@ _GQL_SEARCH_QUERY = (
 
 _LOC_PAGE_SIZE_DEFAULT = 50
 _LOC_PAGE_SIZE_MIN = 10
+_LOC_PAGE_SIZE_MAX = 100  # GitHub GraphQL `first:` hard cap
 
 
 def _gql_loc_query(page_size: int) -> str:
@@ -1029,10 +1033,12 @@ def get_qodo_pr_count(org: str, since: date, repos: Optional[List[str]] = None) 
         return None
 
 
-def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: Optional[int] = None, total_prs: Optional[int] = None) -> Optional[int]:
+def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chunk_days: Optional[int] = None, total_prs: Optional[int] = None, page_size: Optional[int] = None) -> Optional[int]:
     """Return total additions across all merged PRs in the window.
 
     Pass total_prs to enable dynamic chunk sizing for high-volume orgs.
+    Pass page_size to override the default GraphQL `first:` value (still
+    shrinks adaptively on persistent API errors).
     """
     today = date.today()
     if chunk_days is None:
@@ -1041,7 +1047,7 @@ def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chu
     cursor = since
     total = 0
     pr_count = 0
-    page_size = _LOC_PAGE_SIZE_DEFAULT
+    page_size = page_size if page_size is not None else _LOC_PAGE_SIZE_DEFAULT
     _frac = f"0/{total_prs}" if total_prs is not None else "0"
     print(f"\r  [{_frac} PRs] Fetching total org LOC...\033[K", end="", file=sys.stderr, flush=True)
     try:
@@ -1072,7 +1078,7 @@ def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chu
                             raise
                         new_size = max(_LOC_PAGE_SIZE_MIN, page_size // 2)
                         print(
-                            f"\n  Persistent 5xx on LOC query — shrinking page size "
+                            f"\n  Persistent API errors on LOC query — shrinking page size "
                             f"{page_size} → {new_size} and retrying the same page.",
                             file=sys.stderr, flush=True,
                         )
@@ -1296,7 +1302,7 @@ def cmd_count(args):
     hotfix_count = get_hotfix_pr_count(args.org, args.since, repos=args.repos)
     print(f" {revert_count} reverts, {hotfix_count} hotfixes", file=sys.stderr)
 
-    all_pr_loc = get_all_pr_loc(args.org, args.since, repos=args.repos, total_prs=org_pr_count)
+    all_pr_loc = get_all_pr_loc(args.org, args.since, repos=args.repos, total_prs=org_pr_count, page_size=args.loc_page_size)
     loc_str = f"{all_pr_loc:,}" if all_pr_loc is not None else "(unavailable)"
     print(f"\r  Fetching total org LOC... {loc_str}\033[K", file=sys.stderr)
 
@@ -1506,7 +1512,24 @@ def main():
                         "or omit SCOPE to anonymize both.")
     p.add_argument("--test-hotfix-signals", action="store_true",
                    help="Smoke-test hotfix detection signals (branch/label/title) and exit")
+    p.add_argument(
+        "--loc-page-size", type=int, default=None, metavar="N",
+        help=(
+            f"Starting page size for the org-wide LOC GraphQL query "
+            f"(default: {_LOC_PAGE_SIZE_DEFAULT}, range: {_LOC_PAGE_SIZE_MIN}-{_LOC_PAGE_SIZE_MAX}). "
+            "Lower it (e.g. 25 or 10) for very large orgs where GitHub returns "
+            "persistent 5xx or stream-cancel errors on the LOC fetch."
+        ),
+    )
     args = p.parse_args()
+
+    if args.loc_page_size is not None and not (
+        _LOC_PAGE_SIZE_MIN <= args.loc_page_size <= _LOC_PAGE_SIZE_MAX
+    ):
+        p.error(
+            f"--loc-page-size must be between {_LOC_PAGE_SIZE_MIN} and "
+            f"{_LOC_PAGE_SIZE_MAX} (got {args.loc_page_size})"
+        )
 
     if not args.since:
         args.since = date.today() - timedelta(days=args.days)

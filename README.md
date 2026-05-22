@@ -172,4 +172,4 @@ The Velocity, High-Impact, Speed to First Fix, and Quality Signals sections are 
 | `--resume` | Resume from a previous checkpoint (`ORG-checkpoint.json`) |
 | `--repos` | Space-delimited list of repo names to scope the run (e.g. `--repos frontend-app backend-api`); omit to scan the full org |
 | `--anonymize [SCOPE]` | Replace identifying data with stable pseudonyms in all output files; output filenames get an `_anon` suffix. `SCOPE`: `users` (PR Creator / Final Approver only), `repos` (Repo Name / PR URL only), or omit `SCOPE` to anonymize both |
-| `--test-hotfix-signals` | Smoke-test hotfix detection signals against the org and exit. Prints counts for each signal (branch, label, title) and the combined OR query, and confirms that OR deduplication is working correctly. |
+| `--loc-page-size N` | Starting page size for the org-wide LOC GraphQL query (default: `50`, range: `10`–`100`). Lower it (e.g. `25` or `10`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors on the LOC fetch — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
