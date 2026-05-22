@@ -146,15 +146,24 @@ _GQL_SEARCH_QUERY = (
     "}}}}"
 )
 
-_GQL_LOC_SEARCH_QUERY = (
-    "query($q:String!,$cursor:String){"
-    "search(query:$q,type:ISSUE,first:100,after:$cursor){"
-    "issueCount "
-    "pageInfo{hasNextPage endCursor}"
-    "nodes{...on PullRequest{"
-    "additions"
-    "}}}}"
-)
+_LOC_PAGE_SIZE_DEFAULT = 50
+_LOC_PAGE_SIZE_MIN = 10
+
+
+def _gql_loc_query(page_size: int) -> str:
+    return (
+        "query($q:String!,$cursor:String){"
+        f"search(query:$q,type:ISSUE,first:{page_size},after:$cursor){{"
+        "issueCount "
+        "pageInfo{hasNextPage endCursor}"
+        "nodes{...on PullRequest{"
+        "additions"
+        "}}}}"
+    )
+
+
+class TransientHttpError(Exception):
+    """Raised by run_gh when 5xx retries are exhausted and the caller opted in to recover."""
 
 
 def _safe_chunk_days(known_count: Optional[int], since: date, target: int = 800) -> int:
@@ -209,8 +218,13 @@ def _rate_limit_reset_epoch():
         return None
 
 
-def run_gh(args, paginate=False):
-    """Run `gh` and return stdout. Retries on rate limits and transient HTTP 5xx errors."""
+def run_gh(args, paginate=False, raise_on_5xx=False):
+    """Run `gh` and return stdout. Retries on rate limits and transient HTTP 5xx errors.
+
+    If `raise_on_5xx` is True, raises TransientHttpError after 5xx retries are
+    exhausted instead of calling sys.exit, so the caller can adapt and retry
+    (e.g. by shrinking page size).
+    """
     cmd = ["gh"] + args
     if paginate and "--paginate" not in cmd:
         cmd.append("--paginate")
@@ -243,6 +257,8 @@ def run_gh(args, paginate=False):
             )
             time.sleep(wait)
             continue
+        if m and raise_on_5xx:
+            raise TransientHttpError(stderr)
         sys.exit(f"`{' '.join(cmd)}` failed:\n{stderr}")
 
 
@@ -1025,6 +1041,7 @@ def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chu
     cursor = since
     total = 0
     pr_count = 0
+    page_size = _LOC_PAGE_SIZE_DEFAULT
     _frac = f"0/{total_prs}" if total_prs is not None else "0"
     print(f"\r  [{_frac} PRs] Fetching total org LOC...\033[K", end="", file=sys.stderr, flush=True)
     try:
@@ -1041,14 +1058,26 @@ def get_all_pr_loc(org: str, since: date, repos: Optional[List[str]] = None, chu
                 while True:
                     gh_args = [
                         "api", "graphql",
-                        "-f", f"query={_GQL_LOC_SEARCH_QUERY}",
+                        "-f", f"query={_gql_loc_query(page_size)}",
                         "-f", f"q={q}",
                     ]
                     if end_cursor:
                         gh_args += ["-f", f"cursor={end_cursor}"]
                     else:
                         gh_args += ["-F", "cursor=null"]
-                    out = run_gh(gh_args)
+                    try:
+                        out = run_gh(gh_args, raise_on_5xx=True)
+                    except TransientHttpError as exc:
+                        if page_size <= _LOC_PAGE_SIZE_MIN:
+                            raise
+                        new_size = max(_LOC_PAGE_SIZE_MIN, page_size // 2)
+                        print(
+                            f"\n  Persistent 5xx on LOC query — shrinking page size "
+                            f"{page_size} → {new_size} and retrying the same page.",
+                            file=sys.stderr, flush=True,
+                        )
+                        page_size = new_size
+                        continue
                     data = json.loads(out)
                     search = data["data"]["search"]
                     issue_count = search.get("issueCount", 0)
