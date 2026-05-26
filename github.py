@@ -40,6 +40,7 @@ from pathlib import Path
 from typing import List, Optional
 
 import report
+import user_impact
 
 
 # Stable marker in Qodo Merge's review comment, independent of bot account name.
@@ -1483,6 +1484,20 @@ def cmd_count(args):
         print(f"\n  Warning: HTML report not written: {exc}", file=sys.stderr)
         html_path = None
 
+    user_html_path = None
+    try:
+        user_html_path = base / f"{stem}_user.html"
+        user_html_path.write_text(
+            user_impact.generate_user_html(
+                rows, args.org, args.since.isoformat(), today.isoformat(),
+                logo_path="logo.svg",
+            ),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        print(f"\n  Warning: user impact report not written: {exc}", file=sys.stderr)
+        user_html_path = None
+
     if cp_path.exists():
         cp_path.unlink()
 
@@ -1521,6 +1536,8 @@ def cmd_count(args):
     print(f"  CSV:  {csv_path}")
     if html_path:
         print(f"  HTML: {html_path}")
+    if user_html_path:
+        print(f"  User: {user_html_path}")
     print(f"\nCompleted in {elapsed_str}")
 
 
