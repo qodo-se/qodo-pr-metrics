@@ -536,9 +536,24 @@ html, body { background: var(--bg-canvas); color: var(--fg-default);
   var daysOut = $('dr-days');
   var resetBtn = $('dr-reset');
 
+  // A 1-day window has no range to drag, and (TOTAL_DAYS - 1) === 0 would make
+  // the percentage math divide by zero. Pin the selection to the single day and
+  // disable the controls; update() still renders the headline/table for it.
+  var singleDay = TOTAL_DAYS <= 1;
+  if (singleDay) {
+    lo = 0; hi = 0;
+    loInput.disabled = true;
+    hiInput.disabled = true;
+  }
+
   function update() {
-    var pctLo = (lo / (TOTAL_DAYS - 1)) * 100;
-    var pctHi = (hi / (TOTAL_DAYS - 1)) * 100;
+    var pctLo, pctHi;
+    if (singleDay) {
+      pctLo = 0; pctHi = 100;
+    } else {
+      pctLo = (lo / (TOTAL_DAYS - 1)) * 100;
+      pctHi = (hi / (TOTAL_DAYS - 1)) * 100;
+    }
     fill.style.left  = pctLo + '%';
     fill.style.right = (100 - pctHi) + '%';
     bubLo.style.left = pctLo + '%';
@@ -547,7 +562,7 @@ html, body { background: var(--bg-canvas); color: var(--fg-default);
     bubHi.textContent = fmtShort(dayToDate(hi));
     var days = hi - lo + 1;
     daysOut.textContent = days + ' day' + (days === 1 ? '' : 's') + ' selected';
-    resetBtn.disabled = (lo === 0 && hi === TOTAL_DAYS - 1);
+    resetBtn.disabled = singleDay || (lo === 0 && hi === TOTAL_DAYS - 1);
 
     var r = aggregate(lo, hi);
     renderHero(r.totals, days);
@@ -557,13 +572,13 @@ html, body { background: var(--bg-canvas); color: var(--fg-default);
 
   loInput.addEventListener('input', function () {
     var v = parseInt(loInput.value, 10);
-    lo = Math.min(v, hi - 1);
+    lo = Math.min(v, hi);
     loInput.value = lo;
     update();
   });
   hiInput.addEventListener('input', function () {
     var v = parseInt(hiInput.value, 10);
-    hi = Math.max(v, lo + 1);
+    hi = Math.max(v, lo);
     hiInput.value = hi;
     update();
   });

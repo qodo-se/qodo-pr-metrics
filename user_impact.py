@@ -91,7 +91,11 @@ def aggregate_user_impact(rows: list, since: str, until: str) -> UserImpactData:
     end = _parse_iso_date(until)
     if not start or not end:
         return UserImpactData(window={"start": since, "end": until, "total_days": 1})
-    total_days = (end - start).days + 1
+    # Guard against inverted windows (until < since): a non-positive span would
+    # propagate into the slider's max/value attrs and JS math. Clamp to a
+    # single-day window so the report degrades gracefully instead of emitting
+    # invalid HTML/JS state.
+    total_days = max(1, (end - start).days + 1)
 
     user_acc: dict = defaultdict(lambda: {
         "login": "", "name": "",
@@ -551,9 +555,24 @@ _JS = r"""<script>
   var daysOut = $('dr-days');
   var resetBtn = $('dr-reset');
 
+  // A 1-day window has no range to drag, and (TOTAL_DAYS - 1) === 0 would make
+  // the percentage math divide by zero. Pin the selection to the single day and
+  // disable the controls; update() still renders the headline/table for it.
+  var singleDay = TOTAL_DAYS <= 1;
+  if (singleDay) {
+    lo = 0; hi = 0;
+    loInput.disabled = true;
+    hiInput.disabled = true;
+  }
+
   function update() {
-    var pctLo = (lo / (TOTAL_DAYS - 1)) * 100;
-    var pctHi = (hi / (TOTAL_DAYS - 1)) * 100;
+    var pctLo, pctHi;
+    if (singleDay) {
+      pctLo = 0; pctHi = 100;
+    } else {
+      pctLo = (lo / (TOTAL_DAYS - 1)) * 100;
+      pctHi = (hi / (TOTAL_DAYS - 1)) * 100;
+    }
     fill.style.left  = pctLo + '%';
     fill.style.right = (100 - pctHi) + '%';
     bubLo.style.left = pctLo + '%';
@@ -562,7 +581,7 @@ _JS = r"""<script>
     bubHi.textContent = fmtShort(dayToDate(hi));
     var days = hi - lo + 1;
     daysOut.textContent = days + ' day' + (days === 1 ? '' : 's') + ' selected';
-    resetBtn.disabled = (lo === 0 && hi === TOTAL_DAYS - 1);
+    resetBtn.disabled = singleDay || (lo === 0 && hi === TOTAL_DAYS - 1);
 
     var r = aggregate(lo, hi);
     renderHero(r.totals, days);
@@ -572,13 +591,13 @@ _JS = r"""<script>
 
   loInput.addEventListener('input', function () {
     var v = parseInt(loInput.value, 10);
-    lo = Math.min(v, hi - 1);
+    lo = Math.min(v, hi);
     loInput.value = lo;
     update();
   });
   hiInput.addEventListener('input', function () {
     var v = parseInt(hiInput.value, 10);
-    hi = Math.max(v, lo + 1);
+    hi = Math.max(v, lo);
     hiInput.value = hi;
     update();
   });
@@ -652,7 +671,9 @@ def generate_user_html(rows: list, org: str, since: str, until: str,
     Returns the complete HTML document as a string.
     """
     data = aggregate_user_impact(rows, since, until)
-    total_days = data.window.get("total_days", 1)
+    # Defensive: keep the span valid (>=1) before rendering slider attrs, even
+    # if the data layer ever returns an unexpected value.
+    total_days = max(1, data.window.get("total_days", 1))
 
     # Server-rendered initial state for the full window. The JS recomputes
     # everything on first paint anyway, but rendering it server-side keeps
