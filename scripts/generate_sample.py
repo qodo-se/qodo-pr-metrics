@@ -10,6 +10,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from datetime import date, datetime, timedelta
 from report import generate_html
+from user_impact import generate_user_html
 
 SINCE = date(2025, 3, 20)
 UNTIL = date(2025, 5, 19)
@@ -285,3 +286,10 @@ if __name__ == "__main__":
         f.write(html)
         f.write("\n")
     print(f"Written: {out}")
+
+    user_out = os.path.join(os.path.dirname(os.path.dirname(__file__)), "examples", "sample_user_report.html")
+    user_html = generate_user_html(ROWS, ORG, SINCE.isoformat(), UNTIL.isoformat(), logo_path=logo)
+    with open(user_out, "w", encoding="utf-8") as f:
+        f.write(user_html)
+        f.write("\n")
+    print(f"Written: {user_out}")

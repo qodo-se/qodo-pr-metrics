@@ -2,6 +2,7 @@
 *.csv
 *.html
 !examples/sample_report.html
+!examples/sample_user_report.html
 *-checkpoint.json
 __pycache__/
 *.pyc

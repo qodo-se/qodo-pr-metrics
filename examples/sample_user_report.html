@@ -1,0 +1,597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Qodo — user impact report · acme-corp</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+:root {
+  --pm-100:#F4F4F4; --pm-200:#DFDFDF; --pm-400:#6E6E6E; --pm-500:#3D3D3D;
+  --pm-700:#1C1C1C; --pm-750:#171518; --pm-800:#141414;
+  --p-200:#A8A1FD; --p-300:#9084FC; --p-400:#7968FA; --p-500:#634FD1;
+  --p-tint-10:rgba(174,161,241,0.10); --p-tint-20:rgba(174,161,241,0.20);
+  --success:#57E3C0; --danger:#E5484D; --warning:#F5B544; --g-mint-bright:#06E4AE;
+  --bg-canvas:var(--pm-750); --bg-surface:var(--pm-700); --bg-inset:var(--pm-800);
+  --border-default:#2C2C2C; --border-subtle:rgba(255,255,255,0.06);
+  --fg-default:var(--pm-200); --fg-strong:var(--pm-100); --fg-muted:#A09CB6; --fg-subtle:var(--pm-400);
+  --brand-gradient:linear-gradient(135deg,#684BFE 0%,#06E4AE 100%);
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--bg-canvas); color: var(--fg-default);
+             font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+             font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+.mono, .lb-mono { font-family: 'IBM Plex Mono', ui-monospace, Menlo, monospace; }
+.page-wrap { width: 100%; min-height: 100vh; display: flex; justify-content: center; padding: 32px 16px; }
+.lb { width: 1200px; max-width: 100%; background: var(--bg-canvas);
+      border-radius: 14px; overflow: clip;
+      box-shadow: 0 1px 0 var(--border-default), 0 24px 64px rgba(0,0,0,.4); }
+
+/* Header bar */
+.lb-bar { display: grid; grid-template-columns: auto 1fr auto; align-items: center;
+          padding: 22px 36px; gap: 28px; border-bottom: 1px solid var(--border-default);
+          background: var(--bg-inset); }
+.lb-bar .brand { display: flex; align-items: center; gap: 14px; }
+.lb-bar .brand svg, .lb-bar .brand img { height: 32px; width: auto; display: block; }
+.lb-bar .brand .sep { width: 1px; height: 20px; background: var(--border-default); margin: 0 2px; }
+.lb-bar .brand .label { font-size: 13px; color: var(--fg-muted); }
+.lb-bar .crumbs { font-size: 12px; color: var(--fg-muted); display: flex; align-items: center; gap: 10px; justify-content: center; }
+.lb-bar .crumbs .pill { background: var(--p-tint-10); border: 1px solid var(--p-tint-20);
+                        color: var(--p-300); padding: 4px 10px; border-radius: 999px;
+                        font-size: 11px; font-weight: 600; letter-spacing: .04em; }
+.lb-bar .rng { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--fg-default);
+               padding: 6px 12px; background: var(--bg-surface); border: 1px solid var(--border-default);
+               border-radius: 6px; }
+
+/* Hero */
+.lb-hero { padding: 48px 36px 44px; border-bottom: 1px solid var(--border-default);
+           display: grid; grid-template-columns: 1.4fr 1fr; gap: 48px; align-items: start; }
+.lb-hero h1 { font-size: 30px; line-height: 1.22; font-weight: 600; color: var(--fg-strong);
+              letter-spacing: -.01em; text-wrap: balance; }
+.lb-hero h1 .accent { color: var(--p-300); font-weight: 700; }
+.lb-hero h1 .accent.success { color: var(--success); }
+.lb-hero h1 .accent.zero { color: var(--fg-muted); font-weight: 500; }
+.lb-hero .tldr { padding: 20px 22px; background: var(--bg-surface); border: 1px solid var(--p-tint-20);
+                 border-radius: 12px; border-left: 3px solid var(--p-400); }
+.lb-hero .tldr-label { font-size: 10.5px; font-weight: 700; letter-spacing: .12em;
+                       text-transform: uppercase; color: var(--p-300); margin-bottom: 12px;
+                       display: flex; justify-content: space-between; align-items: baseline; }
+.lb-hero .tldr-label .lowsamp { font-size: 9.5px; color: var(--warning); letter-spacing: .08em;
+                                background: rgba(245,181,68,.12); padding: 2px 6px; border-radius: 4px; }
+.lb-hero .tldr-label .lowsamp[hidden] { display: none !important; }
+.lb-hero .tldr-row { display: flex; justify-content: space-between; align-items: baseline; padding: 7px 0;
+                     border-bottom: 1px dashed rgba(255,255,255,.06); font-size: 12.5px; }
+.lb-hero .tldr-row:last-child { border-bottom: none; }
+.lb-hero .tldr-row .l { color: var(--fg-muted); }
+.lb-hero .tldr-row .v { color: var(--fg-strong); font-weight: 500;
+                        font-family: 'IBM Plex Mono', monospace; white-space: nowrap; }
+.lb-hero .tldr-row.headline { padding-bottom: 10px; }
+.lb-hero .tldr-row.headline .v { font-size: 15px; color: var(--success); font-weight: 600; }
+.lb-hero .tldr-row.headline.zero .v { color: var(--fg-muted); }
+
+/* Section */
+.lb-section { padding: 0 0 40px; border-bottom: 1px solid var(--border-default); }
+.lb-section > .lb-sec-head, .lb-section > .lb-board { margin-left: 36px; margin-right: 36px; }
+.lb-section:last-child { border-bottom: none; }
+.lb-sec-head { display: flex; align-items: end; justify-content: space-between;
+               margin-top: 36px; margin-bottom: 24px; gap: 24px; }
+.lb-sec-title { font-size: 20px; font-weight: 600; color: var(--fg-strong); letter-spacing: -.005em; }
+
+/* Sticky control bar */
+.lb-ctrl { padding: 16px 36px 20px; border-top: 1px solid var(--border-default);
+           border-bottom: 1px solid var(--border-default);
+           background: rgba(20, 20, 20, .92); backdrop-filter: blur(8px);
+           -webkit-backdrop-filter: blur(8px);
+           display: flex; align-items: center; gap: 24px;
+           position: sticky; top: 0; z-index: 20; }
+.lb-ctrl-label { font-size: 10.5px; font-weight: 700; letter-spacing: .14em;
+                 text-transform: uppercase; color: var(--p-300); white-space: nowrap; }
+.lb-ctrl-actions { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+.lb-reset { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--fg-muted);
+            background: var(--bg-surface); border: 1px solid var(--border-default);
+            border-radius: 6px; padding: 6px 10px; cursor: pointer; transition: all 120ms ease-out; }
+.lb-reset:hover { color: var(--fg-strong); border-color: var(--p-tint-20); background: var(--p-tint-10); }
+.lb-reset:disabled { opacity: .4; cursor: not-allowed; }
+.lb-reset:disabled:hover { color: var(--fg-muted); border-color: var(--border-default); background: var(--bg-surface); }
+
+/* Date range slider */
+.dr { flex: 1; min-width: 0; }
+.dr-row { display: flex; align-items: center; gap: 14px; }
+.dr-end { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--fg-subtle);
+          white-space: nowrap; min-width: 56px; }
+.dr-end:last-of-type { text-align: right; }
+.dr-track-wrap { position: relative; flex: 1; height: 32px; }
+.dr-track { position: absolute; top: 50%; transform: translateY(-50%); left: 0; right: 0;
+            height: 4px; background: var(--bg-inset); border-radius: 999px; }
+.dr-tick { position: absolute; top: 50%; transform: translate(-50%, -50%);
+           width: 2px; height: 8px; background: var(--border-default);
+           border-radius: 1px; pointer-events: none; }
+.dr-fill { position: absolute; top: 50%; transform: translateY(-50%);
+           height: 4px; background: var(--p-400); border-radius: 999px;
+           pointer-events: none; box-shadow: 0 0 12px rgba(121,104,250,.5); }
+.dr-input { position: absolute; top: 0; left: 0; width: 100%; height: 32px;
+            -webkit-appearance: none; appearance: none;
+            background: transparent; pointer-events: none; margin: 0; padding: 0; }
+.dr-input:focus { outline: none; }
+.dr-input::-webkit-slider-runnable-track { background: transparent; border: 0; }
+.dr-input::-moz-range-track { background: transparent; border: 0; }
+.dr-input::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 18px; height: 18px; border-radius: 50%;
+  background: #fff; border: 2px solid var(--p-400);
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  cursor: grab; pointer-events: auto;
+}
+.dr-input::-moz-range-thumb {
+  width: 18px; height: 18px; border-radius: 50%; box-sizing: border-box;
+  background: #fff; border: 2px solid var(--p-400);
+  box-shadow: 0 1px 4px rgba(0,0,0,.4);
+  cursor: grab; pointer-events: auto;
+}
+.dr-bubble { position: absolute; top: -2px; transform: translate(-50%, -100%);
+             font-family: 'IBM Plex Mono', monospace; font-size: 11px;
+             font-weight: 500; color: var(--fg-strong); background: var(--bg-surface);
+             border: 1px solid var(--p-tint-20); border-radius: 6px;
+             padding: 3px 8px; white-space: nowrap; pointer-events: none;
+             box-shadow: 0 2px 8px rgba(0,0,0,.3); }
+.dr-meta { margin-top: 8px; font-size: 11px; color: var(--fg-muted); text-align: center; }
+.dr-days { font-family: 'IBM Plex Mono', monospace; }
+
+/* Leaderboard */
+.lb-board { background: var(--bg-surface); border: 1px solid var(--border-default);
+            border-radius: 12px; overflow: hidden; }
+.lb-board table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.lb-board th { text-align: left; padding: 12px 16px; font-size: 10.5px; font-weight: 700;
+               letter-spacing: .1em; text-transform: uppercase; color: var(--fg-muted);
+               background: var(--bg-inset); border-bottom: 1px solid var(--border-default);
+               white-space: nowrap; }
+.lb-board th.num { text-align: right; }
+.lb-board td { padding: 14px 16px; border-bottom: 1px solid var(--border-subtle);
+               transition: opacity 80ms ease-out; }
+.lb-board tr:last-child td { border-bottom: none; }
+.lb-board td.num { text-align: right; font-family: 'IBM Plex Mono', monospace; color: var(--fg-default); }
+.lb-board td.num.strong { color: var(--fg-strong); font-weight: 500; }
+.lb-board .dev { display: flex; align-items: center; gap: 10px; }
+.lb-board .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--brand-gradient);
+                    font-size: 10.5px; font-weight: 600; color: #fff;
+                    display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.lb-board .dev-name { color: var(--fg-strong); font-weight: 500; font-size: 13px; line-height: 1.2; }
+.lb-board .dev-handle { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--fg-muted); }
+.lb-board .meter { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.lb-board .meter .bar { position: relative; width: 64px; height: 5px;
+                        background: var(--bg-inset); border-radius: 999px; overflow: hidden; }
+.lb-board .meter .bar i { display: block; height: 100%; background: var(--success);
+                          border-radius: 999px; transition: width 120ms ease-out; }
+.lb-board .meter .pct { color: var(--fg-strong); font-weight: 500; min-width: 36px;
+                        text-align: right; font-family: 'IBM Plex Mono', monospace; }
+.lb-board .ar-frac { font-size: 13px; color: var(--fg-muted); font-family: 'IBM Plex Mono', monospace; }
+.lb-board .ar-frac .acc { color: var(--success); font-weight: 500; }
+
+/* Grouped column headers (total vs Qodo-reviewed) */
+.lb-board th.grp { background: var(--bg-inset); color: var(--p-300); text-align: center;
+                   padding-top: 10px; padding-bottom: 6px; font-size: 10px;
+                   letter-spacing: .14em; border-bottom: 1px solid var(--p-tint-20); }
+.lb-board th.grp.qodo { background: rgba(121,104,250,.10); }
+.lb-board th.sub { padding-top: 6px; padding-bottom: 12px; font-size: 9.5px; }
+.lb-board td.col-q { background: rgba(121,104,250,.04); }
+.lb-board td.col-q.left { box-shadow: inset 1px 0 0 var(--p-tint-20); }
+.lb-board td.col-q.right { box-shadow: inset -1px 0 0 var(--p-tint-20); }
+
+/* Inactive row */
+.lb-board tr.inactive td { opacity: .42; }
+.lb-board tr.inactive .dev-name, .lb-board tr.inactive .dev-handle { color: var(--fg-subtle); }
+.lb-board tr.inactive .avatar { filter: saturate(.2); }
+.inactive-tag { display: inline-block; font-family: 'IBM Plex Mono', monospace; font-size: 10px;
+                color: var(--fg-subtle); background: var(--bg-inset);
+                border: 1px solid var(--border-default);
+                padding: 1px 6px; border-radius: 4px; margin-left: 8px;
+                letter-spacing: .04em; text-transform: uppercase; font-weight: 600; }
+
+/* Footer */
+.lb-foot { padding: 18px 36px; background: var(--bg-inset);
+           display: flex; align-items: center; justify-content: space-between;
+           font-size: 11px; color: var(--fg-muted); }
+.lb-foot .l { display: flex; align-items: center; gap: 12px; }
+.lb-foot .l svg, .lb-foot .l img { height: 18px; width: auto; display: block; }
+</style>
+</head>
+<body>
+<div class="page-wrap"><div class="lb">
+
+  <div class="lb-bar">
+    <div class="brand"><svg height="32" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 135 46" fill="none">
+  <path d="M84.8438 14.4876C80.0618 14.4876 76.1758 18.407 76.1758 23.2169C76.1758 28.0267 80.0676 31.9461 84.8438 31.9461C89.6199 31.9461 93.5118 28.0267 93.5118 23.2169C93.5118 18.407 89.6199 14.4876 84.8438 14.4876ZM84.8438 28.2435C82.0921 28.2435 79.8524 25.9879 79.8524 23.2169C79.8524 20.4458 82.0921 18.1902 84.8438 18.1902C87.5954 18.1902 89.8351 20.4458 89.8351 23.2169C89.8351 25.9879 87.5954 28.2435 84.8438 28.2435Z" fill="#7968FA"></path>
+  <path d="M126.19 14.4876C121.409 14.4876 117.522 18.407 117.522 23.2169C117.522 28.0267 121.414 31.9461 126.19 31.9461C130.967 31.9461 134.858 28.0267 134.858 23.2169C134.858 18.407 130.967 14.4876 126.19 14.4876ZM126.19 28.2435C123.439 28.2435 121.199 25.9879 121.199 23.2169C121.199 20.4458 123.439 18.1902 126.19 18.1902C128.942 18.1902 131.182 20.4458 131.182 23.2169C131.182 25.9879 128.942 28.2435 126.19 28.2435Z" fill="#7968FA"></path>
+  <path d="M69.1584 16.087C67.7447 15.0793 66.0286 14.4817 64.167 14.4817C59.3851 14.4817 55.499 18.4011 55.499 23.211C55.499 28.0208 59.3909 31.9402 64.167 31.9402C66.0228 31.9402 67.7447 31.3426 69.1584 30.3349V39.5563H72.8408V12.7066H69.1584V16.087ZM64.167 28.2434C61.4154 28.2434 59.1756 25.9879 59.1756 23.2168C59.1756 20.4457 61.4154 18.1902 64.167 18.1902C66.9187 18.1902 69.1584 20.4457 69.1584 23.2168C69.1584 25.9879 66.9187 28.2434 64.167 28.2434Z" fill="#7968FA"></path>
+  <path d="M110.505 16.0871C109.091 15.0794 107.375 14.4818 105.514 14.4818C100.732 14.4818 96.8457 18.4012 96.8457 23.2111C96.8457 28.0209 100.738 31.9403 105.514 31.9403C107.369 31.9403 109.091 31.3427 110.505 30.335V33.6041H114.187V6.75442H110.505V16.0871ZM105.52 28.2435C102.768 28.2435 100.528 25.988 100.528 23.2169C100.528 20.4458 102.768 18.1903 105.52 18.1903C108.271 18.1903 110.511 20.4458 110.511 23.2169C110.511 25.988 108.271 28.2435 105.52 28.2435Z" fill="#7968FA"></path>
+  <circle cx="22.7929" cy="22.7618" r="21.7929" fill="#7968FA"></circle>
+  <mask id="mask0_40001745_7426" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="1" y="0" width="52" height="45">
+    <path d="M52.9398 30.6312C52.9398 43.0349 35.8625 44.9177 23.4588 44.9177C11.0552 44.9177 1 34.8625 1 22.4588C1 10.0552 11.0552 0 23.4588 0C35.8625 0 52.9398 18.2275 52.9398 30.6312Z" fill="#D9D9D9"></path>
+  </mask>
+  <g mask="url(#mask0_40001745_7426)">
+    <path d="M22.041 14.9905L22.495 11.1803C22.495 11.1803 22.867 9.60521 24.5623 9.87978C26.2576 10.1543 26.0065 11.6139 26.0065 11.6139C26.0065 12.9144 24.2242 15.5445 24.2242 15.5445" fill="white"></path>
+    <path d="M22.041 14.9905L22.495 11.1803C22.495 11.1803 22.867 9.60521 24.5623 9.87978C26.2576 10.1543 26.0065 11.6139 26.0065 11.6139C26.0065 12.9144 24.2242 15.5445 24.2242 15.5445" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M50.3973 33.8741L46.9052 36.0225C46.9873 36.167 39.0805 32.5783 31.4297 30.7431C27.2324 29.7363 23.1124 28.9271 20.3351 30.666C12.7906 35.3914 11.612 61.085 4.62296 71.2487C4.62296 71.2487 5.64692 78.0503 4.72438 84.8903C3.46857 94.1966 -4.03731 98.267 -4.67488 98.2862C8.38073 97.5492 7.9267 102.178 7.9267 102.178C7.9267 102.178 0.338703 102.188 -7.86271 102.193C-9.92997 102.193 -11.3017 102.188 -11.5577 102.178C-12.9536 102.14 -11.4321 97.9827 -11.4321 97.9827C-13.1806 97.0531 -14.5958 95.0203 -15.1561 93.4645L-22.2466 97.9057L-20.0199 102.198C-24.367 102.198 -27.5741 102.193 -27.9798 102.178C-29.3757 102.14 -27.8543 97.4288 -27.8543 97.4288C-32.1772 94.8951 -33.3122 88.0454 -33.3122 88.0454C-33.3122 88.0454 -36.9299 72.6216 -28.5788 52.5879C-25.106 44.2546 -20.0248 34.9531 -10.9539 25.9743C1.09219 14.0524 13.0562 10.9262 22.9385 13.3925C40.1576 17.6844 49.6583 31.4656 50.3973 33.8741Z" fill="white" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M11.747 16.2531L9.70393 13.4882C9.70393 13.4882 8.50126 11.1905 10.4912 10.4583C12.4812 9.72614 13.2637 11.7637 13.3699 12.2839C13.4762 12.8042 14.2055 15.362 14.2055 15.362" fill="white"></path>
+    <path d="M11.747 16.2531L9.70393 13.4882C9.70393 13.4882 8.50126 11.1905 10.4912 10.4583C12.4812 9.72614 13.2637 11.7637 13.3699 12.2839C13.4762 12.8042 14.2055 15.362 14.2055 15.362" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M43.8008 34.5565L48.8095 31.3195L50.331 33.6606L46.9065 36.0209L43.8008 34.5565Z" fill="#7A68FA" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M19.79 18.9642C19.79 18.9642 20.331 19.3014 20.331 20.0384C20.331 20.7754 20.2296 23.2899 23.5237 23.2899C26.8177 23.2899 26.7501 20.944 26.7501 18.998" fill="black"></path>
+    <path d="M19.79 18.9642C19.79 18.9642 20.331 19.3014 20.331 20.0384C20.331 20.7754 20.2296 23.2899 23.5237 23.2899C26.8177 23.2899 26.7501 20.944 26.7501 18.998" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M36.5598 18.9642C36.5598 18.9642 36.0188 19.3014 36.0188 20.0384C36.0188 20.7754 36.1203 23.2899 32.8262 23.2899C29.5321 23.2899 29.5997 20.944 29.5997 18.998" fill="black"></path>
+    <path d="M36.5598 18.9642C36.5598 18.9642 36.0188 19.3014 36.0188 20.0384C36.0188 20.7754 36.1203 23.2899 32.8262 23.2899C29.5321 23.2899 29.5997 20.944 29.5997 18.998" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M18.9639 18.8689H37.3856" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M29.7975 19.9101C29.7975 19.4814 29.3435 18.9467 28.2181 18.9467C27.0927 18.9467 26.5469 19.491 26.5469 19.9101" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+  </g>
+  <path d="M44.3939 25.9098C44.5205 24.9593 44.5859 23.9893 44.5859 23.0041C44.5859 10.9682 34.8289 1.21117 22.7929 1.21117C10.757 1.21117 1 10.9682 1 23.0041C1 35.04 10.757 44.7971 22.7929 44.7971C30.759 44.7971 37.7269 40.5229 41.5282 34.1427" stroke="#0E0F10" stroke-width="0.726431"></path>
+</svg><span class="sep"></span><span class="label">User impact report</span></div>
+    <div class="crumbs">
+      <span class="pill">acme-corp</span>
+      <span>·</span>
+      <span>28 developers</span>
+      <span>·</span>
+      <span>Merged PRs only</span>
+    </div>
+    <div class="rng">2025-03-20 → 2025-05-19</div>
+  </div>
+
+  <div class="lb-hero">
+    <div>
+      <h1 id="ui-headline">Across 28 of 28 developers and 61 days, Qodo reviewed <span class="accent">78% of PRs</span> and the team accepted <span class="accent success">24%</span> of high-priority suggestions.</h1>
+    </div>
+    <div class="tldr">
+      <div class="tldr-label">
+        <span>At a glance</span>
+        <span id="ui-lowsamp" class="lowsamp" hidden>low sample · 326 AR</span>
+      </div>
+      <div id="ui-tldr-headline-row" class="tldr-row headline">
+        <span class="l">Action Required acceptance</span>
+        <span class="v" id="ui-tldr-headline">24%</span>
+      </div>
+      <div class="tldr-row"><span class="l">Total PRs</span><span class="v" id="ui-tldr-prs">125</span></div>
+      <div class="tldr-row"><span class="l">Reviewed by Qodo</span><span class="v" id="ui-tldr-reviewed">97 (78%)</span></div>
+      <div class="tldr-row"><span class="l">LOC (total)</span><span class="v" id="ui-tldr-loctotal">56,781</span></div>
+      <div class="tldr-row"><span class="l">LOC reviewed</span><span class="v" id="ui-tldr-locreviewed">53,646</span></div>
+      <div class="tldr-row"><span class="l">Action Required</span><span class="v" id="ui-tldr-ar">326</span></div>
+      <div class="tldr-row"><span class="l">…of which accepted</span><span class="v" id="ui-tldr-aracc">77</span></div>
+    </div>
+  </div>
+
+  <div class="lb-section">
+
+    <div class="lb-ctrl">
+      <div class="lb-ctrl-label">Time range</div>
+      <div class="dr">
+        <div class="dr-row">
+          <span class="dr-end">Mar 20</span>
+          <div class="dr-track-wrap">
+            <div class="dr-track"></div>
+            <div class="dr-tick" style="left:0.000%"></div><div class="dr-tick" style="left:11.667%"></div><div class="dr-tick" style="left:23.333%"></div><div class="dr-tick" style="left:35.000%"></div><div class="dr-tick" style="left:46.667%"></div><div class="dr-tick" style="left:58.333%"></div><div class="dr-tick" style="left:70.000%"></div><div class="dr-tick" style="left:81.667%"></div><div class="dr-tick" style="left:93.333%"></div>
+            <div class="dr-fill" id="dr-fill" style="left:0%;right:0%"></div>
+            <input type="range" id="dr-lo" min="0" max="60" value="0" class="dr-input dr-lo" aria-label="Start date">
+            <input type="range" id="dr-hi" min="0" max="60" value="60" class="dr-input dr-hi" aria-label="End date">
+            <div class="dr-bubble" id="dr-bubble-lo" style="left:0%"></div>
+            <div class="dr-bubble" id="dr-bubble-hi" style="left:100%"></div>
+          </div>
+          <span class="dr-end">May 19</span>
+        </div>
+        <div class="dr-meta">
+          <span class="dr-days" id="dr-days">61 days selected</span>
+        </div>
+      </div>
+      <div class="lb-ctrl-actions">
+        <button type="button" class="lb-reset" id="dr-reset" disabled>Reset</button>
+      </div>
+    </div>
+
+    <div class="lb-sec-head">
+      <div class="lb-sec-title">Per-developer breakdown</div>
+    </div>
+    <div class="lb-board">
+      <table>
+        <thead>
+          <tr>
+            <th rowspan="2">Developer</th>
+            <th colspan="2" class="grp num">Total</th>
+            <th colspan="2" class="grp qodo num">Qodo reviewed</th>
+            <th rowspan="2" class="num">Implemented Qodo Findings</th>
+            <th rowspan="2" class="num">Acceptance Rate</th>
+          </tr>
+          <tr>
+            <th class="num sub">PRs</th>
+            <th class="num sub">LOC</th>
+            <th class="num sub">PRs</th>
+            <th class="num sub">LOC</th>
+          </tr>
+        </thead>
+        <tbody id="ui-tbody">
+<tr><td><div class="dev"><div class="avatar">DM</div><div><div class="dev-name">Dev Mia</div><div class="dev-handle">@dev-mia</div></div></div></td><td class="num strong">4</td><td class="num">1,155</td><td class="num col-q left strong">3</td><td class="num col-q right">1,065</td><td class="num"><span class="ar-frac"><span class="acc">4</span> / 6</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:67%"></i></span><span class="pct">67%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DQ</div><div><div class="dev-name">Dev Quinn</div><div class="dev-handle">@dev-quinn</div></div></div></td><td class="num strong">4</td><td class="num">735</td><td class="num col-q left strong">3</td><td class="num col-q right">675</td><td class="num"><span class="ar-frac"><span class="acc">2</span> / 3</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:67%"></i></span><span class="pct">67%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DO</div><div><div class="dev-name">Dev Olivia</div><div class="dev-handle">@dev-olivia</div></div></div></td><td class="num strong">4</td><td class="num">1,035</td><td class="num col-q left strong">3</td><td class="num col-q right">960</td><td class="num"><span class="ar-frac"><span class="acc">3</span> / 5</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:60%"></i></span><span class="pct">60%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DA</div><div><div class="dev-name">Dev Alice</div><div class="dev-handle">@dev-alice</div></div></div></td><td class="num strong">4</td><td class="num">1,440</td><td class="num col-q left strong">3</td><td class="num col-q right">1,260</td><td class="num"><span class="ar-frac"><span class="acc">5</span> / 9</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:56%"></i></span><span class="pct">56%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DB</div><div><div class="dev-name">Dev Bob</div><div class="dev-handle">@dev-bob</div></div></div></td><td class="num strong">6</td><td class="num">4,245</td><td class="num col-q left strong">5</td><td class="num col-q right">4,095</td><td class="num"><span class="ar-frac"><span class="acc">12</span> / 27</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:44%"></i></span><span class="pct">44%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DN</div><div><div class="dev-name">Dev Nate</div><div class="dev-handle">@dev-nate</div></div></div></td><td class="num strong">4</td><td class="num">930</td><td class="num col-q left strong">3</td><td class="num col-q right">870</td><td class="num"><span class="ar-frac"><span class="acc">2</span> / 5</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:40%"></i></span><span class="pct">40%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DC</div><div><div class="dev-name">Dev Carol</div><div class="dev-handle">@dev-carol</div></div></div></td><td class="num strong">6</td><td class="num">3,555</td><td class="num col-q left strong">5</td><td class="num col-q right">3,450</td><td class="num"><span class="ar-frac"><span class="acc">8</span> / 21</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:38%"></i></span><span class="pct">38%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DD</div><div><div class="dev-name">Dev Diana</div><div class="dev-handle">@dev-diana</div></div></div></td><td class="num strong">5</td><td class="num">5,520</td><td class="num col-q left strong">4</td><td class="num col-q right">5,280</td><td class="num"><span class="ar-frac"><span class="acc">9</span> / 24</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:38%"></i></span><span class="pct">38%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DW</div><div><div class="dev-name">Dev Wendy</div><div class="dev-handle">@dev-wendy</div></div></div></td><td class="num strong">4</td><td class="num">840</td><td class="num col-q left strong">3</td><td class="num col-q right">765</td><td class="num"><span class="ar-frac"><span class="acc">1</span> / 3</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:33%"></i></span><span class="pct">33%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DE</div><div><div class="dev-name">Dev Evan</div><div class="dev-handle">@dev-evan</div></div></div></td><td class="num strong">5</td><td class="num">3,795</td><td class="num col-q left strong">4</td><td class="num col-q right">3,630</td><td class="num"><span class="ar-frac"><span class="acc">7</span> / 22</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:32%"></i></span><span class="pct">32%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DP</div><div><div class="dev-name">Dev Peter</div><div class="dev-handle">@dev-peter</div></div></div></td><td class="num strong">4</td><td class="num">840</td><td class="num col-q left strong">3</td><td class="num col-q right">780</td><td class="num"><span class="ar-frac"><span class="acc">1</span> / 4</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:25%"></i></span><span class="pct">25%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DK</div><div><div class="dev-name">Dev Kate</div><div class="dev-handle">@dev-kate</div></div></div></td><td class="num strong">5</td><td class="num">3,150</td><td class="num col-q left strong">4</td><td class="num col-q right">3,000</td><td class="num"><span class="ar-frac"><span class="acc">4</span> / 21</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:19%"></i></span><span class="pct">19%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DG</div><div><div class="dev-name">Dev Grace</div><div class="dev-handle">@dev-grace</div></div></div></td><td class="num strong">5</td><td class="num">3,390</td><td class="num col-q left strong">4</td><td class="num col-q right">3,225</td><td class="num"><span class="ar-frac"><span class="acc">4</span> / 23</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:17%"></i></span><span class="pct">17%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DI</div><div><div class="dev-name">Dev Irene</div><div class="dev-handle">@dev-irene</div></div></div></td><td class="num strong">5</td><td class="num">4,680</td><td class="num col-q left strong">4</td><td class="num col-q right">4,500</td><td class="num"><span class="ar-frac"><span class="acc">4</span> / 23</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:17%"></i></span><span class="pct">17%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DL</div><div><div class="dev-name">Dev Leo</div><div class="dev-handle">@dev-leo</div></div></div></td><td class="num strong">5</td><td class="num">3,510</td><td class="num col-q left strong">4</td><td class="num col-q right">3,360</td><td class="num"><span class="ar-frac"><span class="acc">4</span> / 23</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:17%"></i></span><span class="pct">17%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DF</div><div><div class="dev-name">Dev Frank</div><div class="dev-handle">@dev-frank</div></div></div></td><td class="num strong">5</td><td class="num">3,090</td><td class="num col-q left strong">4</td><td class="num col-q right">2,880</td><td class="num"><span class="ar-frac"><span class="acc">3</span> / 22</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:14%"></i></span><span class="pct">14%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DH</div><div><div class="dev-name">Dev Henry</div><div class="dev-handle">@dev-henry</div></div></div></td><td class="num strong">5</td><td class="num">3,135</td><td class="num col-q left strong">4</td><td class="num col-q right">2,955</td><td class="num"><span class="ar-frac"><span class="acc">2</span> / 22</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:9%"></i></span><span class="pct">9%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DJ</div><div><div class="dev-name">Dev Jack</div><div class="dev-handle">@dev-jack</div></div></div></td><td class="num strong">5</td><td class="num">3,360</td><td class="num col-q left strong">4</td><td class="num col-q right">3,225</td><td class="num"><span class="ar-frac"><span class="acc">2</span> / 22</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:9%"></i></span><span class="pct">9%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DR</div><div><div class="dev-name">Dev Rosa</div><div class="dev-handle">@dev-rosa</div></div></div></td><td class="num strong">4</td><td class="num">1,095</td><td class="num col-q left strong">3</td><td class="num col-q right">975</td><td class="num"><span class="ar-frac"><span class="acc">0</span> / 7</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:0%"></i></span><span class="pct">0%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DS</div><div><div class="dev-name">Dev Sam</div><div class="dev-handle">@dev-sam</div></div></div></td><td class="num strong">4</td><td class="num">1,185</td><td class="num col-q left strong">3</td><td class="num col-q right">1,080</td><td class="num"><span class="ar-frac"><span class="acc">0</span> / 7</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:0%"></i></span><span class="pct">0%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DT</div><div><div class="dev-name">Dev Tara</div><div class="dev-handle">@dev-tara</div></div></div></td><td class="num strong">4</td><td class="num">915</td><td class="num col-q left strong">3</td><td class="num col-q right">840</td><td class="num"><span class="ar-frac"><span class="acc">0</span> / 5</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:0%"></i></span><span class="pct">0%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DU</div><div><div class="dev-name">Dev Uma</div><div class="dev-handle">@dev-uma</div></div></div></td><td class="num strong">4</td><td class="num">1,305</td><td class="num col-q left strong">3</td><td class="num col-q right">1,200</td><td class="num"><span class="ar-frac"><span class="acc">0</span> / 5</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:0%"></i></span><span class="pct">0%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DV</div><div><div class="dev-name">Dev Victor</div><div class="dev-handle">@dev-victor</div></div></div></td><td class="num strong">4</td><td class="num">990</td><td class="num col-q left strong">3</td><td class="num col-q right">915</td><td class="num"><span class="ar-frac"><span class="acc">0</span> / 4</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:0%"></i></span><span class="pct">0%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DX</div><div><div class="dev-name">Dev Xavier</div><div class="dev-handle">@dev-xavier</div></div></div></td><td class="num strong">4</td><td class="num">765</td><td class="num col-q left strong">3</td><td class="num col-q right">705</td><td class="num"><span class="ar-frac"><span class="acc">0</span> / 3</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:0%"></i></span><span class="pct">0%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DY</div><div><div class="dev-name">Dev Yara</div><div class="dev-handle">@dev-yara</div></div></div></td><td class="num strong">4</td><td class="num">654</td><td class="num col-q left strong">3</td><td class="num col-q right">600</td><td class="num"><span class="ar-frac"><span class="acc">0</span> / 3</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:0%"></i></span><span class="pct">0%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DZ</div><div><div class="dev-name">Dev Zack</div><div class="dev-handle">@dev-zack</div></div></div></td><td class="num strong">4</td><td class="num">570</td><td class="num col-q left strong">3</td><td class="num col-q right">525</td><td class="num"><span class="ar-frac"><span class="acc">0</span> / 3</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:0%"></i></span><span class="pct">0%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DA</div><div><div class="dev-name">Dev Alex</div><div class="dev-handle">@dev-alex</div></div></div></td><td class="num strong">4</td><td class="num">501</td><td class="num col-q left strong">3</td><td class="num col-q right">465</td><td class="num"><span class="ar-frac"><span class="acc">0</span> / 3</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:0%"></i></span><span class="pct">0%</span></span></td></tr>
+<tr><td><div class="dev"><div class="avatar">DB</div><div><div class="dev-name">Dev Brett</div><div class="dev-handle">@dev-brett</div></div></div></td><td class="num strong">4</td><td class="num">396</td><td class="num col-q left strong">3</td><td class="num col-q right">366</td><td class="num"><span class="ar-frac"><span class="acc">0</span> / 1</span></td><td class="num"><span class="meter"><span class="bar"><i style="width:0%"></i></span><span class="pct">0%</span></span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="lb-foot">
+    <div class="l"><svg height="18" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 135 46" fill="none">
+  <path d="M84.8438 14.4876C80.0618 14.4876 76.1758 18.407 76.1758 23.2169C76.1758 28.0267 80.0676 31.9461 84.8438 31.9461C89.6199 31.9461 93.5118 28.0267 93.5118 23.2169C93.5118 18.407 89.6199 14.4876 84.8438 14.4876ZM84.8438 28.2435C82.0921 28.2435 79.8524 25.9879 79.8524 23.2169C79.8524 20.4458 82.0921 18.1902 84.8438 18.1902C87.5954 18.1902 89.8351 20.4458 89.8351 23.2169C89.8351 25.9879 87.5954 28.2435 84.8438 28.2435Z" fill="#7968FA"></path>
+  <path d="M126.19 14.4876C121.409 14.4876 117.522 18.407 117.522 23.2169C117.522 28.0267 121.414 31.9461 126.19 31.9461C130.967 31.9461 134.858 28.0267 134.858 23.2169C134.858 18.407 130.967 14.4876 126.19 14.4876ZM126.19 28.2435C123.439 28.2435 121.199 25.9879 121.199 23.2169C121.199 20.4458 123.439 18.1902 126.19 18.1902C128.942 18.1902 131.182 20.4458 131.182 23.2169C131.182 25.9879 128.942 28.2435 126.19 28.2435Z" fill="#7968FA"></path>
+  <path d="M69.1584 16.087C67.7447 15.0793 66.0286 14.4817 64.167 14.4817C59.3851 14.4817 55.499 18.4011 55.499 23.211C55.499 28.0208 59.3909 31.9402 64.167 31.9402C66.0228 31.9402 67.7447 31.3426 69.1584 30.3349V39.5563H72.8408V12.7066H69.1584V16.087ZM64.167 28.2434C61.4154 28.2434 59.1756 25.9879 59.1756 23.2168C59.1756 20.4457 61.4154 18.1902 64.167 18.1902C66.9187 18.1902 69.1584 20.4457 69.1584 23.2168C69.1584 25.9879 66.9187 28.2434 64.167 28.2434Z" fill="#7968FA"></path>
+  <path d="M110.505 16.0871C109.091 15.0794 107.375 14.4818 105.514 14.4818C100.732 14.4818 96.8457 18.4012 96.8457 23.2111C96.8457 28.0209 100.738 31.9403 105.514 31.9403C107.369 31.9403 109.091 31.3427 110.505 30.335V33.6041H114.187V6.75442H110.505V16.0871ZM105.52 28.2435C102.768 28.2435 100.528 25.988 100.528 23.2169C100.528 20.4458 102.768 18.1903 105.52 18.1903C108.271 18.1903 110.511 20.4458 110.511 23.2169C110.511 25.988 108.271 28.2435 105.52 28.2435Z" fill="#7968FA"></path>
+  <circle cx="22.7929" cy="22.7618" r="21.7929" fill="#7968FA"></circle>
+  <mask id="mask0_40001745_7426" style="mask-type:alpha" maskUnits="userSpaceOnUse" x="1" y="0" width="52" height="45">
+    <path d="M52.9398 30.6312C52.9398 43.0349 35.8625 44.9177 23.4588 44.9177C11.0552 44.9177 1 34.8625 1 22.4588C1 10.0552 11.0552 0 23.4588 0C35.8625 0 52.9398 18.2275 52.9398 30.6312Z" fill="#D9D9D9"></path>
+  </mask>
+  <g mask="url(#mask0_40001745_7426)">
+    <path d="M22.041 14.9905L22.495 11.1803C22.495 11.1803 22.867 9.60521 24.5623 9.87978C26.2576 10.1543 26.0065 11.6139 26.0065 11.6139C26.0065 12.9144 24.2242 15.5445 24.2242 15.5445" fill="white"></path>
+    <path d="M22.041 14.9905L22.495 11.1803C22.495 11.1803 22.867 9.60521 24.5623 9.87978C26.2576 10.1543 26.0065 11.6139 26.0065 11.6139C26.0065 12.9144 24.2242 15.5445 24.2242 15.5445" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M50.3973 33.8741L46.9052 36.0225C46.9873 36.167 39.0805 32.5783 31.4297 30.7431C27.2324 29.7363 23.1124 28.9271 20.3351 30.666C12.7906 35.3914 11.612 61.085 4.62296 71.2487C4.62296 71.2487 5.64692 78.0503 4.72438 84.8903C3.46857 94.1966 -4.03731 98.267 -4.67488 98.2862C8.38073 97.5492 7.9267 102.178 7.9267 102.178C7.9267 102.178 0.338703 102.188 -7.86271 102.193C-9.92997 102.193 -11.3017 102.188 -11.5577 102.178C-12.9536 102.14 -11.4321 97.9827 -11.4321 97.9827C-13.1806 97.0531 -14.5958 95.0203 -15.1561 93.4645L-22.2466 97.9057L-20.0199 102.198C-24.367 102.198 -27.5741 102.193 -27.9798 102.178C-29.3757 102.14 -27.8543 97.4288 -27.8543 97.4288C-32.1772 94.8951 -33.3122 88.0454 -33.3122 88.0454C-33.3122 88.0454 -36.9299 72.6216 -28.5788 52.5879C-25.106 44.2546 -20.0248 34.9531 -10.9539 25.9743C1.09219 14.0524 13.0562 10.9262 22.9385 13.3925C40.1576 17.6844 49.6583 31.4656 50.3973 33.8741Z" fill="white" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M11.747 16.2531L9.70393 13.4882C9.70393 13.4882 8.50126 11.1905 10.4912 10.4583C12.4812 9.72614 13.2637 11.7637 13.3699 12.2839C13.4762 12.8042 14.2055 15.362 14.2055 15.362" fill="white"></path>
+    <path d="M11.747 16.2531L9.70393 13.4882C9.70393 13.4882 8.50126 11.1905 10.4912 10.4583C12.4812 9.72614 13.2637 11.7637 13.3699 12.2839C13.4762 12.8042 14.2055 15.362 14.2055 15.362" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M43.8008 34.5565L48.8095 31.3195L50.331 33.6606L46.9065 36.0209L43.8008 34.5565Z" fill="#7A68FA" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M19.79 18.9642C19.79 18.9642 20.331 19.3014 20.331 20.0384C20.331 20.7754 20.2296 23.2899 23.5237 23.2899C26.8177 23.2899 26.7501 20.944 26.7501 18.998" fill="black"></path>
+    <path d="M19.79 18.9642C19.79 18.9642 20.331 19.3014 20.331 20.0384C20.331 20.7754 20.2296 23.2899 23.5237 23.2899C26.8177 23.2899 26.7501 20.944 26.7501 18.998" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M36.5598 18.9642C36.5598 18.9642 36.0188 19.3014 36.0188 20.0384C36.0188 20.7754 36.1203 23.2899 32.8262 23.2899C29.5321 23.2899 29.5997 20.944 29.5997 18.998" fill="black"></path>
+    <path d="M36.5598 18.9642C36.5598 18.9642 36.0188 19.3014 36.0188 20.0384C36.0188 20.7754 36.1203 23.2899 32.8262 23.2899C29.5321 23.2899 29.5997 20.944 29.5997 18.998" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M18.9639 18.8689H37.3856" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+    <path d="M29.7975 19.9101C29.7975 19.4814 29.3435 18.9467 28.2181 18.9467C27.0927 18.9467 26.5469 19.491 26.5469 19.9101" stroke="black" stroke-width="0.724507" stroke-linecap="round" stroke-linejoin="round"></path>
+  </g>
+  <path d="M44.3939 25.9098C44.5205 24.9593 44.5859 23.9893 44.5859 23.0041C44.5859 10.9682 34.8289 1.21117 22.7929 1.21117C10.757 1.21117 1 10.9682 1 23.0041C1 35.04 10.757 44.7971 22.7929 44.7971C30.759 44.7971 37.7269 40.5229 41.5282 34.1427" stroke="#0E0F10" stroke-width="0.726431"></path>
+</svg><span>user impact report</span></div>
+    <div class="lb-mono">acme-corp · 28 users · report scope: 2025-03-20 → 2025-05-19</div>
+  </div>
+
+</div></div>
+
+<script type="application/json" id="ui-records">[{"user":"dev-alice","dayOffset":0,"reviewed":1,"locTotal":555,"locReviewed":555,"arSugg":4,"arAcc":2},{"user":"dev-alice","dayOffset":0,"reviewed":1,"locTotal":420,"locReviewed":420,"arSugg":3,"arAcc":2},{"user":"dev-alice","dayOffset":1,"reviewed":1,"locTotal":285,"locReviewed":285,"arSugg":2,"arAcc":1},{"user":"dev-alice","dayOffset":1,"reviewed":0,"locTotal":180,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-frank","dayOffset":2,"reviewed":1,"locTotal":1140,"locReviewed":1140,"arSugg":9,"arAcc":1},{"user":"dev-frank","dayOffset":2,"reviewed":1,"locTotal":780,"locReviewed":780,"arSugg":6,"arAcc":1},{"user":"dev-frank","dayOffset":3,"reviewed":1,"locTotal":570,"locReviewed":570,"arSugg":4,"arAcc":1},{"user":"dev-frank","dayOffset":3,"reviewed":1,"locTotal":390,"locReviewed":390,"arSugg":3,"arAcc":0},{"user":"dev-frank","dayOffset":4,"reviewed":0,"locTotal":210,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-rosa","dayOffset":4,"reviewed":1,"locTotal":450,"locReviewed":450,"arSugg":3,"arAcc":0},{"user":"dev-rosa","dayOffset":5,"reviewed":1,"locTotal":330,"locReviewed":330,"arSugg":2,"arAcc":0},{"user":"dev-rosa","dayOffset":5,"reviewed":1,"locTotal":195,"locReviewed":195,"arSugg":2,"arAcc":0},{"user":"dev-rosa","dayOffset":6,"reviewed":0,"locTotal":120,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-mia","dayOffset":6,"reviewed":1,"locTotal":540,"locReviewed":540,"arSugg":3,"arAcc":2},{"user":"dev-mia","dayOffset":6,"reviewed":1,"locTotal":360,"locReviewed":360,"arSugg":2,"arAcc":1},{"user":"dev-mia","dayOffset":7,"reviewed":1,"locTotal":165,"locReviewed":165,"arSugg":1,"arAcc":1},{"user":"dev-mia","dayOffset":7,"reviewed":0,"locTotal":90,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-bob","dayOffset":8,"reviewed":1,"locTotal":1560,"locReviewed":1560,"arSugg":9,"arAcc":4},{"user":"dev-bob","dayOffset":8,"reviewed":1,"locTotal":1050,"locReviewed":1050,"arSugg":7,"arAcc":3},{"user":"dev-bob","dayOffset":9,"reviewed":1,"locTotal":720,"locReviewed":720,"arSugg":5,"arAcc":2},{"user":"dev-bob","dayOffset":9,"reviewed":1,"locTotal":495,"locReviewed":495,"arSugg":4,"arAcc":2},{"user":"dev-bob","dayOffset":10,"reviewed":1,"locTotal":270,"locReviewed":270,"arSugg":2,"arAcc":1},{"user":"dev-bob","dayOffset":10,"reviewed":0,"locTotal":150,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-grace","dayOffset":11,"reviewed":1,"locTotal":1380,"locReviewed":1380,"arSugg":9,"arAcc":2},{"user":"dev-grace","dayOffset":11,"reviewed":1,"locTotal":900,"locReviewed":900,"arSugg":6,"arAcc":1},{"user":"dev-grace","dayOffset":12,"reviewed":1,"locTotal":600,"locReviewed":600,"arSugg":5,"arAcc":1},{"user":"dev-grace","dayOffset":12,"reviewed":1,"locTotal":345,"locReviewed":345,"arSugg":3,"arAcc":0},{"user":"dev-grace","dayOffset":13,"reviewed":0,"locTotal":165,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-sam","dayOffset":13,"reviewed":1,"locTotal":540,"locReviewed":540,"arSugg":3,"arAcc":0},{"user":"dev-sam","dayOffset":14,"reviewed":1,"locTotal":360,"locReviewed":360,"arSugg":2,"arAcc":0},{"user":"dev-sam","dayOffset":14,"reviewed":1,"locTotal":180,"locReviewed":180,"arSugg":2,"arAcc":0},{"user":"dev-sam","dayOffset":14,"reviewed":0,"locTotal":105,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-nate","dayOffset":15,"reviewed":1,"locTotal":465,"locReviewed":465,"arSugg":2,"arAcc":1},{"user":"dev-nate","dayOffset":15,"reviewed":1,"locTotal":270,"locReviewed":270,"arSugg":2,"arAcc":1},{"user":"dev-nate","dayOffset":16,"reviewed":1,"locTotal":135,"locReviewed":135,"arSugg":1,"arAcc":0},{"user":"dev-nate","dayOffset":16,"reviewed":0,"locTotal":60,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-carol","dayOffset":17,"reviewed":1,"locTotal":1440,"locReviewed":1440,"arSugg":8,"arAcc":3},{"user":"dev-carol","dayOffset":17,"reviewed":1,"locTotal":930,"locReviewed":930,"arSugg":5,"arAcc":2},{"user":"dev-carol","dayOffset":18,"reviewed":1,"locTotal":570,"locReviewed":570,"arSugg":4,"arAcc":2},{"user":"dev-carol","dayOffset":18,"reviewed":1,"locTotal":330,"locReviewed":330,"arSugg":3,"arAcc":1},{"user":"dev-carol","dayOffset":19,"reviewed":1,"locTotal":180,"locReviewed":180,"arSugg":1,"arAcc":0},{"user":"dev-carol","dayOffset":19,"reviewed":0,"locTotal":105,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-henry","dayOffset":20,"reviewed":1,"locTotal":1260,"locReviewed":1260,"arSugg":10,"arAcc":1},{"user":"dev-henry","dayOffset":20,"reviewed":1,"locTotal":840,"locReviewed":840,"arSugg":5,"arAcc":1},{"user":"dev-henry","dayOffset":21,"reviewed":1,"locTotal":540,"locReviewed":540,"arSugg":4,"arAcc":0},{"user":"dev-henry","dayOffset":21,"reviewed":1,"locTotal":315,"locReviewed":315,"arSugg":3,"arAcc":0},{"user":"dev-henry","dayOffset":21,"reviewed":0,"locTotal":180,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-tara","dayOffset":22,"reviewed":1,"locTotal":420,"locReviewed":420,"arSugg":2,"arAcc":0},{"user":"dev-tara","dayOffset":22,"reviewed":1,"locTotal":270,"locReviewed":270,"arSugg":2,"arAcc":0},{"user":"dev-tara","dayOffset":23,"reviewed":1,"locTotal":150,"locReviewed":150,"arSugg":1,"arAcc":0},{"user":"dev-tara","dayOffset":23,"reviewed":0,"locTotal":75,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-olivia","dayOffset":24,"reviewed":1,"locTotal":510,"locReviewed":510,"arSugg":2,"arAcc":1},{"user":"dev-olivia","dayOffset":24,"reviewed":1,"locTotal":300,"locReviewed":300,"arSugg":2,"arAcc":1},{"user":"dev-olivia","dayOffset":25,"reviewed":1,"locTotal":150,"locReviewed":150,"arSugg":1,"arAcc":1},{"user":"dev-olivia","dayOffset":25,"reviewed":0,"locTotal":75,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-diana","dayOffset":26,"reviewed":1,"locTotal":2340,"locReviewed":2340,"arSugg":9,"arAcc":3},{"user":"dev-diana","dayOffset":26,"reviewed":1,"locTotal":1560,"locReviewed":1560,"arSugg":7,"arAcc":3},{"user":"dev-diana","dayOffset":27,"reviewed":1,"locTotal":900,"locReviewed":900,"arSugg":5,"arAcc":2},{"user":"dev-diana","dayOffset":27,"reviewed":1,"locTotal":480,"locReviewed":480,"arSugg":3,"arAcc":1},{"user":"dev-diana","dayOffset":28,"reviewed":0,"locTotal":240,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-irene","dayOffset":28,"reviewed":1,"locTotal":2040,"locReviewed":2040,"arSugg":10,"arAcc":2},{"user":"dev-irene","dayOffset":29,"reviewed":1,"locTotal":1320,"locReviewed":1320,"arSugg":6,"arAcc":1},{"user":"dev-irene","dayOffset":29,"reviewed":1,"locTotal":750,"locReviewed":750,"arSugg":4,"arAcc":1},{"user":"dev-irene","dayOffset":29,"reviewed":1,"locTotal":390,"locReviewed":390,"arSugg":3,"arAcc":0},{"user":"dev-irene","dayOffset":30,"reviewed":0,"locTotal":180,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-uma","dayOffset":30,"reviewed":1,"locTotal":600,"locReviewed":600,"arSugg":2,"arAcc":0},{"user":"dev-uma","dayOffset":31,"reviewed":1,"locTotal":390,"locReviewed":390,"arSugg":2,"arAcc":0},{"user":"dev-uma","dayOffset":31,"reviewed":1,"locTotal":210,"locReviewed":210,"arSugg":1,"arAcc":0},{"user":"dev-uma","dayOffset":32,"reviewed":0,"locTotal":105,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-evan","dayOffset":32,"reviewed":1,"locTotal":1650,"locReviewed":1650,"arSugg":10,"arAcc":3},{"user":"dev-evan","dayOffset":33,"reviewed":1,"locTotal":1080,"locReviewed":1080,"arSugg":6,"arAcc":2},{"user":"dev-evan","dayOffset":33,"reviewed":1,"locTotal":600,"locReviewed":600,"arSugg":4,"arAcc":1},{"user":"dev-evan","dayOffset":34,"reviewed":1,"locTotal":300,"locReviewed":300,"arSugg":2,"arAcc":1},{"user":"dev-evan","dayOffset":34,"reviewed":0,"locTotal":165,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-jack","dayOffset":35,"reviewed":1,"locTotal":1470,"locReviewed":1470,"arSugg":9,"arAcc":1},{"user":"dev-jack","dayOffset":35,"reviewed":1,"locTotal":930,"locReviewed":930,"arSugg":6,"arAcc":1},{"user":"dev-jack","dayOffset":36,"reviewed":1,"locTotal":540,"locReviewed":540,"arSugg":4,"arAcc":0},{"user":"dev-jack","dayOffset":36,"reviewed":1,"locTotal":285,"locReviewed":285,"arSugg":3,"arAcc":0},{"user":"dev-jack","dayOffset":36,"reviewed":0,"locTotal":135,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-victor","dayOffset":37,"reviewed":1,"locTotal":480,"locReviewed":480,"arSugg":2,"arAcc":0},{"user":"dev-victor","dayOffset":37,"reviewed":1,"locTotal":285,"locReviewed":285,"arSugg":1,"arAcc":0},{"user":"dev-victor","dayOffset":38,"reviewed":1,"locTotal":150,"locReviewed":150,"arSugg":1,"arAcc":0},{"user":"dev-victor","dayOffset":38,"reviewed":0,"locTotal":75,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-peter","dayOffset":39,"reviewed":1,"locTotal":420,"locReviewed":420,"arSugg":2,"arAcc":1},{"user":"dev-peter","dayOffset":39,"reviewed":1,"locTotal":240,"locReviewed":240,"arSugg":1,"arAcc":0},{"user":"dev-peter","dayOffset":40,"reviewed":1,"locTotal":120,"locReviewed":120,"arSugg":1,"arAcc":0},{"user":"dev-peter","dayOffset":40,"reviewed":0,"locTotal":60,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-kate","dayOffset":41,"reviewed":1,"locTotal":1320,"locReviewed":1320,"arSugg":11,"arAcc":2},{"user":"dev-kate","dayOffset":41,"reviewed":1,"locTotal":870,"locReviewed":870,"arSugg":5,"arAcc":1},{"user":"dev-kate","dayOffset":42,"reviewed":1,"locTotal":510,"locReviewed":510,"arSugg":3,"arAcc":1},{"user":"dev-kate","dayOffset":42,"reviewed":1,"locTotal":300,"locReviewed":300,"arSugg":2,"arAcc":0},{"user":"dev-kate","dayOffset":43,"reviewed":0,"locTotal":150,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-wendy","dayOffset":43,"reviewed":1,"locTotal":390,"locReviewed":390,"arSugg":1,"arAcc":0},{"user":"dev-wendy","dayOffset":44,"reviewed":1,"locTotal":240,"locReviewed":240,"arSugg":1,"arAcc":0},{"user":"dev-wendy","dayOffset":44,"reviewed":1,"locTotal":135,"locReviewed":135,"arSugg":1,"arAcc":1},{"user":"dev-wendy","dayOffset":44,"reviewed":0,"locTotal":75,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-quinn","dayOffset":45,"reviewed":1,"locTotal":360,"locReviewed":360,"arSugg":1,"arAcc":1},{"user":"dev-quinn","dayOffset":45,"reviewed":1,"locTotal":210,"locReviewed":210,"arSugg":1,"arAcc":0},{"user":"dev-quinn","dayOffset":46,"reviewed":1,"locTotal":105,"locReviewed":105,"arSugg":1,"arAcc":1},{"user":"dev-quinn","dayOffset":46,"reviewed":0,"locTotal":60,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-leo","dayOffset":47,"reviewed":1,"locTotal":1500,"locReviewed":1500,"arSugg":11,"arAcc":2},{"user":"dev-leo","dayOffset":47,"reviewed":1,"locTotal":990,"locReviewed":990,"arSugg":5,"arAcc":1},{"user":"dev-leo","dayOffset":48,"reviewed":1,"locTotal":570,"locReviewed":570,"arSugg":4,"arAcc":0},{"user":"dev-leo","dayOffset":48,"reviewed":1,"locTotal":300,"locReviewed":300,"arSugg":3,"arAcc":1},{"user":"dev-leo","dayOffset":49,"reviewed":0,"locTotal":150,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-xavier","dayOffset":49,"reviewed":1,"locTotal":360,"locReviewed":360,"arSugg":1,"arAcc":0},{"user":"dev-xavier","dayOffset":50,"reviewed":1,"locTotal":225,"locReviewed":225,"arSugg":1,"arAcc":0},{"user":"dev-xavier","dayOffset":50,"reviewed":1,"locTotal":120,"locReviewed":120,"arSugg":1,"arAcc":0},{"user":"dev-xavier","dayOffset":51,"reviewed":0,"locTotal":60,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-yara","dayOffset":51,"reviewed":1,"locTotal":300,"locReviewed":300,"arSugg":1,"arAcc":0},{"user":"dev-yara","dayOffset":51,"reviewed":1,"locTotal":195,"locReviewed":195,"arSugg":1,"arAcc":0},{"user":"dev-yara","dayOffset":52,"reviewed":1,"locTotal":105,"locReviewed":105,"arSugg":1,"arAcc":0},{"user":"dev-yara","dayOffset":52,"reviewed":0,"locTotal":54,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-zack","dayOffset":53,"reviewed":1,"locTotal":270,"locReviewed":270,"arSugg":1,"arAcc":0},{"user":"dev-zack","dayOffset":53,"reviewed":1,"locTotal":165,"locReviewed":165,"arSugg":1,"arAcc":0},{"user":"dev-zack","dayOffset":54,"reviewed":1,"locTotal":90,"locReviewed":90,"arSugg":1,"arAcc":0},{"user":"dev-zack","dayOffset":54,"reviewed":0,"locTotal":45,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-alex","dayOffset":55,"reviewed":1,"locTotal":240,"locReviewed":240,"arSugg":1,"arAcc":0},{"user":"dev-alex","dayOffset":55,"reviewed":1,"locTotal":150,"locReviewed":150,"arSugg":1,"arAcc":0},{"user":"dev-alex","dayOffset":56,"reviewed":1,"locTotal":75,"locReviewed":75,"arSugg":1,"arAcc":0},{"user":"dev-alex","dayOffset":56,"reviewed":0,"locTotal":36,"locReviewed":0,"arSugg":0,"arAcc":0},{"user":"dev-brett","dayOffset":57,"reviewed":1,"locTotal":180,"locReviewed":180,"arSugg":1,"arAcc":0},{"user":"dev-brett","dayOffset":57,"reviewed":1,"locTotal":120,"locReviewed":120,"arSugg":0,"arAcc":0},{"user":"dev-brett","dayOffset":58,"reviewed":1,"locTotal":66,"locReviewed":66,"arSugg":0,"arAcc":0},{"user":"dev-brett","dayOffset":58,"reviewed":0,"locTotal":30,"locReviewed":0,"arSugg":0,"arAcc":0}]</script>
+<script type="application/json" id="ui-baseline">[{"login":"dev-mia","name":"Dev Mia"},{"login":"dev-quinn","name":"Dev Quinn"},{"login":"dev-olivia","name":"Dev Olivia"},{"login":"dev-alice","name":"Dev Alice"},{"login":"dev-bob","name":"Dev Bob"},{"login":"dev-nate","name":"Dev Nate"},{"login":"dev-carol","name":"Dev Carol"},{"login":"dev-diana","name":"Dev Diana"},{"login":"dev-wendy","name":"Dev Wendy"},{"login":"dev-evan","name":"Dev Evan"},{"login":"dev-peter","name":"Dev Peter"},{"login":"dev-kate","name":"Dev Kate"},{"login":"dev-grace","name":"Dev Grace"},{"login":"dev-irene","name":"Dev Irene"},{"login":"dev-leo","name":"Dev Leo"},{"login":"dev-frank","name":"Dev Frank"},{"login":"dev-henry","name":"Dev Henry"},{"login":"dev-jack","name":"Dev Jack"},{"login":"dev-rosa","name":"Dev Rosa"},{"login":"dev-sam","name":"Dev Sam"},{"login":"dev-tara","name":"Dev Tara"},{"login":"dev-uma","name":"Dev Uma"},{"login":"dev-victor","name":"Dev Victor"},{"login":"dev-xavier","name":"Dev Xavier"},{"login":"dev-yara","name":"Dev Yara"},{"login":"dev-zack","name":"Dev Zack"},{"login":"dev-alex","name":"Dev Alex"},{"login":"dev-brett","name":"Dev Brett"}]</script>
+<script type="application/json" id="ui-window">{"start":"2025-03-20","end":"2025-05-19","total_days":61}</script>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var RECORDS  = JSON.parse($('ui-records').textContent);
+  var BASELINE = JSON.parse($('ui-baseline').textContent);
+  var WINDOW   = JSON.parse($('ui-window').textContent);
+  var TOTAL_DAYS = WINDOW.total_days;
+  // Parse window start as local date (avoid UTC offset shifting day 0).
+  var parts = WINDOW.start.split('-').map(Number);
+  var START_DATE = new Date(parts[0], parts[1] - 1, parts[2]);
+  var DAY_MS = 86400000;
+
+  function dayToDate(off) { return new Date(START_DATE.getTime() + off * DAY_MS); }
+  function fmtShort(d) {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  }
+  function initials(name) {
+    var p = (name || '').split(/[-_\s.]+/).filter(Boolean);
+    if (p.length >= 2) return (p[0][0] + p[1][0]).toUpperCase();
+    return (name || '').slice(0, 2).toUpperCase() || '—';
+  }
+  function fmtInt(n) { return n.toLocaleString('en-US'); }
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+
+  // Aggregate PR records in the day-range [lo, hi].
+  function aggregate(lo, hi) {
+    var userMap = Object.create(null);
+    BASELINE.forEach(function (b) {
+      userMap[b.login] = {
+        login: b.login, name: b.name,
+        prs: 0, reviewed: 0,
+        locTotal: 0, locReviewed: 0,
+        arSugg: 0, arAcc: 0,
+      };
+    });
+    for (var i = 0; i < RECORDS.length; i++) {
+      var r = RECORDS[i];
+      if (r.dayOffset < lo || r.dayOffset > hi) continue;
+      var u = userMap[r.user];
+      if (!u) continue;
+      u.prs += 1;
+      u.reviewed += r.reviewed;
+      u.locTotal += r.locTotal;
+      u.locReviewed += r.locReviewed;
+      u.arSugg += r.arSugg;
+      u.arAcc += r.arAcc;
+    }
+    var users = Object.keys(userMap).map(function (k) { return userMap[k]; });
+    var totals = {
+      userCount: users.length,
+      activeUsers: users.filter(function (u) { return u.prs > 0; }).length,
+      prsRaised: users.reduce(function (a, u) { return a + u.prs; }, 0),
+      prsReviewedByQodo: users.reduce(function (a, u) { return a + u.reviewed; }, 0),
+      locTotal: users.reduce(function (a, u) { return a + u.locTotal; }, 0),
+      locReviewed: users.reduce(function (a, u) { return a + u.locReviewed; }, 0),
+      actionRequiredSugg: users.reduce(function (a, u) { return a + u.arSugg; }, 0),
+      actionRequiredAccepted: users.reduce(function (a, u) { return a + u.arAcc; }, 0),
+    };
+    return { users: users, totals: totals };
+  }
+
+  function renderRows(users) {
+    var tbody = $('ui-tbody');
+    var sorted = users.slice().sort(function (a, b) {
+      var aA = a.prs > 0 ? 1 : 0, bA = b.prs > 0 ? 1 : 0;
+      if (aA !== bA) return bA - aA;
+      var aR = a.arSugg > 0 ? a.arAcc / a.arSugg : -1;
+      var bR = b.arSugg > 0 ? b.arAcc / b.arSugg : -1;
+      if (aR !== bR) return bR - aR;
+      return b.prs - a.prs;
+    });
+    var html = sorted.map(function (u) {
+      var inactive = u.prs === 0;
+      var arRate = u.arSugg > 0 ? Math.round(u.arAcc * 100 / u.arSugg) : 0;
+      var arCell = u.arSugg > 0
+        ? '<span class="ar-frac"><span class="acc">' + u.arAcc + '</span> / ' + u.arSugg + '</span>'
+        : '<span class="ar-frac">—</span>';
+      var rateCell = u.arSugg > 0
+        ? '<span class="meter"><span class="bar"><i style="width:' + arRate + '%"></i></span>'
+          + '<span class="pct">' + arRate + '%</span></span>'
+        : '<span class="ar-frac">—</span>';
+      var inactiveTag = inactive
+        ? ' <span class="inactive-tag">No activity</span>'
+        : '';
+      var displayName = u.name || u.login;
+      return '<tr class="' + (inactive ? 'inactive' : '') + '">'
+        + '<td><div class="dev"><div class="avatar">' + escapeHtml(initials(displayName)) + '</div>'
+        + '<div><div class="dev-name">' + escapeHtml(displayName) + inactiveTag + '</div>'
+        + '<div class="dev-handle">@' + escapeHtml(u.login) + '</div></div></div></td>'
+        + '<td class="num strong">' + u.prs + '</td>'
+        + '<td class="num">' + fmtInt(u.locTotal) + '</td>'
+        + '<td class="num col-q left strong">' + u.reviewed + '</td>'
+        + '<td class="num col-q right">' + fmtInt(u.locReviewed) + '</td>'
+        + '<td class="num">' + arCell + '</td>'
+        + '<td class="num">' + rateCell + '</td>'
+        + '</tr>';
+    }).join('');
+    tbody.innerHTML = html;
+  }
+
+  function renderHero(totals, days) {
+    var reviewedPct = totals.prsRaised > 0
+      ? Math.round(totals.prsReviewedByQodo * 100 / totals.prsRaised) : 0;
+    var arPct = totals.actionRequiredSugg > 0
+      ? Math.round(totals.actionRequiredAccepted * 100 / totals.actionRequiredSugg) : 0;
+    var h1 = $('ui-headline');
+    if (totals.prsRaised === 0) {
+      h1.innerHTML = '<span class="accent zero">No PRs</span> from these '
+        + totals.userCount + ' developers in the selected ' + days + '-day window.';
+    } else if (totals.actionRequiredSugg > 0) {
+      h1.innerHTML = 'Across ' + totals.activeUsers + ' of ' + totals.userCount
+        + ' developers and ' + days + ' days, Qodo reviewed '
+        + '<span class="accent">' + reviewedPct + '% of PRs</span> '
+        + 'and the team accepted '
+        + '<span class="accent success">' + arPct + '%</span> '
+        + 'of high-priority suggestions.';
+    } else {
+      h1.innerHTML = 'Across ' + totals.activeUsers + ' of ' + totals.userCount
+        + ' developers and ' + days + ' days, Qodo reviewed '
+        + '<span class="accent">' + reviewedPct + '% of PRs</span>.';
+    }
+  }
+
+  function renderTldr(totals) {
+    var reviewedPct = totals.prsRaised > 0
+      ? Math.round(totals.prsReviewedByQodo * 100 / totals.prsRaised) : 0;
+    var arPct = totals.actionRequiredSugg > 0
+      ? Math.round(totals.actionRequiredAccepted * 100 / totals.actionRequiredSugg) : 0;
+    var lowSample = totals.actionRequiredSugg > 0 && totals.actionRequiredSugg < 10;
+    $('ui-tldr-headline').textContent =
+      totals.actionRequiredSugg > 0 ? (arPct + '%') : '—';
+    $('ui-tldr-headline-row').classList.toggle('zero', totals.actionRequiredSugg === 0);
+    var lowEl = $('ui-lowsamp');
+    if (lowSample) {
+      lowEl.textContent = 'low sample · ' + totals.actionRequiredSugg + ' AR';
+      lowEl.hidden = false;
+    } else {
+      lowEl.hidden = true;
+    }
+    $('ui-tldr-prs').textContent = totals.prsRaised;
+    $('ui-tldr-reviewed').textContent =
+      totals.prsRaised > 0 ? (totals.prsReviewedByQodo + ' (' + reviewedPct + '%)') : '0';
+    $('ui-tldr-loctotal').textContent = fmtInt(totals.locTotal);
+    $('ui-tldr-locreviewed').textContent = fmtInt(totals.locReviewed);
+    $('ui-tldr-ar').textContent = totals.actionRequiredSugg;
+    $('ui-tldr-aracc').textContent = totals.actionRequiredAccepted;
+  }
+
+  // Slider state
+  var lo = 0, hi = TOTAL_DAYS - 1;
+  var loInput = $('dr-lo');
+  var hiInput = $('dr-hi');
+  var fill    = $('dr-fill');
+  var bubLo   = $('dr-bubble-lo');
+  var bubHi   = $('dr-bubble-hi');
+  var daysOut = $('dr-days');
+  var resetBtn = $('dr-reset');
+
+  // A 1-day window has no range to drag, and (TOTAL_DAYS - 1) === 0 would make
+  // the percentage math divide by zero. Pin the selection to the single day and
+  // disable the controls; update() still renders the headline/table for it.
+  var singleDay = TOTAL_DAYS <= 1;
+  if (singleDay) {
+    lo = 0; hi = 0;
+    loInput.disabled = true;
+    hiInput.disabled = true;
+  }
+
+  function update() {
+    var pctLo, pctHi;
+    if (singleDay) {
+      pctLo = 0; pctHi = 100;
+    } else {
+      pctLo = (lo / (TOTAL_DAYS - 1)) * 100;
+      pctHi = (hi / (TOTAL_DAYS - 1)) * 100;
+    }
+    fill.style.left  = pctLo + '%';
+    fill.style.right = (100 - pctHi) + '%';
+    bubLo.style.left = pctLo + '%';
+    bubHi.style.left = pctHi + '%';
+    bubLo.textContent = fmtShort(dayToDate(lo));
+    bubHi.textContent = fmtShort(dayToDate(hi));
+    var days = hi - lo + 1;
+    daysOut.textContent = days + ' day' + (days === 1 ? '' : 's') + ' selected';
+    resetBtn.disabled = singleDay || (lo === 0 && hi === TOTAL_DAYS - 1);
+
+    var r = aggregate(lo, hi);
+    renderHero(r.totals, days);
+    renderTldr(r.totals);
+    renderRows(r.users);
+  }
+
+  loInput.addEventListener('input', function () {
+    var v = parseInt(loInput.value, 10);
+    lo = Math.min(v, hi);
+    loInput.value = lo;
+    update();
+  });
+  hiInput.addEventListener('input', function () {
+    var v = parseInt(hiInput.value, 10);
+    hi = Math.max(v, lo);
+    hiInput.value = hi;
+    update();
+  });
+  resetBtn.addEventListener('click', function () {
+    lo = 0; hi = TOTAL_DAYS - 1;
+    loInput.value = lo; hiInput.value = hi;
+    update();
+  });
+
+  update();
+})();
+</script>
+
+</body>
+</html>
+

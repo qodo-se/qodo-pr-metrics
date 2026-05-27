@@ -2,7 +2,7 @@
 
 Generates an HTML report measuring Qodo code-review impact across merged PRs in a GitHub org — covering suggestion volume, implementation rates, reviewer velocity, and developer adoption.
 
-[View sample report](https://qodo-se.github.io/qodo-pr-metrics/examples/sample_report.html)
+[View sample report](https://qodo-se.github.io/qodo-pr-metrics/examples/sample_report.html) · [View sample per-user report](https://qodo-se.github.io/qodo-pr-metrics/examples/sample_user_report.html)
 
 ## What it does
 
@@ -12,7 +12,7 @@ For each merged PR in a configurable lookback window, the script:
 2. Counts suggestions made and how many were implemented (detected via strikethrough formatting)
 3. Records timing, spotlight issues (Security/Correctness), and per-developer activity
 
-It produces an HTML report and a raw CSV — see [Output files](#output-files) below.
+It produces an org-wide HTML report, a per-developer impact report, and a raw CSV — see [Output files](#output-files) below.
 
 ## How it works
 
@@ -91,12 +91,15 @@ python github.py --org acme-corp
 
 ### Output files
 
-The script generates two output files:
+The script generates three output files:
 
 - `{org}_{since_date}_{until_date}.csv` — raw per-PR data
-- `{org}_{since_date}_{until_date}.html` — visual summary report
+- `{org}_{since_date}_{until_date}.html` — org-wide visual summary report
+- `{org}_{since_date}_{until_date}_user.html` — per-developer impact report with an interactive date-range slider that recomputes the headline, at-a-glance panel, and per-developer table client-side
 
-For example, running `python3 github.py --org acme-corp` creates `acme-corp_2025-05-12_2026-05-12.csv` and `acme-corp_2025-05-12_2026-05-12.html`.
+For example, running `python3 github.py --org acme-corp` creates `acme-corp_2025-05-12_2026-05-12.csv`, `acme-corp_2025-05-12_2026-05-12.html`, and `acme-corp_2025-05-12_2026-05-12_user.html`.
+
+> **Scope note:** In the per-developer report, "Total PRs" currently equals "Qodo-reviewed PRs" — the pipeline's search only returns PRs that carry a Qodo review comment. Reporting true totals (Qodo or not) requires the row producer to also fetch unreviewed PRs and mark them `Has Qodo Review: False`; the report already reads that field correctly. The per-developer report buckets PRs by **creation date** within the window, so a PR merged just inside the window but created before `since` is excluded from the per-developer view.
 
 Each row in the CSV contains 37 columns with per-PR data:
 
