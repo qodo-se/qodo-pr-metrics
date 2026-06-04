@@ -536,10 +536,21 @@ def parse_qodo_comment(body: str) -> "QodoStats":
     if not body:
         return stats
 
-    # Track which section we're currently in (None = preamble/unknown)
-    section = None  # "action_required" | "review_recommended" | None
-    seen_spotlight: set = set()
-
+    # When Qodo re-reviews a PR after new commits, it edits the same comment and
+    # appends a folded "Previous review results" block holding earlier review
+    # snapshots (marked by "<!-- FOLDED_SECTION_START -->"). Counting every line
+    # double-counts suggestions that recur across snapshots; counting only the
+    # latest snapshot loses suggestions that were implemented in an *earlier*
+    # cycle and then drop out of the current review (they survive only in the
+    # folded history).
+    #
+    # So we take the deduplicated union of all snapshots: each distinct
+    # suggestion (keyed by its cleaned title) is counted once, and is credited as
+    # implemented if it was implemented in *any* snapshot. The first occurrence —
+    # the current review, which precedes the folded blocks — wins for section and
+    # category, so live state takes precedence over history.
+    occurrences = []  # in document order: current review first, then folded blocks
+    section = None    # "action_required" | "review_recommended" | None
     for line in body.splitlines():
         # Detect section transitions — check before suggestion matching so
         # heading lines are never mis-counted as suggestion items.
@@ -558,64 +569,86 @@ def parse_qodo_comment(body: str) -> "QodoStats":
                 any(marker in title for marker in IMPLEMENTED_MARKERS)
                 and not is_dismissed
             )
-            cat = _classify_category(title)
+            occurrences.append({
+                "key": _clean_title(title).lower(),
+                "title": title,
+                "section": section,
+                "cat": _classify_category(title),
+                "sub_label": _classify_sublabel(title),
+                "is_implemented": is_implemented,
+                "is_dismissed": is_dismissed,
+            })
 
-            # Always increment global totals (covers PRs with no section headers)
-            stats.total_suggestions += 1
+    # Merge occurrences by key: first occurrence fixes the title/section/category;
+    # implemented/dismissed are OR-ed across all snapshots of the same suggestion.
+    merged: dict = {}
+    for occ in occurrences:
+        existing = merged.get(occ["key"])
+        if existing is None:
+            merged[occ["key"]] = dict(occ)
+        else:
+            existing["is_implemented"] = existing["is_implemented"] or occ["is_implemented"]
+            existing["is_dismissed"] = existing["is_dismissed"] or occ["is_dismissed"]
+
+    for occ in merged.values():
+        # A suggestion dismissed in any snapshot is not counted as implemented.
+        is_dismissed = occ["is_dismissed"]
+        is_implemented = occ["is_implemented"] and not is_dismissed
+        section = occ["section"]
+        cat = occ["cat"]
+        sub_label = occ["sub_label"]
+
+        # Global totals (cover PRs with no section headers)
+        stats.total_suggestions += 1
+        if is_implemented:
+            stats.total_implemented += 1
+        if is_dismissed:
+            stats.total_dismissed += 1
+
+        # Section counts
+        if section == "action_required":
+            stats.action_required_total += 1
             if is_implemented:
-                stats.total_implemented += 1
+                stats.action_required_implemented += 1
             if is_dismissed:
-                stats.total_dismissed += 1
+                stats.action_required_dismissed += 1
+        elif section == "review_recommended":
+            stats.review_recommended_total += 1
+            if is_implemented:
+                stats.review_recommended_implemented += 1
+            if is_dismissed:
+                stats.review_recommended_dismissed += 1
 
-            # Section counts
-            if section == "action_required":
-                stats.action_required_total += 1
-                if is_implemented:
-                    stats.action_required_implemented += 1
-                if is_dismissed:
-                    stats.action_required_dismissed += 1
-            elif section == "review_recommended":
-                stats.review_recommended_total += 1
-                if is_implemented:
-                    stats.review_recommended_implemented += 1
-                if is_dismissed:
-                    stats.review_recommended_dismissed += 1
+        # Category counts
+        if cat == "bug":
+            stats.bugs_suggested += 1
+            if is_implemented:
+                stats.bugs_implemented += 1
+        elif cat == "rule_violation":
+            stats.rule_violations_suggested += 1
+            if is_implemented:
+                stats.rule_violations_implemented += 1
+        elif cat == "requirement_gap":
+            stats.requirement_gaps_suggested += 1
+            if is_implemented:
+                stats.requirement_gaps_implemented += 1
 
-            # Category counts
-            if cat == "bug":
-                stats.bugs_suggested += 1
-                if is_implemented:
-                    stats.bugs_implemented += 1
-            elif cat == "rule_violation":
-                stats.rule_violations_suggested += 1
-                if is_implemented:
-                    stats.rule_violations_implemented += 1
-            elif cat == "requirement_gap":
-                stats.requirement_gaps_suggested += 1
-                if is_implemented:
-                    stats.requirement_gaps_implemented += 1
+        # Sub-label counts (Security / Correctness)
+        if sub_label == "Security":
+            stats.security_suggested += 1
+            if is_implemented:
+                stats.security_implemented += 1
+        elif sub_label == "Correctness":
+            stats.correctness_suggested += 1
+            if is_implemented:
+                stats.correctness_implemented += 1
 
-            # Sub-label counts (Security / Correctness)
-            sub_label = _classify_sublabel(title)
-
-            if sub_label == "Security":
-                stats.security_suggested += 1
-                if is_implemented:
-                    stats.security_implemented += 1
-            elif sub_label == "Correctness":
-                stats.correctness_suggested += 1
-                if is_implemented:
-                    stats.correctness_implemented += 1
-
-            if section == "action_required" and is_implemented and sub_label:
-                key = (_clean_title(title), sub_label)
-                if key not in seen_spotlight:
-                    seen_spotlight.add(key)
-                    stats.spotlight_issues.append({
-                        "title": key[0],
-                        "category": cat,
-                        "sub_label": sub_label,
-                    })
+        if section == "action_required" and is_implemented and sub_label:
+            stats.spotlight_issues.append({
+                "title": _clean_title(occ["title"]),
+                "category": cat,
+                "sub_label": sub_label,
+            })
 
     return stats
 
