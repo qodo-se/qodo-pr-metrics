@@ -149,19 +149,17 @@ The HTML report is organized into the following sections:
 
 | Section | What it shows |
 |---|---|
+| Hero | Narrative headline summarizing Qodo's impact for the org and period |
 | Executive Summary | At-a-glance stat cards: PRs reviewed by Qodo, total issues caught, issues resolved, overall implementation rate |
-| Velocity — Time to First Feedback | Median time for Qodo vs the first human reviewer to leave a comment; speed multiplier; % of PRs where Qodo was the sole reviewer before merge |
-| High-Impact Issues Caught & Resolved | Cards for every Action Required issue flagged as Security or Correctness that was implemented before merge |
-| Adoption | Developer breadth stats (how many developers had PRs reviewed, how many implemented suggestions); per-repository and per-developer (top 10) breakdown tables |
-| Impact by Severity | Action Required vs Review Recommended suggestion counts and implementation rates |
-| Impact by Category | Bugs, Rule Violations, and Requirement Gaps counts and implementation rates |
-| Speed to First Fix | Median minutes from Qodo's first review to the developer's first follow-up commit; shown when data is available |
-| AI-Authored PRs | Count and implementation rate for PRs detected as AI-assisted |
-| Quality Signals | Revert PR count and hotfix PR count for the period; hotfixes are detected by PR title containing "hotfix", PR label "hotfix", or branch name matching the GitHub `head:hotfix` qualifier; shown when data is available |
-| Top 5 PRs by Issues Found | The PRs with the most Qodo suggestions |
-| Top 5 PRs by Implemented Suggestions | The PRs with the most implemented suggestions |
+| Trend | Findings caught & fixed, week over week; shown when weekly coverage data is available |
+| From merged PR to high-impact fix | Conversion funnel: the share of PRs surviving each step, down to PRs where Qodo measurably prevented something from reaching production |
+| High-impact findings caught & fixed | Cards for Action Required findings flagged as Security or Correctness — the issues most likely to have caused an incident in production |
+| What Qodo flagged & how it landed | Counts and implementation rates by severity (Action Required vs Review Recommended) and by category (Bugs, Rule Violations, Requirement Gaps) |
+| First feedback on a PR | Density plot of time to first feedback, comparing Qodo's median vs the first human reviewer's |
+| Developer adoption matrix | Every author plotted by action-required findings (log scale) vs implementation rate, split into four quadrants |
+| Hours Saved | Estimated senior-engineer review hours offloaded, based on lines of code reviewed |
 
-The Velocity, High-Impact, Speed to First Fix, and Quality Signals sections are omitted from the report if no relevant data is present.
+The Trend, Spotlight (High-impact findings), and Velocity (First feedback) sections are omitted from the report if no relevant data is present.
 
 ### Options
 
