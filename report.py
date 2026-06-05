@@ -595,10 +595,6 @@ def _format_week_label(week_start: str, fmt: str = "%b %-d") -> str:
         return d.strftime("%b %d")
 
 
-def _rate_str(implemented: int, total: int) -> str:
-    return f"{100 * implemented / total:.1f}%" if total > 0 else "—"
-
-
 def _format_duration(minutes: Optional[float]) -> str:
     if minutes is None:
         return "&mdash;"
@@ -625,17 +621,6 @@ def _initials(name: str) -> str:
     if len(parts) >= 2:
         return (parts[0][0] + parts[1][0]).upper()
     return name[:2].upper()
-
-
-def _rate_class(rate_pct: float) -> str:
-    """Bar color tier from implementation rate."""
-    if rate_pct is None:
-        return ""
-    if rate_pct < 40:
-        return "low"
-    if rate_pct < 70:
-        return "med"
-    return "hi"
 
 
 def _embed_logo(logo_path: Optional[str]) -> str:
@@ -2594,110 +2579,6 @@ def _section_velocity(agg: ReportData) -> str:
     )
 
 
-def _bar_row_repo(row: dict) -> str:
-    rate = _rate(row["implemented"], row["suggestions"])
-    cls = _rate_class(rate)
-    rate_label = _rate_str(row["implemented"], row["suggestions"])
-    return (
-        f'<div class="bar-row">'
-        f'<div class="bar-row-name">'
-        f'<span class="nm">{_h(row["repo"])}</span>'
-        f'<span class="pr-ct">{row["prs"]} PRs &middot; {row["suggestions"]} findings</span>'
-        f'</div>'
-        f'<div class="bar-row-val {cls}">{rate_label}</div>'
-        f'<div style="grid-column:1/-1"><div class="bar-row-bar {cls}"><i style="width:{rate}%"></i></div></div>'
-        f'</div>'
-    )
-
-
-def _bar_row_dev(row: dict) -> str:
-    rate = _rate(row["implemented"], row["suggestions"])
-    cls = _rate_class(rate)
-    rate_label = _rate_str(row["implemented"], row["suggestions"])
-    return (
-        f'<div class="bar-row">'
-        f'<div class="bar-row-name dev">'
-        f'<span class="dev-avatar">{_h(_initials(row["developer"]))}</span>'
-        f'<span class="nm">{_h(row["developer"])}</span>'
-        f'<span class="pr-ct">{row["prs"]} PRs</span>'
-        f'</div>'
-        f'<div class="bar-row-val {cls}">{rate_label}</div>'
-        f'<div style="grid-column:1/-1"><div class="bar-row-bar {cls}"><i style="width:{rate}%"></i></div></div>'
-        f'</div>'
-    )
-
-
-def _section_adoption(agg: ReportData) -> str:
-    top_repos = agg.by_repo[:10]
-    remainder_repos = agg.by_repo[10:]
-    rem_repo_prs = sum(r["prs"] for r in remainder_repos)
-    rem_repo_findings = sum(r["suggestions"] for r in remainder_repos)
-
-    repo_rows = "".join(_bar_row_repo(r) for r in top_repos)
-    repo_tail = (
-        f'<div class="bar-tail">+ {len(remainder_repos)} more repos &middot; '
-        f'{rem_repo_prs} PRs &middot; {rem_repo_findings} findings</div>'
-        if remainder_repos else ""
-    )
-
-    dev_rows = "".join(_bar_row_dev(r) for r in agg.by_developer)
-    rem_devs = max(0, agg.developers_with_qodo - len(agg.by_developer))
-    dev_tail = (
-        f'<div class="bar-tail">+ {rem_devs} more developers</div>'
-        if rem_devs else ""
-    )
-
-    dev_rate_pct = _rate(agg.developers_engaged, agg.developers_with_qodo) if agg.developers_with_qodo else 0.0
-
-    ai_stat_html = ""
-    if agg.ai_authored_count > 0:
-        ai_rate_label = f"{agg.ai_authored_impl_rate_pct:.1f}% implementation rate" if agg.ai_authored_count > 0 else ""
-        ai_stat_html = (
-            f'<div class="ai-stat">'
-            f'<span class="ai-count">{agg.ai_authored_count}</span>'
-            f'<span class="ai-label">AI-authored PRs reviewed by Qodo this period</span>'
-            f'<span class="ai-rate">{ai_rate_label}</span>'
-            f'</div>'
-        )
-
-    return (
-        f'<section class="r-section">'
-        f'<div class="r-section-head"><div>'
-        f'<div class="r-section-eyebrow">Adoption</div>'
-        f'<div class="r-section-title">Coverage across the org</div>'
-        f'<div class="r-section-deck">How Qodo\'s reach splits across repositories and developers this period.</div>'
-        f'</div></div>'
-
-        f'<div class="coverage-strip">'
-        f'<div class="cov-cell">'
-        f'<div class="cov-cell-val">{agg.repos_with_qodo}</div>'
-        f'<div class="cov-cell-label">Repos with Qodo-reviewed PRs</div>'
-        f'<div class="cov-cell-bar"><i style="width:100%"></i></div>'
-        f'</div>'
-        f'<div class="cov-cell">'
-        f'<div class="cov-cell-val">{agg.developers_engaged}<span class="of"> / {agg.developers_with_qodo}</span></div>'
-        f'<div class="cov-cell-label">Developers who implemented at least one Qodo fix</div>'
-        f'<div class="cov-cell-bar"><i style="width:{dev_rate_pct}%"></i></div>'
-        f'</div>'
-        f'</div>'
-        f'{ai_stat_html}'
-
-        f'<div class="bar-grid">'
-        f'<div>'
-        f'<div class="bar-head"><h4>By repository &middot; top 10 by volume</h4>'
-        f'<span class="axis">% findings implemented &rarr;</span></div>'
-        f'{repo_rows}{repo_tail}'
-        f'</div>'
-        f'<div>'
-        f'<div class="bar-head"><h4>By developer &middot; top 10 by volume</h4>'
-        f'<span class="axis">% findings implemented &rarr;</span></div>'
-        f'{dev_rows}{dev_tail}'
-        f'</div>'
-        f'</div>'
-        f'</section>'
-    )
-
-
 def _bd_item(klass: str, name: str, total: int, implemented: int) -> str:
     rate = _rate(implemented, total)
     rate_label = f"{rate:.1f}%" if total > 0 else "—"
@@ -3189,87 +3070,6 @@ def _section_breakdown(agg: ReportData) -> str:
         f'<div class="bd-block"><h4>By severity</h4>{severity}</div>'
         f'<div class="bd-block"><h4>By category</h4>{category}</div>'
         f'</div>'
-        f'</section>'
-    )
-
-
-def _section_quality_signal(agg: ReportData) -> str:
-    revert_absent = agg.revert_count is None or agg.revert_count == 0
-    hotfix_absent = agg.hotfix_count is None or agg.hotfix_count == 0
-    if revert_absent and hotfix_absent:
-        return ""
-    revert_val = str(agg.revert_count) if agg.revert_count is not None else "—"
-    hotfix_val = str(agg.hotfix_count) if agg.hotfix_count else "—"
-    return (
-        f'<section class="r-section">'
-        f'<div class="r-section-head"><div>'
-        f'<div class="r-section-eyebrow">Quality Signal</div>'
-        f'<div class="r-section-title">Reverts &amp; hotfixes</div>'
-        f'<div class="r-section-deck">Indicators of post-merge quality issues in the period.</div>'
-        f'</div></div>'
-        f'<div class="quality-signal">'
-        f'<div class="quality-grid">'
-        f'<div class="quality-cell">'
-        f'<div class="quality-value">{revert_val}</div>'
-        f'<div class="quality-label">Reverts</div>'
-        f'</div>'
-        f'<div class="quality-cell">'
-        f'<div class="quality-value">{hotfix_val}</div>'
-        f'<div class="quality-label">Hotfixes</div>'
-        f'</div>'
-        f'</div>'
-        f'</div>'
-        f'</section>'
-    )
-
-
-def _section_top_prs(agg: ReportData) -> str:
-    rows = []
-    for r in agg.top_prs_by_implemented:
-        url = r.get("PR URL", "")
-        safe_url = url if url.startswith(("https://", "http://")) else ""
-        pr_ref = f'<a href="{_h(safe_url)}">#{_h(str(r["PR #"]))}</a>' if safe_url else f'#{_h(str(r["PR #"]))}'
-        rate_raw = r.get("Implementation Rate (%)", "")
-        try:
-            rate_val = float(rate_raw) if rate_raw not in (None, "") else None
-        except (TypeError, ValueError):
-            rate_val = None
-        rate_pct_label = f'{rate_val:.1f}%' if rate_val is not None else '—'
-        rate_pct_bar = rate_val if rate_val is not None else 0
-        creator = r.get("PR Creator", "")
-
-        rows.append(
-            f'<tr>'
-            f'<td class="repo">{_h(r["Repo Name"])}</td>'
-            f'<td class="pr-link">{pr_ref}</td>'
-            f'<td><div class="creator">'
-            f'<span class="dev-avatar" style="width:18px;height:18px;font-size:9px">{_h(_initials(creator))}</span>'
-            f'{_h(creator)}'
-            f'</div></td>'
-            f'<td class="num">{r.get("Total Suggestions", 0)}</td>'
-            f'<td class="num">{r.get("Total Implemented", 0)}</td>'
-            f'<td><span class="mini-bar"><i style="width:{rate_pct_bar}%"></i></span> {rate_pct_label}</td>'
-            f'</tr>'
-        )
-
-    if not rows:
-        return ""
-
-    return (
-        f'<section class="r-section">'
-        f'<div class="r-section-head"><div>'
-        f'<div class="r-section-eyebrow">Top PRs</div>'
-        f'<div class="r-section-title">Most fixes implemented in a single PR</div>'
-        f'<div class="r-section-deck">PRs with the highest count of implemented Qodo findings.</div>'
-        f'</div></div>'
-        f'<table class="top-prs">'
-        f'<thead><tr>'
-        f'<th>Repository</th><th>PR</th><th>Author</th>'
-        f'<th class="num">Caught</th><th class="num">Fixed</th>'
-        f'<th>Implementation rate</th>'
-        f'</tr></thead>'
-        f'<tbody>{"".join(rows)}</tbody>'
-        f'</table>'
         f'</section>'
     )
 

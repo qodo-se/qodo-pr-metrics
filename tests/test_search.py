@@ -127,7 +127,17 @@ def test_get_all_pr_loc_sums_across_chunks(monkeypatch):
         return _loc_response([100, 50])  # 150 per chunk
 
     monkeypatch.setattr("github.run_gh", mock_gh)
-    # date(2026, 5, 19) to today (2026-05-21) = 2 days → 2 chunks with chunk_days=1
+
+    # Freeze "today" so the chunk count is deterministic regardless of when the
+    # test runs — otherwise the window grows with wall-clock time and the chunk
+    # count (and call count) drifts.
+    class _FrozenDate(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 5, 21)
+
+    monkeypatch.setattr("github.date", _FrozenDate)
+    # 2026-05-19 to frozen today 2026-05-21 = 2 days → 2 chunks with chunk_days=1
     result = get_all_pr_loc("acme", date(2026, 5, 19), repos=["frontend"], chunk_days=1)
     assert result == 300   # 150 per chunk × 2 chunks
     assert len(calls) == 2

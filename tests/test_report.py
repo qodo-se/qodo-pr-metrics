@@ -160,21 +160,10 @@ def test_generate_html_smoke():
     assert "Adoption" in html
     assert "By severity" in html
     assert "By category" in html
-    assert "Most fixes implemented" in html
     # stat values present
     assert 'class="kpi-value">2<' in html   # prs_with_qodo
     assert 'class="kpi-value">5<' in html   # total_suggestions
     assert 'class="kpi-value">3<' in html   # total_implemented
-
-
-def test_generate_html_includes_top_prs_by_implemented_section():
-    from report import generate_html
-    rows = [
-        _row(repo="api", creator="alice", suggestions=5, implemented=3),
-        _row(repo="web", creator="bob", suggestions=3, implemented=3),
-    ]
-    html = generate_html(rows, "acme-corp", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
-    assert "Most fixes implemented in a single PR" in html
 
 
 import json as _json
@@ -344,29 +333,6 @@ def test_generate_html_spotlight_links_pr():
     html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
     assert "PR #42" in html
     assert "https://github.com/acme/repo/pull/42" in html
-
-
-def test_generate_html_adoption_developer_breadth():
-    from report import generate_html
-    rows = [
-        _timing_row(creator="alice", implemented=2),
-        _timing_row(creator="bob",   implemented=0),
-        _timing_row(creator="carol", suggestions=0, implemented=0),
-    ]
-    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
-    assert "Coverage across the org" in html
-    assert "alice" in html
-    assert "Developers who implemented at least one Qodo fix" in html
-
-
-def test_generate_html_adoption_engagement():
-    from report import generate_html
-    rows = [
-        _timing_row(creator="alice", implemented=3),
-        _timing_row(creator="bob",   implemented=0),
-    ]
-    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
-    assert "Developers who implemented" in html
 
 
 def test_spotlight_security_sorted_before_correctness():
@@ -544,19 +510,6 @@ def test_spotlight_footer_other_sub_label():
     assert "+ 1 more" in html
 
 
-def test_spotlight_section_before_top_prs():
-    from report import generate_html
-    issue = {"title": "Security issue", "category": "bug", "sub_label": "Security"}
-    rows = [
-        _timing_row(spotlight=[issue], suggestions=5, implemented=3),
-        _timing_row(spotlight=[],      suggestions=3, implemented=3),
-    ]
-    html = generate_html(rows, "acme", date(2025,1,1), date(2026,1,1), logo_path=None)
-    spotlight_pos    = html.index("High-impact findings caught")
-    top_prs_impl_pos = html.index("Most fixes implemented")
-    assert spotlight_pos < top_prs_impl_pos
-
-
 def test_generate_html_requirement_gaps_hidden_when_zero():
     from report import generate_html
     rows = [_row(req_sug=0, req_imp=0)]
@@ -715,74 +668,6 @@ def test_aggregate_new_fields_default_when_empty():
     assert agg.weekly_coverage == []
     assert agg.revert_count is None
     assert agg.hotfix_count is None
-
-
-def test_generate_html_speed_to_fix_shown_when_data():
-    from report import generate_html
-    rows = [
-        _extras_row(speed_min=30, qodo_min=8, human_min=270),
-        _extras_row(speed_min=60, qodo_min=10, human_min=300),
-    ]
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
-    assert "Speed to first fix" in html
-    assert "45m" in html   # median of [30, 60]
-
-
-def test_generate_html_speed_to_fix_hidden_when_no_data():
-    from report import generate_html
-    rows = [_timing_row(qodo_min=8, human_min=270)]  # no Speed to First Fix column
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
-    assert "Speed to first fix" not in html
-
-
-def test_generate_html_ai_authored_insight_shown_when_nonzero():
-    from report import generate_html
-    rows = [_extras_row(is_ai=True, ai_type="copilot", suggestions=4, implemented=2)]
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
-    assert "AI-authored" in html
-
-
-def test_generate_html_ai_authored_hidden_when_zero():
-    from report import generate_html
-    rows = [_extras_row(is_ai=False)]
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None)
-    assert "AI-authored" not in html
-
-
-def test_generate_html_quality_signal_shown_when_data():
-    from report import generate_html
-    rows = [_extras_row()]
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None,
-                         revert_count=5, hotfix_count=2)
-    assert "Reverts" in html
-    assert "Hotfixes" in html
-
-
-def test_generate_html_quality_signal_hidden_when_none():
-    from report import generate_html
-    rows = [_extras_row()]
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None,
-                         revert_count=None, hotfix_count=None)
-    assert "Reverts" not in html
-    assert "Hotfixes" not in html
-
-
-def test_generate_html_hotfix_zero_renders_dash():
-    from report import generate_html
-    rows = [_extras_row()]
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None,
-                         revert_count=3, hotfix_count=0)
-    assert "Hotfixes" in html
-    assert ">—<" in html
-
-
-def test_generate_html_quality_signal_hidden_when_both_zero():
-    from report import generate_html
-    rows = [_extras_row()]
-    html = generate_html(rows, "acme", date(2025, 1, 1), date(2026, 1, 1), logo_path=None,
-                         revert_count=0, hotfix_count=0)
-    assert "Reverts" not in html
-    assert "Hotfixes" not in html
 
 
 import re as _re
