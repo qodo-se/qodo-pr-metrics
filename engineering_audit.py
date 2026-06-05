@@ -26,6 +26,7 @@ Prerequisites:
 
 import argparse
 import csv as _csv
+import html
 import json
 import re
 import statistics
@@ -72,6 +73,7 @@ _QODO_BODY_MARKER = re.compile(r"Code Review by Qodo", re.IGNORECASE)
 _AUDIT_GQL_SEARCH_QUERY = (
     "query($q:String!,$cursor:String){"
     "search(query:$q,type:ISSUE,first:100,after:$cursor){"
+    "issueCount "
     "pageInfo{hasNextPage endCursor}"
     "nodes{...on PullRequest{"
     "number id "
@@ -102,6 +104,7 @@ def audit_search_merged_prs(org, since, until, chunk_days=30, repos=None):
             )
             end_cursor = None
             chunk_count = 0
+            issue_count = 0
             while True:
                 gh_args = [
                     "api", "graphql",
@@ -115,6 +118,7 @@ def audit_search_merged_prs(org, since, until, chunk_days=30, repos=None):
                 out = gh_helpers.run_gh(gh_args)
                 data = json.loads(out)
                 search = data["data"]["search"]
+                issue_count = search.get("issueCount", 0)
                 for pr in gh_helpers._parse_search_gql_nodes(search["nodes"]):
                     key = (pr["owner"], pr["repo"], pr["number"])
                     if key in seen:
@@ -126,22 +130,62 @@ def audit_search_merged_prs(org, since, until, chunk_days=30, repos=None):
                     break
                 end_cursor = search["pageInfo"]["endCursor"]
             print(f" {chunk_count} PRs", file=sys.stderr)
+            # GitHub search caps any single query at 1000 results; pagination
+            # silently stops there. issueCount is the true match total, so if it
+            # exceeds what we fetched the chunk overflowed the cap and PRs were
+            # dropped — every downstream aggregate would be understated.
+            if issue_count > chunk_count:
+                print(
+                    f"  Warning: search cap hit for chunk {cursor}..{chunk_end} "
+                    f"({qual_label}): fetched {chunk_count}/{issue_count} PRs — "
+                    "results are incomplete. Re-run with a smaller --chunk-days "
+                    "(or a narrower window) so each chunk stays under 1000.",
+                    file=sys.stderr,
+                )
         cursor = chunk_end + timedelta(days=1)
 
 
 # ── Per-PR row ───────────────────────────────────────────────────────────
 
+def _is_bot_login(login: str) -> bool:
+    return bool(_BOT_LOGIN_PATTERNS.search((login or "").lower()))
+
+
 def _is_bot_comment(comment: dict) -> bool:
     user = comment.get("user") or {}
     if user.get("type") == "Bot":
         return True
-    login = (user.get("login") or "").lower()
-    if _BOT_LOGIN_PATTERNS.search(login):
+    if _is_bot_login(user.get("login") or ""):
         return True
     body = comment.get("body") or ""
     if _QODO_BODY_MARKER.search(body):
         return True
     return False
+
+
+# Review states that represent a human actually engaging with the PR. A bare
+# DISMISSED/PENDING review is not engagement; APPROVED/CHANGES_REQUESTED/
+# COMMENTED are.
+_HUMAN_REVIEW_STATES = {"APPROVED", "CHANGES_REQUESTED", "COMMENTED"}
+
+
+def _human_review_timestamps(reviews: list) -> List[str]:
+    """submittedAt timestamps of non-bot reviews that signal real engagement.
+
+    The batch fetch doesn't return review-thread comment *bodies*, only review
+    state + author + submittedAt, so we use a review in an engaged state as a
+    proxy for "a human looked at this PR" even when they left no issue comment.
+    """
+    stamps = []
+    for rv in reviews or []:
+        if (rv.get("state") or "").upper() not in _HUMAN_REVIEW_STATES:
+            continue
+        if _is_bot_login((rv.get("author") or {}).get("login") or ""):
+            continue
+        ts = rv.get("submittedAt") or ""
+        if ts:
+            stamps.append(ts)
+    return stamps
 
 
 def build_audit_row(pr: dict, pr_data: dict) -> dict:
@@ -153,20 +197,27 @@ def build_audit_row(pr: dict, pr_data: dict) -> dict:
         pr.get("created_at", ""), pr.get("merged_at", "")
     )
 
+    # "Human engagement" = any non-bot issue comment OR any non-bot review in
+    # an engaged state (APPROVED / CHANGES_REQUESTED / COMMENTED). Counting
+    # reviews matters because a PR can get a thorough review with zero issue
+    # comments, and the methodology copy promises review-level signal is used.
+    reviews = pr_data.get("reviews", []) or []
     human_comments = [c for c in comments if not _is_bot_comment(c)]
-    has_human = bool(human_comments)
+    human_timestamps = [
+        c.get("created_at", "") for c in human_comments if c.get("created_at")
+    ] + _human_review_timestamps(reviews)
+    has_human = bool(human_timestamps)
     ttfc_min: Optional[int] = None
     if has_human:
-        first = min(human_comments, key=lambda c: c.get("created_at", ""))
         ttfc_min = gh_helpers._minutes_between(
-            pr.get("created_at", ""), first.get("created_at", "")
+            pr.get("created_at", ""), min(human_timestamps)
         )
 
     is_ai, ai_type = gh_helpers.detect_ai_authored(
         pr_data.get("body", "") or "",
         pr_data.get("labels", []) or [],
     )
-    review_info = gh_helpers.parse_reviews(pr_data.get("reviews", []) or [])
+    review_info = gh_helpers.parse_reviews(reviews)
 
     return {
         "owner": pr["owner"],
@@ -459,20 +510,41 @@ def render_html(agg: dict, scatter: dict, template_path: Path) -> str:
 
     The template's inline <script> does the rest — reads the blobs at load
     time and rewrites the DOM. We only do three substitutions here:
-      - <<ORG>>          → plain org name (used in the <title> tag)
+      - <<ORG>>          → HTML-escaped org name (used in the <title> tag)
       - <<AGG_JSON>>     → pretty-printed aggregates blob
       - <<SCATTER_JSON>> → compact scatter-points blob
+
+    org comes from --org or, via --from-json/--from-csv, from untrusted files,
+    so it's HTML-escaped before going into <title>. The JSON blobs land inside
+    <script> tags, so any "</script>" inside them is neutralised to stop an
+    early tag close from breaking out into executable markup.
     """
     template = template_path.read_text(encoding="utf-8")
-    out = template.replace("<<ORG>>", agg["org"])
+    out = template.replace("<<ORG>>", html.escape(str(agg.get("org", "")), quote=True))
     # Inject the JSON payloads LAST so any stray placeholders inside them
     # don't get rewritten by an earlier substitution.
-    out = out.replace("<<AGG_JSON>>", json.dumps(agg, indent=2))
-    out = out.replace("<<SCATTER_JSON>>", json.dumps(scatter, separators=(",", ":")))
+    out = out.replace("<<AGG_JSON>>", _json_for_script(agg, indent=2))
+    out = out.replace("<<SCATTER_JSON>>", _json_for_script(scatter, separators=(",", ":")))
     return out
 
 
+def _json_for_script(obj, **dumps_kwargs) -> str:
+    """json.dumps, but safe to embed inside an inline <script> block."""
+    return json.dumps(obj, **dumps_kwargs).replace("</", "<\\/")
+
+
 # ── Orchestration / CLI ──────────────────────────────────────────────
+
+def _org_from_csv_stem(stem: str) -> str:
+    """Infer the org from a report.py CSV filename: ``{org}_{since}_{until}``.
+
+    Splitting on the first underscore breaks for orgs containing underscores
+    (e.g. ``my_org_2026-01-01_2026-02-01``), so split on the first
+    ``_YYYY-MM-DD`` date segment instead and fall back to the whole stem.
+    """
+    parts = re.split(r"_\d{4}-\d{2}-\d{2}", stem, maxsplit=1)
+    return parts[0] if parts and parts[0] else stem
+
 
 def rows_from_csv(csv_path: Path) -> List[dict]:
     """Load audit rows from a report.py CSV.
@@ -498,10 +570,18 @@ def rows_from_csv(csv_path: Path) -> List[dict]:
                 hours = int(r.get("Hours to Merge") or 0)
             except ValueError:
                 hours = 0
+            try:
+                number = int(r.get("PR #") or 0)
+            except ValueError:
+                number = 0
+            try:
+                reviewer_count = int(r.get("Reviewer Count") or 0)
+            except ValueError:
+                reviewer_count = 0
             rows.append({
                 "owner": "",
                 "repo": r.get("Repo Name", ""),
-                "number": int(r.get("PR #") or 0),
+                "number": number,
                 "url": r.get("PR URL", ""),
                 "creator": r.get("PR Creator", ""),
                 "created_at": r.get("PR Creation Date", ""),
@@ -513,7 +593,7 @@ def rows_from_csv(csv_path: Path) -> List[dict]:
                 "is_ai": (r.get("Is AI Authored") or "").strip() == "True",
                 "ai_type": r.get("AI Author Type", ""),
                 "approver": r.get("Final Approver", ""),
-                "reviewer_count": int(r.get("Reviewer Count") or 0),
+                "reviewer_count": reviewer_count,
                 "had_request_changes": (
                     (r.get("Had Request Changes") or "").strip() == "True"
                 ),
@@ -538,7 +618,7 @@ def cmd_audit(args):
             if merge_dates:
                 since = date.fromisoformat(merge_dates[0])
                 until = date.fromisoformat(merge_dates[-1])
-        org = args.org or Path(args.from_csv).stem.split("_")[0]
+        org = args.org or _org_from_csv_stem(Path(args.from_csv).stem)
         print(
             f"Loaded {len(rows):,} rows (window {since} → {until}, org {org}).\n"
             "Note: report.py CSVs only contain Qodo-reviewed PRs, so the\n"
@@ -550,7 +630,8 @@ def cmd_audit(args):
               file=sys.stderr)
 
         pr_meta = list(audit_search_merged_prs(
-            args.org, since, until, repos=args.repos,
+            args.org, since, until,
+            chunk_days=args.chunk_days, repos=args.repos,
         ))
         if not pr_meta:
             sys.exit("No merged PRs found in window. Check --org and date range.")
@@ -561,7 +642,9 @@ def cmd_audit(args):
         batch_size = 25
         for i in range(0, len(pr_meta), batch_size):
             batch = pr_meta[i:i + batch_size]
-            pr_data_map = gh_helpers.fetch_pr_data_batch(batch)
+            # Pull up to 100 comments (vs the report's default 20) so the
+            # "no human comment" / TTFC signal isn't skewed by chatty PRs.
+            pr_data_map = gh_helpers.fetch_pr_data_batch(batch, comments_first=100)
             for pr in batch:
                 data = pr_data_map.get(pr.get("node_id", ""))
                 if not data:
@@ -620,12 +703,24 @@ def render_from_json(args):
     Useful when you've already paid for the GitHub API calls and just want
     to tweak the template or copy without re-fetching everything.
     """
-    agg = json.loads(Path(args.from_json).read_text(encoding="utf-8"))
+    json_path = Path(args.from_json)
+    if not json_path.exists():
+        sys.exit(f"Audit JSON not found: {json_path}")
+    try:
+        agg = json.loads(json_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError as e:
+        sys.exit(f"Audit JSON is not valid JSON ({json_path}): {e}")
+    template_path = Path(args.template or TEMPLATE_FILENAME)
+    if not template_path.exists():
+        sys.exit(
+            f"HTML template not found: {template_path}\n"
+            f"Pass --template /path/to/engineering_audit_template.html "
+            "or place the file alongside this script."
+        )
     # No scatter data on disk — render with an empty payload. The scatter
     # chart will be blank but the rest of the report is intact.
     scatter = {"generated": datetime.utcnow().isoformat() + "Z",
                "points": [], "rubberStamps": []}
-    template_path = Path(args.template or TEMPLATE_FILENAME)
     out = Path(args.output or "audit.html")
     out.write_text(render_html(agg, scatter, template_path), encoding="utf-8")
     print(f"Rendered {out}")
@@ -645,6 +740,9 @@ def main():
                    help="Lookback window in days when --since is omitted (default: 60)")
     p.add_argument("--repos", nargs="+", metavar="REPO",
                    help="Limit to specific repos (e.g. --repos frontend api)")
+    p.add_argument("--chunk-days", type=int, default=30,
+                   help="Date-window size per search query (default: 30). "
+                        "Lower it if you hit GitHub's 1000-result search cap.")
     p.add_argument("--output-dir", help="Directory to write reports into (default: cwd)")
     p.add_argument("--template", help=f"Path to HTML template (default: ./{TEMPLATE_FILENAME})")
     p.add_argument("--from-csv",

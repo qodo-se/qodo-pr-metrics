@@ -5,7 +5,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Qodo · Engineering Audit · <<ORG>></title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+/* No web-font @import on purpose: the report must stay fully self-contained
+   and fetch nothing at view time (see README). Inter / IBM Plex Mono are used
+   when present locally; every font-family stack below falls back to system
+   sans / mono otherwise. */
 
 :root{
   --pm-100:#F4F4F4;--pm-200:#DFDFDF;--pm-400:#6E6E6E;--pm-500:#3D3D3D;
@@ -1010,14 +1013,14 @@ a:hover{color:var(--p-200)}
 
     <div class="method">
       <div class="method-eyebrow">Methodology · how this audit was computed</div>
-      <b>Source.</b> A single GitHub GraphQL pull, fetched by the <code>qodo-audit.py</code> script you ran. The script reads PRs in the configured org and time window, joins them with reviews, comments, and commit metadata &mdash; nothing else. <b>No Qodo product data is read or required.</b>
-      &nbsp;<b>Window.</b> 60-day lookback ending today. Only merged PRs are included; open and closed-without-merge are filtered out.
+      <b>Source.</b> A single GitHub GraphQL pull, fetched by the <code>engineering_audit.py</code> script you ran. The script reads PRs in the configured org and time window, joins them with reviews, comments, and commit metadata &mdash; nothing else. <b>No Qodo product data is read or required.</b>
+      &nbsp;<b>Window.</b> <span id="method-window">a 60-day lookback</span>. Only merged PRs are included; open and closed-without-merge are filtered out.
       &nbsp;<b>"Big" / "fast" thresholds (Section 01).</b> The org's own median lines and hours-to-merge. "Big" = above-median size. "Fast" = at-or-below-median merge time. Computed per-audit, so thresholds reflect your team's normal.
-      &nbsp;<b>"No human comment" (Sections 01 + 02).</b> Zero non-bot review comments and zero review-level comments on the PR before merge. Bot accounts (dependabot, renovate, your own CI bots) are filtered out before the count.
+      &nbsp;<b>"No human comment" (Sections 01 + 02).</b> Zero non-bot issue comments <em>and</em> no human review (approve, request-changes, or comment) on the PR before merge. Bot accounts (dependabot, renovate, your own CI bots) are filtered out before the count.
       &nbsp;<b>Final approver (Section 03).</b> The user whose APPROVED review is most recent before merge. PRs merged without an explicit approval are excluded from this section's denominator (<span id="method-approver-denom">135 of 556</span>).
       &nbsp;<b>Cycle time (Section 04).</b> <code>PR.mergedAt - PR.createdAt</code>, rounded to the nearest hour.
       &nbsp;<b>AI-authored detection (Section 05).</b> PR body co-author signatures (Claude, Copilot, Cursor, Codex) or commit-message patterns matching known agent footprints. Heuristic &mdash; not exhaustive. <b>Reported share is a floor.</b>
-      &nbsp;<b>Re-running.</b> <code>python qodo-audit.py --owner OWNER --since YYYY-MM-DD --until YYYY-MM-DD</code>. Each run produces a fresh standalone HTML file like this one.
+      &nbsp;<b>Re-running.</b> <code id="method-rerun">python3 engineering_audit.py --org ORG --since YYYY-MM-DD --until YYYY-MM-DD</code>. Each run produces a fresh standalone HTML file like this one.
       &nbsp;<b>Privacy.</b> The script runs entirely in your environment, against your GitHub token. Nothing is sent to Qodo servers. The output HTML can be shared internally, or with us if you'd like a guided walkthrough.
     </div>
 
@@ -1063,6 +1066,10 @@ a:hover{color:var(--p-200)}
   const $ = id => document.getElementById(id);
   const set = (id, html) => { const el = $(id); if (el) el.innerHTML = html; };
   const setText = (id, t) => { const el = $(id); if (el) el.textContent = t; };
+  // Escape untrusted strings (e.g. AGG.org from a hand-edited JSON) before
+  // they go into an innerHTML string, so markup in them can't execute.
+  const esc = s => String(s).replace(/[&<>"']/g, c =>
+    ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const r0 = n => Math.round(n);
   const r1 = n => Math.round(n * 10) / 10;
   const numFmt = n => Math.round(n).toLocaleString('en-US');
@@ -1104,7 +1111,13 @@ a:hover{color:var(--p-200)}
   // ── BRAND / COVER / KPI / SIGNATURE ──────────────────────────────────────
   const win = AGG.window;
   set('brand-window-line',
-    `<span class="mono">${AGG.org}</span> · ${fmtDateShort(win.from)} – ${fmtDateFull(win.to)} · ${win.days}-day window`);
+    `<span class="mono">${esc(AGG.org)}</span> · ${fmtDateShort(win.from)} – ${fmtDateFull(win.to)} · ${win.days}-day window`);
+  // Methodology block: keep the window + rerun command honest for whatever
+  // --since/--until/--days this run actually used (no hardcoded "60-day").
+  setText('method-window',
+    `a ${win.days}-day window, ${fmtDateFull(win.from)} – ${fmtDateFull(win.to)}`);
+  setText('method-rerun',
+    `python3 engineering_audit.py --org ${AGG.org} --since ${win.from} --until ${win.to}`);
   setText('cover-eyebrow-org', AGG.org);
   setText('cover-eyebrow-repos', `${AGG.totalRepos} ${plural(AGG.totalRepos, 'repository', 'repositories')}`);
   setText('cover-eyebrow-prs', `${numFmt(AGG.totalPRs)} merged ${plural(AGG.totalPRs, 'PR')}`);
@@ -1113,7 +1126,7 @@ a:hover{color:var(--p-200)}
   setText('kpi-pace-v', numFmt(AGG.s7_volume.lastWeek));
   setText('kpi-ai-v', r0(AGG.s6_ai.pct));
   setText('signature-line',
-    `${AGG.org} · ${fmtDateShort(win.from)} – ${fmtDateFull(win.to)} · ${numFmt(AGG.totalPRs)} PRs · ${AGG.totalRepos} ${plural(AGG.totalRepos, 'repo')}`);
+    `${esc(AGG.org)} · ${fmtDateShort(win.from)} – ${fmtDateFull(win.to)} · ${numFmt(AGG.totalPRs)} PRs · ${AGG.totalRepos} ${plural(AGG.totalRepos, 'repo')}`);
   setText('method-approver-denom',
     `${numFmt(AGG.s3_reviewers.totalApproved)} of ${numFmt(AGG.totalPRs)}`);
 

@@ -186,8 +186,8 @@ The report surfaces seven measurable patterns:
 
 | Section | What it shows |
 |---|---|
-| 01 Review-bypass on large PRs | Share of merges that are big *and* fast with no human comment, plus a lines-vs-hours scatter highlighting rubber-stamped PRs |
-| 02 Review depth | Share of merged PRs that received no human comment at all |
+| 01 Review-bypass on large PRs | Share of merges that are big *and* fast with no human engagement, plus a lines-vs-hours scatter highlighting rubber-stamped PRs |
+| 02 Review depth | Share of merged PRs that received no human engagement — neither a non-bot issue comment nor a human review (approve / request-changes / comment) — before merge |
 | 03 Reviewer concentration | Bus factor — how few reviewers approve the bulk of all PRs |
 | 04 Cycle-time tail | Distribution of time-to-merge, highlighting the long tail |
 | 05 AI-authored share | Share of merges detected as AI-assisted |
@@ -239,6 +239,7 @@ A full run writes two files (`{org}_audit_{since}_{until}.*`):
 | `--until` | End date in `YYYY-MM-DD` format (defaults to today) |
 | `--days` | Lookback window in days when `--since` is omitted (default: `60`) |
 | `--repos` | Space-delimited list of repo names to scope the run; omit to scan the full org |
+| `--chunk-days` | Date-window size per GitHub search query (default: `30`). Lower it if a run warns that GitHub's 1000-result search cap was hit |
 | `--output-dir` | Directory to write reports into (default: current directory) |
 | `--template` | Path to the HTML template (default: `./engineering_audit_template.html`) |
 | `--from-json` | Skip fetching and re-render the HTML from a previously saved audit JSON file |
