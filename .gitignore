@@ -3,9 +3,13 @@
 *.html
 !examples/sample_report.html
 !examples/sample_user_report.html
+!engineering_audit_template.html
 *-checkpoint.json
+# Engineering Audit data dumps ({org}_audit_{from}_{to}.json) hold real org PR data
+*_audit_*.json
 __pycache__/
 *.pyc
 .pytest_cache/
 docs/
 .superpowers/
+.playwright-mcp/

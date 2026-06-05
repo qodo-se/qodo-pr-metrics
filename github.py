@@ -462,7 +462,8 @@ def fetch_pr_data(owner: str, repo: str, number: int, comments_limit: int = 20) 
     }
 
 
-def fetch_pr_data_batch(prs: list, batch_size: int = 50, raise_on_5xx: bool = False) -> dict:
+def fetch_pr_data_batch(prs: list, batch_size: int = 50, raise_on_5xx: bool = False,
+                        comments_first: int = 20) -> dict:
     """Fetch PR data for multiple PRs in batched GraphQL calls.
 
     prs: list of dicts with a "node_id" key (from search_merged_prs).
@@ -471,7 +472,13 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 50, raise_on_5xx: bool = Fa
     If `raise_on_5xx` is True, transient 5xx / stream-cancel errors that
     survive run_gh's retries propagate as TransientHttpError instead of
     exiting, so the caller can adapt (e.g. shrink batch size and retry).
+
+    `comments_first` caps how many issue comments are pulled per PR (default
+    20, matching the impact report). The audit passes a higher value so its
+    "no human comment" / TTFC classification isn't fooled by PRs whose first
+    20 comments are all bots.
     """
+    comments_first = max(1, min(comments_first, 100))  # GitHub `first:` hard cap
     results = {}
     for i in range(0, len(prs), batch_size):
         batch = prs[i:i + batch_size]
@@ -485,7 +492,7 @@ def fetch_pr_data_batch(prs: list, batch_size: int = 50, raise_on_5xx: bool = Fa
             "reviews(last:100){nodes{author{login} state submittedAt}} "
             "lastCommit:commits(last:1){nodes{commit{statusCheckRollup{state}}}} "
             "allCommits:commits(last:100){nodes{commit{committedDate message}}} "
-            "comments(first:20){nodes{body createdAt "
+            f"comments(first:{comments_first}){{nodes{{body createdAt "
             "userContentEdits(last:2){nodes{editedAt}} "
             "author{login __typename}}}"
             "}}"
