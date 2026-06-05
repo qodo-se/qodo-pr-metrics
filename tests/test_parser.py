@@ -304,3 +304,45 @@ def test_folded_implemented_in_history_not_lost_when_open_in_current():
     stats = parse_qodo_comment(body)
     assert stats.total_suggestions == 1          # same suggestion, counted once
     assert stats.total_implemented == 1          # implemented status OR-ed from history
+
+
+# Regression: dismissal state must reflect the *current* snapshot. A suggestion
+# that is open in the current review but marked ✗ Dismissed only in folded
+# history must NOT be counted as dismissed — live state wins, matching how
+# section/category use first-occurrence precedence.
+def test_folded_dismissed_in_history_does_not_override_current():
+    body = """
+## Code Review by Qodo
+
+### Action Required
+
+<details><summary>  1.  Risky cast <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+
+<!-- FOLDED_SECTION_START -->
+### Previous review results
+
+<details><summary>Results up to commit abc1234</summary>
+<details><summary>  1.  <s>Risky cast</s> ✗ Dismissed <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+</details>
+"""
+    stats = parse_qodo_comment(body)
+    assert stats.total_suggestions == 1          # same suggestion, counted once
+    assert stats.total_dismissed == 0            # current snapshot is open, not dismissed
+    assert stats.total_implemented == 0          # open now, never implemented
+
+
+# Regression: the dedupe key must not truncate non-ASCII content in the core
+# title. Two distinct titles that both begin with a non-ASCII character used to
+# collapse to the same (empty) key under the old _clean_title-based key.
+def test_unicode_titles_do_not_collapse():
+    body = """
+## Code Review by Qodo
+
+### Action Required
+
+<details><summary>  1.  Δ threshold too low <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+<details><summary>  2.  λ handler leaks <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+"""
+    stats = parse_qodo_comment(body)
+    assert stats.total_suggestions == 2          # two distinct titles, not collapsed to 1
+    assert stats.bugs_suggested == 2

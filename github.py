@@ -94,6 +94,9 @@ _CAT_SECURITY    = re.compile(r"\bSecurity\b",    re.IGNORECASE)
 _CAT_CORRECTNESS = re.compile(r"\bCorrectness\b", re.IGNORECASE)
 _HTML_TAG        = re.compile(r"<[^>]+>")
 _STRIKETHROUGH   = re.compile(r"~~(.+?)~~")
+# Trailing Qodo label/badge blocks, e.g. "<code>🐞 Bug</code> <code>≡ Correctness</code>".
+# Used to strip badges for the dedupe key without truncating the core title.
+_TRAILING_BADGES = re.compile(r"(?:\s*<code>[^<]*</code>)+\s*$")
 
 _AI_BODY_PATTERNS = [
     # GitHub Copilot — covers github-copilot[bot], copilot-swe-agent[bot], and plain Copilot
@@ -570,7 +573,7 @@ def parse_qodo_comment(body: str) -> "QodoStats":
                 and not is_dismissed
             )
             occurrences.append({
-                "key": _clean_title(title).lower(),
+                "key": _dedupe_key(title),
                 "title": title,
                 "section": section,
                 "cat": _classify_category(title),
@@ -579,8 +582,10 @@ def parse_qodo_comment(body: str) -> "QodoStats":
                 "is_dismissed": is_dismissed,
             })
 
-    # Merge occurrences by key: first occurrence fixes the title/section/category;
-    # implemented/dismissed are OR-ed across all snapshots of the same suggestion.
+    # Merge occurrences by key: the first occurrence (current review) fixes the
+    # title/section/category *and* the dismissal state, so live state takes
+    # precedence over folded history. is_implemented is OR-ed across all
+    # snapshots so an implementation found only in an earlier cycle is credited.
     merged: dict = {}
     for occ in occurrences:
         existing = merged.get(occ["key"])
@@ -588,10 +593,12 @@ def parse_qodo_comment(body: str) -> "QodoStats":
             merged[occ["key"]] = dict(occ)
         else:
             existing["is_implemented"] = existing["is_implemented"] or occ["is_implemented"]
-            existing["is_dismissed"] = existing["is_dismissed"] or occ["is_dismissed"]
+            # is_dismissed is intentionally NOT OR-ed: the first occurrence's
+            # (current-snapshot) dismissal state wins, matching section/category.
 
     for occ in merged.values():
-        # A suggestion dismissed in any snapshot is not counted as implemented.
+        # Dismissal reflects the current snapshot; a dismissed suggestion is not
+        # counted as implemented.
         is_dismissed = occ["is_dismissed"]
         is_implemented = occ["is_implemented"] and not is_dismissed
         section = occ["section"]
@@ -671,6 +678,24 @@ def _classify_sublabel(title: str) -> Optional[str]:
     if _CAT_CORRECTNESS.search(title):
         return "Correctness"
     return None
+
+
+def _dedupe_key(title: str) -> str:
+    """Normalise a suggestion title into a stable key for deduplication.
+
+    Unlike _clean_title (a display helper that truncates at the first non-ASCII
+    character), this preserves Unicode in the core title and removes only the
+    trailing Qodo label/badge blocks and implemented/dismissed markers. This way
+    the same suggestion matches across snapshots whether or not it is struck
+    through or dismissed, while two distinct titles that legitimately contain
+    Unicode do not collapse to the same (or an empty) key.
+    """
+    text = _TRAILING_BADGES.sub("", title)       # drop trailing <code>…</code> badges
+    text = _HTML_TAG.sub("", text)               # strip <s>/<del>/<strike> etc.
+    text = text.replace("~~", "")                # markdown strikethrough delimiters
+    text = text.replace(DISMISSED_MARKER, "")    # ✗ Dismissed badge
+    text = text.replace("☑", "")            # ☑ implemented marker
+    return re.sub(r"\s+", " ", text).strip().lower()
 
 
 def _clean_title(title: str) -> str:
