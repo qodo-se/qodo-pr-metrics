@@ -175,3 +175,72 @@ The Trend, Spotlight (High-impact findings), and Velocity (First feedback) secti
 | `--anonymize [SCOPE]` | Replace identifying data with stable pseudonyms in all output files; output filenames get an `_anon` suffix. `SCOPE`: `users` (PR Creator / Final Approver only), `repos` (Repo Name / PR URL only), or omit `SCOPE` to anonymize both |
 | `--loc-page-size N` | Starting page size for the org-wide LOC GraphQL query (default: `50`, range: `10`–`100`). Lower it (e.g. `25` or `10`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors on the LOC fetch — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
 | `--pr-batch-size N` | Starting batch size for the per-PR GraphQL data lookup that pulls comments, reviews, commits, and CI status (default: `25`, range: `5`–`50`). Lower it (e.g. `10` or `5`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors during the main PR walk — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
+
+## Engineering Audit (pre-install diagnostic)
+
+`engineering_audit.py` is a separate, **pre-install** report. Where the main report measures Qodo's impact *after* it's installed, the Engineering Audit establishes a **baseline before Qodo is in the picture** — it reads only the GitHub GraphQL API via the `gh` CLI and **does not touch any Qodo product data**. Run it before install to surface the pain a team should be solving, then re-run after install to quantify what changed.
+
+It reads the last N days of merged PRs from a GitHub org (or a scoped list of repos) and renders a **single self-contained HTML file** (logo and mascot are inlined as data URIs — nothing is fetched at view time, and the report can be shared as one file). The report is rendered client-side: the Python emits an aggregates JSON blob and a scatter blob into the template, and the template's inline script draws every number, chart, and severity-banded sentence from those.
+
+The report surfaces seven measurable patterns:
+
+| Section | What it shows |
+|---|---|
+| 01 Review-bypass on large PRs | Share of merges that are big *and* fast with no human comment, plus a lines-vs-hours scatter highlighting rubber-stamped PRs |
+| 02 Review depth | Share of merged PRs that received no human comment at all |
+| 03 Reviewer concentration | Bus factor — how few reviewers approve the bulk of all PRs |
+| 04 Cycle-time tail | Distribution of time-to-merge, highlighting the long tail |
+| 05 AI-authored share | Share of merges detected as AI-assisted |
+| 06 Volume scaling | PR cadence week over week |
+| 07 Cost of first-pass review | Interactive calculator sizing senior-engineer review hours in dollars / FTE, with adjustable assumptions and an outlier-trim toggle |
+
+### Usage
+
+```bash
+# Full run, default 60-day lookback
+python3 engineering_audit.py --org acme-corp
+
+# Custom window
+python3 engineering_audit.py --org acme-corp --since 2026-03-17
+python3 engineering_audit.py --org acme-corp --days 60
+python3 engineering_audit.py --org acme-corp --since 2026-03-17 --until 2026-05-21
+
+# Scope to specific repos
+python3 engineering_audit.py --org acme-corp --repos frontend-app api
+
+# Write reports into a directory
+python3 engineering_audit.py --org acme-corp --output-dir reports/
+
+# Skip GitHub entirely and re-render from a previously saved audit JSON
+# (fast path for iterating on the template — scatter chart will be blank)
+python3 engineering_audit.py --from-json acme-corp_audit_2026-03-22_2026-05-21.json --output audit.html
+
+# Build from a main-report CSV instead of fetching (only Qodo-reviewed PRs)
+python3 engineering_audit.py --from-csv acme-corp_2026-03-22_2026-05-21.csv
+```
+
+Prerequisites are the same as the main report: the [`gh` CLI](https://cli.github.com/) installed and authenticated (`gh auth status`), with `repo` scope if the org has private repos.
+
+### Output files
+
+A full run writes two files (`{org}_audit_{since}_{until}.*`):
+
+- `{org}_audit_{since}_{until}.html` — the self-contained report
+- `{org}_audit_{since}_{until}.json` — the computed aggregates, so you can re-render later with `--from-json` without re-fetching
+
+> The `*_audit_*.json` data dumps are gitignored — they contain real org PR data and should not be committed. The HTML template (`engineering_audit_template.html`) **is** tracked.
+
+### Options
+
+| Flag | Description |
+|---|---|
+| `--org` | GitHub org login (required unless using `--from-csv` or `--from-json`) |
+| `--since` | Start date in `YYYY-MM-DD` format (defaults to `--days` back from `--until`) |
+| `--until` | End date in `YYYY-MM-DD` format (defaults to today) |
+| `--days` | Lookback window in days when `--since` is omitted (default: `60`) |
+| `--repos` | Space-delimited list of repo names to scope the run; omit to scan the full org |
+| `--output-dir` | Directory to write reports into (default: current directory) |
+| `--template` | Path to the HTML template (default: `./engineering_audit_template.html`) |
+| `--from-json` | Skip fetching and re-render the HTML from a previously saved audit JSON file |
+| `--output` | Output HTML path when used with `--from-json` (default: `audit.html`) |
+| `--from-csv` | Build the audit from a main-report CSV instead of fetching from GitHub (note: a CSV only contains Qodo-reviewed PRs) |
