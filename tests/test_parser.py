@@ -209,3 +209,140 @@ def test_dismissed_does_not_appear_in_implemented_buckets():
     stats = parse_qodo_comment(_DISMISSED_BODY)
     assert stats.action_required_implemented == 1  # only item 3
     assert stats.review_recommended_implemented == 0
+
+
+# When Qodo re-reviews a PR after new commits, it keeps a single comment but
+# appends the prior review under a folded "Previous review results" block,
+# marked by <!-- FOLDED_SECTION_START -->. Those historical items overlap with
+# the current review and must NOT be counted (mirrors real PRs #3100 / #3156).
+_FOLDED_PREVIOUS_BODY = """
+## Code Review by Qodo
+
+<code>🐞 Bugs (1)</code> <code>📘 Rule violations (1)</code>
+
+### Action Required
+
+<details><summary>  1.  Headless shell selected first <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+<details><summary>  2.  docs not updated <code>📘 Rule violation</code> <code>✧ Quality</code></summary>d</details>
+
+<!-- FOLDED_SECTION_START -->
+<img src="https://www.qodo.ai/wp-content/uploads/2025/11/light-grey-line.svg" alt="Grey Divider">
+
+### Previous review results
+
+<details><summary>Results up to commit af92cdb</summary>
+
+<br><code>🐞 Bugs (1)</code> <code>📘 Rule violations (1)</code>
+
+<img src="https://www.qodo.ai/wp-content/uploads/2026/01/action-required.png" alt="Action required">
+
+<details><summary>  1.  Headless shell selected first <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+<details><summary>  2.  docs not updated <code>📘 Rule violation</code> <code>✧ Quality</code></summary>d</details>
+</details>
+"""
+
+def test_folded_previous_review_not_double_counted():
+    """Suggestions repeated in the folded block are counted once, not twice."""
+    stats = parse_qodo_comment(_FOLDED_PREVIOUS_BODY)
+    assert stats.total_suggestions == 2          # deduped union, not 4
+    assert stats.bugs_suggested == 1             # not 2
+    assert stats.rule_violations_suggested == 1  # not 2
+    assert stats.action_required_total == 2
+
+
+# Edge case: a suggestion implemented in an EARLIER review cycle drops out of the
+# current review (it's been fixed) but survives in the folded history with the ☑
+# marker. The deduplicated union must still count it — and credit it as
+# implemented — so implementation rate isn't undercounted (mirrors real PR #1791).
+_FOLDED_IMPLEMENTED_BODY = """
+## Code Review by Qodo
+
+<code>🐞 Bugs (1)</code>
+
+### Action Required
+
+<details><summary>  1.  SP token error uses None <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+
+<!-- FOLDED_SECTION_START -->
+### Previous review results
+
+<details><summary>Results up to commit a349002</summary>
+
+<img src="https://www.qodo.ai/wp-content/uploads/2026/01/action-required.png" alt="Action required">
+
+<details><summary>  1.  <s>Wrong credential picked</s> ☑ <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+<details><summary>  2.  SP token error uses None <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+</details>
+"""
+
+def test_folded_implemented_only_in_history_is_counted():
+    stats = parse_qodo_comment(_FOLDED_IMPLEMENTED_BODY)
+    # Two distinct suggestions total: the still-open one (current) and the
+    # fixed one that survives only in the folded history.
+    assert stats.total_suggestions == 2
+    assert stats.total_implemented == 1          # "Wrong credential picked" ☑
+    assert stats.bugs_suggested == 2
+    assert stats.bugs_implemented == 1
+
+
+def test_folded_implemented_in_history_not_lost_when_open_in_current():
+    """If a suggestion is open in the current review but ☑ in history, count it implemented."""
+    body = """
+## Code Review by Qodo
+
+### Action Required
+
+<details><summary>  1.  Token cache missing <code>🐞 Bug</code> <code>☼ Reliability</code></summary>d</details>
+
+<!-- FOLDED_SECTION_START -->
+### Previous review results
+
+<details><summary>Results up to commit abc1234</summary>
+<details><summary>  1.  <s>Token cache missing</s> ☑ <code>🐞 Bug</code> <code>☼ Reliability</code></summary>d</details>
+</details>
+"""
+    stats = parse_qodo_comment(body)
+    assert stats.total_suggestions == 1          # same suggestion, counted once
+    assert stats.total_implemented == 1          # implemented status OR-ed from history
+
+
+# Regression: dismissal state must reflect the *current* snapshot. A suggestion
+# that is open in the current review but marked ✗ Dismissed only in folded
+# history must NOT be counted as dismissed — live state wins, matching how
+# section/category use first-occurrence precedence.
+def test_folded_dismissed_in_history_does_not_override_current():
+    body = """
+## Code Review by Qodo
+
+### Action Required
+
+<details><summary>  1.  Risky cast <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+
+<!-- FOLDED_SECTION_START -->
+### Previous review results
+
+<details><summary>Results up to commit abc1234</summary>
+<details><summary>  1.  <s>Risky cast</s> ✗ Dismissed <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+</details>
+"""
+    stats = parse_qodo_comment(body)
+    assert stats.total_suggestions == 1          # same suggestion, counted once
+    assert stats.total_dismissed == 0            # current snapshot is open, not dismissed
+    assert stats.total_implemented == 0          # open now, never implemented
+
+
+# Regression: the dedupe key must not truncate non-ASCII content in the core
+# title. Two distinct titles that both begin with a non-ASCII character used to
+# collapse to the same (empty) key under the old _clean_title-based key.
+def test_unicode_titles_do_not_collapse():
+    body = """
+## Code Review by Qodo
+
+### Action Required
+
+<details><summary>  1.  Δ threshold too low <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+<details><summary>  2.  λ handler leaks <code>🐞 Bug</code> <code>≡ Correctness</code></summary>d</details>
+"""
+    stats = parse_qodo_comment(body)
+    assert stats.total_suggestions == 2          # two distinct titles, not collapsed to 1
+    assert stats.bugs_suggested == 2
