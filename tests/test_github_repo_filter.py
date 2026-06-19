@@ -31,7 +31,7 @@ def test_output_stem_empty_list_treated_as_no_repos():
 
 
 
-from github import get_qodo_pr_count
+from collectors.github import GitHubCollector
 
 
 def test_get_qodo_pr_count_uses_qodo_filter(monkeypatch):
@@ -39,8 +39,8 @@ def test_get_qodo_pr_count_uses_qodo_filter(monkeypatch):
     def fake_run_gh(args, **kw):
         captured.extend(args)
         return "42\n"
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
-    result = get_qodo_pr_count("acme", date(2025, 1, 1))
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
+    result = GitHubCollector().get_qodo_pr_count("acme", date(2025, 1, 1))
     assert result == 42
     q_arg = next(a for a in captured if a.startswith("q="))
     assert '"Code Review by Qodo" in:comments' in q_arg
@@ -52,20 +52,19 @@ def test_get_qodo_pr_count_with_repos_sums_per_repo(monkeypatch):
     def fake_run_gh(args, **kw):
         call_count[0] += 1
         return "5\n"
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
-    result = get_qodo_pr_count("acme", date(2025, 1, 1), repos=["frontend", "backend"])
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
+    result = GitHubCollector().get_qodo_pr_count("acme", date(2025, 1, 1), repos=["frontend", "backend"])
     assert result == 10
     assert call_count[0] == 2
 
 
 def test_get_qodo_pr_count_returns_none_on_bad_response(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: "not-a-number\n")
-    result = get_qodo_pr_count("acme", date(2025, 1, 1))
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: "not-a-number\n")
+    result = GitHubCollector().get_qodo_pr_count("acme", date(2025, 1, 1))
     assert result is None
 
 
 from datetime import timedelta
-from github import search_merged_prs
 
 
 def _gql_search_response(nodes=None):
@@ -91,16 +90,16 @@ def _make_fake_run_gh(captured_queries, nodes=None):
 
 def test_search_merged_prs_no_repos_uses_org_qualifier(monkeypatch):
     captured = []
-    monkeypatch.setattr("github.run_gh", _make_fake_run_gh(captured))
-    list(search_merged_prs("acme", date.today() - timedelta(days=1)))
+    monkeypatch.setattr("collectors.github.run_gh",_make_fake_run_gh(captured))
+    list(GitHubCollector().search_merged_prs("acme", date.today() - timedelta(days=1)))
     assert any("org:acme" in q for q in captured)
     assert not any("repo:" in q for q in captured)
 
 
 def test_search_merged_prs_with_repos_uses_repo_qualifiers(monkeypatch):
     captured = []
-    monkeypatch.setattr("github.run_gh", _make_fake_run_gh(captured))
-    list(search_merged_prs("acme", date.today() - timedelta(days=1), repos=["frontend", "backend"]))
+    monkeypatch.setattr("collectors.github.run_gh",_make_fake_run_gh(captured))
+    list(GitHubCollector().search_merged_prs("acme", date.today() - timedelta(days=1), repos=["frontend", "backend"]))
     assert any("repo:acme/frontend" in q for q in captured)
     assert any("repo:acme/backend" in q for q in captured)
     assert not any("org:acme" in q for q in captured)
@@ -108,8 +107,8 @@ def test_search_merged_prs_with_repos_uses_repo_qualifiers(monkeypatch):
 
 def test_search_merged_prs_includes_qodo_comment_filter(monkeypatch):
     captured = []
-    monkeypatch.setattr("github.run_gh", _make_fake_run_gh(captured))
-    list(search_merged_prs("acme", date.today() - timedelta(days=1)))
+    monkeypatch.setattr("collectors.github.run_gh",_make_fake_run_gh(captured))
+    list(GitHubCollector().search_merged_prs("acme", date.today() - timedelta(days=1)))
     assert any('"Code Review by Qodo" in:comments' in q for q in captured)
 
 
@@ -127,8 +126,8 @@ def test_search_merged_prs_deduplicates_when_same_repo_listed_twice(monkeypatch)
     def fake_run_gh(args, **kw):
         call_count[0] += 1
         return _gql_search_response([node])  # same PR returned from both queries
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
-    results = list(search_merged_prs("acme", date.today() - timedelta(days=1), repos=["frontend", "frontend"]))
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
+    results = list(GitHubCollector().search_merged_prs("acme", date.today() - timedelta(days=1), repos=["frontend", "frontend"]))
     assert len(results) == 1  # deduped
 
 
@@ -142,8 +141,8 @@ def test_search_merged_prs_yields_node_id(monkeypatch):
         "createdAt": "2026-01-01T10:00:00Z",
         "mergedAt": "2026-01-02T10:00:00Z",
     }
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _gql_search_response([node]))
-    results = list(search_merged_prs("acme", date.today() - timedelta(days=1)))
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _gql_search_response([node]))
+    results = list(GitHubCollector().search_merged_prs("acme", date.today() - timedelta(days=1)))
     assert results[0]["node_id"] == "PR_kwDOA_test"
 
 
@@ -180,8 +179,8 @@ def test_search_merged_prs_follows_pagination_cursor(monkeypatch):
             "pageInfo": {"hasNextPage": False, "endCursor": None},
             "nodes": [page2_node],
         }}})
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
-    results = list(search_merged_prs("acme", date.today() - timedelta(days=1)))
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
+    results = list(GitHubCollector().search_merged_prs("acme", date.today() - timedelta(days=1)))
     assert len(results) == 2
     assert results[0]["node_id"] == "PR_page1"
     assert results[1]["node_id"] == "PR_page2"
@@ -252,7 +251,6 @@ def test_resume_mismatch_detected_when_stored_set_current_none():
     assert _mismatch(["frontend"], None)
 
 
-from github import fetch_pr_data_batch
 
 
 def _batch_response(nodes):
@@ -269,9 +267,9 @@ def test_fetch_pr_data_batch_returns_keyed_by_node_id(monkeypatch):
              "author": {"login": "alice", "__typename": "User"}},
         ]},
     }
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _batch_response([node]))
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _batch_response([node]))
     prs = [{"node_id": "PR_abc", "owner": "acme", "repo": "frontend", "number": 1}]
-    result = fetch_pr_data_batch(prs)
+    result = GitHubCollector().fetch_pr_data_batch(prs)
     assert "PR_abc" in result
     assert result["PR_abc"]["additions"] == 10
     assert result["PR_abc"]["deletions"] == 5
@@ -284,9 +282,9 @@ def test_fetch_pr_data_batch_uses_nodes_query(monkeypatch):
     def fake_run_gh(args, **kw):
         captured.extend(args)
         return _batch_response([])
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
     prs = [{"node_id": "PR_xyz", "owner": "acme", "repo": "r", "number": 1}]
-    fetch_pr_data_batch(prs)
+    GitHubCollector().fetch_pr_data_batch(prs)
     query_arg = next(a for a in captured if a.startswith("query="))
     assert "nodes(ids:" in query_arg
     assert "PR_xyz" in query_arg
@@ -297,9 +295,9 @@ def test_fetch_pr_data_batch_splits_into_batches(monkeypatch):
     def fake_run_gh(args, **kw):
         call_count[0] += 1
         return _batch_response([])
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
     prs = [{"node_id": f"PR_{i}", "owner": "a", "repo": "r", "number": i} for i in range(5)]
-    fetch_pr_data_batch(prs, batch_size=2)
+    GitHubCollector().fetch_pr_data_batch(prs, batch_size=2)
     assert call_count[0] == 3  # ceil(5/2) = 3
 
 
@@ -314,9 +312,9 @@ def test_fetch_pr_data_batch_returns_body_and_labels(monkeypatch):
         "allCommits": {"nodes": []},
         "comments": {"nodes": []},
     }
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _batch_response([node]))
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _batch_response([node]))
     prs = [{"node_id": "PR_abc", "owner": "acme", "repo": "r", "number": 1}]
-    result = fetch_pr_data_batch(prs)
+    result = GitHubCollector().fetch_pr_data_batch(prs)
     assert result["PR_abc"]["body"] == "Co-Authored-By: github-copilot"
     assert result["PR_abc"]["labels"] == ["copilot", "bug"]
 
@@ -332,9 +330,9 @@ def test_fetch_pr_data_batch_returns_reviews(monkeypatch):
         "allCommits": {"nodes": []},
         "comments": {"nodes": []},
     }
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _batch_response([node]))
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _batch_response([node]))
     prs = [{"node_id": "PR_def", "owner": "acme", "repo": "r", "number": 2}]
-    result = fetch_pr_data_batch(prs)
+    result = GitHubCollector().fetch_pr_data_batch(prs)
     assert result["PR_def"]["reviews"][0]["state"] == "APPROVED"
     assert result["PR_def"]["ci_status"] is None
 
@@ -350,9 +348,9 @@ def test_fetch_pr_data_batch_returns_ci_status_and_commits(monkeypatch):
         "allCommits": {"nodes": [{"committedDate": "2026-01-01T11:00:00Z", "message": "fix: resolve review"}]},
         "comments": {"nodes": []},
     }
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _batch_response([node]))
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _batch_response([node]))
     prs = [{"node_id": "PR_ghi", "owner": "acme", "repo": "r", "number": 3}]
-    result = fetch_pr_data_batch(prs)
+    result = GitHubCollector().fetch_pr_data_batch(prs)
     assert result["PR_ghi"]["ci_status"] == "FAILURE"
     assert len(result["PR_ghi"]["commits"]) == 1
     assert result["PR_ghi"]["commits"][0]["committedDate"] == "2026-01-01T11:00:00Z"
@@ -366,9 +364,9 @@ def test_fetch_pr_data_batch_propagates_raise_on_5xx(monkeypatch):
         captured.update(kw)
         return _batch_response([])
 
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
     prs = [{"node_id": "PR_abc", "owner": "a", "repo": "r", "number": 1}]
-    fetch_pr_data_batch(prs, raise_on_5xx=True)
+    GitHubCollector().fetch_pr_data_batch(prs, raise_on_5xx=True)
     assert captured.get("raise_on_5xx") is True
 
 
@@ -380,14 +378,13 @@ def test_fetch_pr_data_batch_default_does_not_raise_on_5xx(monkeypatch):
         captured.update(kw)
         return _batch_response([])
 
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
     prs = [{"node_id": "PR_abc", "owner": "a", "repo": "r", "number": 1}]
-    fetch_pr_data_batch(prs)
+    GitHubCollector().fetch_pr_data_batch(prs)
     # Either absent or explicitly False — both mean run_gh keeps the default behavior.
     assert not captured.get("raise_on_5xx", False)
 
 
-from github import get_revert_pr_count, get_hotfix_pr_count
 
 
 def test_get_revert_pr_count_includes_revert_in_title(monkeypatch):
@@ -395,8 +392,8 @@ def test_get_revert_pr_count_includes_revert_in_title(monkeypatch):
     def fake_run_gh(args, **kw):
         captured.extend(args)
         return "7\n"
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
-    result = get_revert_pr_count("acme", date(2026, 1, 1))
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
+    result = GitHubCollector().get_revert_pr_count("acme", date(2026, 1, 1))
     assert result == 7
     q_args = [a for a in captured if a.startswith("q=")]
     assert any("revert in:title" in q for q in q_args)
@@ -407,8 +404,8 @@ def test_get_hotfix_pr_count_uses_all_signals(monkeypatch):
     def fake_run_gh(args, **kw):
         captured.extend(args)
         return "3\n"
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
-    result = get_hotfix_pr_count("acme", date(2026, 1, 1))
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
+    result = GitHubCollector().get_hotfix_pr_count("acme", date(2026, 1, 1))
     assert result == 3
     q_args = [a for a in captured if a.startswith("q=")]
     assert any("hotfix in:title" in q for q in q_args)
@@ -417,39 +414,38 @@ def test_get_hotfix_pr_count_uses_all_signals(monkeypatch):
 
 
 def test_get_revert_pr_count_with_repos_sums(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: "4\n")
-    result = get_revert_pr_count("acme", date(2026, 1, 1), repos=["a", "b"])
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: "4\n")
+    result = GitHubCollector().get_revert_pr_count("acme", date(2026, 1, 1), repos=["a", "b"])
     assert result == 8
 
 
 def test_get_revert_pr_count_returns_none_on_error(monkeypatch):
     def bad_run_gh(args, **kw):
         raise Exception("network error")
-    monkeypatch.setattr("github.run_gh", bad_run_gh)
-    result = get_revert_pr_count("acme", date(2026, 1, 1))
+    monkeypatch.setattr("collectors.github.run_gh",bad_run_gh)
+    result = GitHubCollector().get_revert_pr_count("acme", date(2026, 1, 1))
     assert result is None
 
 
 def test_get_hotfix_pr_count_with_repos_sums(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: "4\n")
-    result = get_hotfix_pr_count("acme", date(2026, 1, 1), repos=["a", "b"])
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: "4\n")
+    result = GitHubCollector().get_hotfix_pr_count("acme", date(2026, 1, 1), repos=["a", "b"])
     assert result == 8
 
 
 def test_get_hotfix_pr_count_returns_none_on_error(monkeypatch):
     def bad_run_gh(args, **kw):
         raise Exception("network error")
-    monkeypatch.setattr("github.run_gh", bad_run_gh)
-    result = get_hotfix_pr_count("acme", date(2026, 1, 1))
+    monkeypatch.setattr("collectors.github.run_gh",bad_run_gh)
+    result = GitHubCollector().get_hotfix_pr_count("acme", date(2026, 1, 1))
     assert result is None
 
 
-from github import get_weekly_pr_counts
 
 
 def test_get_weekly_pr_counts_returns_list(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: "5\n")
-    result = get_weekly_pr_counts("acme", date(2026, 5, 11))  # Monday
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: "5\n")
+    result = GitHubCollector().get_weekly_pr_counts("acme", date(2026, 5, 11))  # Monday
     assert isinstance(result, list)
     assert len(result) >= 1
     assert "week_start" in result[0]
@@ -458,8 +454,8 @@ def test_get_weekly_pr_counts_returns_list(monkeypatch):
 
 
 def test_get_weekly_pr_counts_week_start_is_monday(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: "0\n")
-    result = get_weekly_pr_counts("acme", date(2026, 5, 13))  # Wednesday
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: "0\n")
+    result = GitHubCollector().get_weekly_pr_counts("acme", date(2026, 5, 13))  # Wednesday
     # First week_start must be the Monday of that week
     from datetime import date as d
     first_week = d.fromisoformat(result[0]["week_start"])
@@ -471,12 +467,12 @@ def test_get_weekly_pr_counts_calls_search_once_per_week(monkeypatch):
     def fake_run_gh(args, **kw):
         call_count[0] += 1
         return "3\n"
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
     from datetime import date as d, timedelta
     # Use Monday of current week so rewind is a no-op regardless of day-of-week
     today = d.today()
     monday = today - timedelta(days=today.weekday())
-    result = get_weekly_pr_counts("acme", monday)
+    result = GitHubCollector().get_weekly_pr_counts("acme", monday)
     # One week → 1 call (total only; qodo counts come from _qodo_counts_by_week)
     assert call_count[0] == 1
 
@@ -486,9 +482,9 @@ def test_get_weekly_pr_counts_with_repos_uses_repo_qualifier(monkeypatch):
     def fake_run_gh(args, **kw):
         captured.extend(args)
         return "1\n"
-    monkeypatch.setattr("github.run_gh", fake_run_gh)
+    monkeypatch.setattr("collectors.github.run_gh",fake_run_gh)
     from datetime import date as d, timedelta
-    get_weekly_pr_counts("acme", d.today() - timedelta(days=1), repos=["frontend"])
+    GitHubCollector().get_weekly_pr_counts("acme", d.today() - timedelta(days=1), repos=["frontend"])
     q_args = [a for a in captured if a.startswith("q=")]
     assert any("repo:acme/frontend" in q for q in q_args)
 

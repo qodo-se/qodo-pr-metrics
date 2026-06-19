@@ -2,7 +2,7 @@ import sys, os
 import json
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from core import _qodo_counts_by_week
-from github import get_all_pr_loc
+from collectors.github import GitHubCollector
 from datetime import date
 
 
@@ -39,7 +39,7 @@ def test_pr_without_merged_at_is_skipped():
     assert _qodo_counts_by_week(prs) == {}
 
 
-from github import _parse_search_gql_nodes
+from collectors.github import _parse_search_gql_nodes
 
 
 _SAMPLE_NODES = [
@@ -112,8 +112,8 @@ def _loc_response(additions_list, has_next=False, end_cursor=None):
 
 def test_get_all_pr_loc_sums_additions(monkeypatch):
     # Basic test: single chunk with multiple PRs
-    monkeypatch.setattr("github.run_gh", lambda _args, **kw: _loc_response([100, 200, 50]))
-    result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
+    monkeypatch.setattr("collectors.github.run_gh",lambda _args, **kw: _loc_response([100, 200, 50]))
+    result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
     assert result == 350
 
 
@@ -126,7 +126,7 @@ def test_get_all_pr_loc_sums_across_chunks(monkeypatch):
         calls.append(1)
         return _loc_response([100, 50])  # 150 per chunk
 
-    monkeypatch.setattr("github.run_gh", mock_gh)
+    monkeypatch.setattr("collectors.github.run_gh",mock_gh)
 
     # Freeze "today" so the chunk count is deterministic regardless of when the
     # test runs — otherwise the window grows with wall-clock time and the chunk
@@ -136,9 +136,9 @@ def test_get_all_pr_loc_sums_across_chunks(monkeypatch):
         def today(cls):
             return date(2026, 5, 21)
 
-    monkeypatch.setattr("github.date", _FrozenDate)
+    monkeypatch.setattr("collectors.github.date", _FrozenDate)
     # 2026-05-19 to frozen today 2026-05-21 = 2 days → 2 chunks with chunk_days=1
-    result = get_all_pr_loc("acme", date(2026, 5, 19), repos=["frontend"], chunk_days=1)
+    result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 19), repos=["frontend"], chunk_days=1)
     assert result == 300   # 150 per chunk × 2 chunks
     assert len(calls) == 2
 
@@ -152,8 +152,8 @@ def test_get_all_pr_loc_skips_empty_nodes(monkeypatch):
             }
         }
     })
-    monkeypatch.setattr("github.run_gh", lambda _args, **kw: response)
-    result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
+    monkeypatch.setattr("collectors.github.run_gh",lambda _args, **kw: response)
+    result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
     assert result == 100
 
 
@@ -166,8 +166,8 @@ def test_get_all_pr_loc_handles_null_additions(monkeypatch):
             }
         }
     })
-    monkeypatch.setattr("github.run_gh", lambda _args, **kw: response)
-    result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
+    monkeypatch.setattr("collectors.github.run_gh",lambda _args, **kw: response)
+    result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
     assert result == 75
 
 
@@ -180,8 +180,8 @@ def test_get_all_pr_loc_handles_pagination(monkeypatch):
             return _loc_response([100], has_next=True, end_cursor="abc")
         return _loc_response([200])
 
-    monkeypatch.setattr("github.run_gh", mock_gh)
-    result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
+    monkeypatch.setattr("collectors.github.run_gh",mock_gh)
+    result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
     assert result == 300
     assert len(calls) == 2
     assert any("abc" in str(arg) for arg in calls[1])
@@ -191,20 +191,20 @@ def test_get_all_pr_loc_returns_none_on_error(monkeypatch):
     def boom(_args, **kw):
         raise RuntimeError("API unavailable")
 
-    monkeypatch.setattr("github.run_gh", boom)
-    result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
+    monkeypatch.setattr("collectors.github.run_gh",boom)
+    result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
     assert result is None
 
 
 def test_get_all_pr_loc_returns_none_on_malformed_response(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda _args, **kw: '{"data": {}}')
-    result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
+    monkeypatch.setattr("collectors.github.run_gh",lambda _args, **kw: '{"data": {}}')
+    result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
     assert result is None
 
 
 def test_get_all_pr_loc_returns_zero_for_empty_window(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda _args, **kw: _loc_response([]))
-    result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
+    monkeypatch.setattr("collectors.github.run_gh",lambda _args, **kw: _loc_response([]))
+    result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
     assert result == 0
 
 
@@ -215,8 +215,8 @@ def test_get_all_pr_loc_uses_org_qualifier_when_no_repos(monkeypatch):
         captured.extend(args)
         return _loc_response([50])
 
-    monkeypatch.setattr("github.run_gh", capture_gh)
-    result = get_all_pr_loc("acme", date(2026, 5, 20))
+    monkeypatch.setattr("collectors.github.run_gh",capture_gh)
+    result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20))
     assert result == 50
     assert any("org:acme" in str(arg) for arg in captured)
 
@@ -228,14 +228,14 @@ def test_get_all_pr_loc_queries_each_repo(monkeypatch):
         captured.append(" ".join(str(a) for a in args))
         return _loc_response([10])
 
-    monkeypatch.setattr("github.run_gh", capture_gh)
-    result = get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend", "backend"])
+    monkeypatch.setattr("collectors.github.run_gh",capture_gh)
+    result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend", "backend"])
     assert result == 20  # 10 per repo
     assert any("frontend" in call for call in captured)
     assert any("backend" in call for call in captured)
 
 
-from github import _TRANSIENT_HTTP
+from collectors.github import _TRANSIENT_HTTP
 
 
 def test_transient_http_matches_5xx():
@@ -269,8 +269,8 @@ def test_get_all_pr_loc_honors_page_size_override(monkeypatch):
         captured.append(" ".join(str(a) for a in args))
         return _loc_response([10])
 
-    monkeypatch.setattr("github.run_gh", capture_gh)
-    result = get_all_pr_loc(
+    monkeypatch.setattr("collectors.github.run_gh",capture_gh)
+    result = GitHubCollector().get_all_pr_loc(
         "acme", date(2026, 5, 20), repos=["frontend"], page_size=25
     )
     assert result == 10
@@ -286,6 +286,6 @@ def test_get_all_pr_loc_defaults_to_50_when_no_override(monkeypatch):
         captured.append(" ".join(str(a) for a in args))
         return _loc_response([10])
 
-    monkeypatch.setattr("github.run_gh", capture_gh)
-    get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
+    monkeypatch.setattr("collectors.github.run_gh", capture_gh)
+    GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
     assert any("first:50" in call for call in captured)
