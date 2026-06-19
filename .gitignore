@@ -1,4 +1,5 @@
 .DS_Store
+reports/
 *.csv
 *.html
 !examples/sample_report.html

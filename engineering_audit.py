@@ -579,7 +579,7 @@ def cmd_audit(args):
     agg = aggregate_audit(rows, org, since, until)
     scatter = build_scatter(rows, agg)
 
-    out_dir = Path(args.output_dir or ".")
+    out_dir = Path(args.output_dir) if args.output_dir else core.REPORTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
     stem = f"{safe_org}_audit_{since.isoformat()}_{until.isoformat()}"
@@ -639,7 +639,13 @@ def render_from_json(args):
     # chart will be blank but the rest of the report is intact.
     scatter = {"generated": datetime.utcnow().isoformat() + "Z",
                "points": [], "rubberStamps": []}
-    out = Path(args.output or "audit.html")
+    if args.output:
+        out = Path(args.output)
+    else:
+        # Default into reports/, reusing the source JSON's stem so the
+        # re-rendered HTML lands next to its data with a matching name.
+        out = core.REPORTS_DIR / f"{json_path.stem}.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render_html(agg, scatter, template_path), encoding="utf-8")
     print(f"Rendered {out}")
 
@@ -661,7 +667,7 @@ def main():
     p.add_argument("--chunk-days", type=int, default=30,
                    help="Date-window size per search query (default: 30). "
                         "Lower it if you hit GitHub's 1000-result search cap.")
-    p.add_argument("--output-dir", help="Directory to write reports into (default: cwd)")
+    p.add_argument("--output-dir", help="Directory to write reports into (default: reports/)")
     p.add_argument("--template", help=f"Path to HTML template (default: ./{TEMPLATE_FILENAME})")
     p.add_argument("--from-csv",
                    help="Build the audit from a report.py CSV instead of "
@@ -669,7 +675,8 @@ def main():
     p.add_argument("--from-json",
                    help="Skip fetching; re-render HTML from a previously saved audit JSON file")
     p.add_argument("--output",
-                   help="Output HTML path when used with --from-json")
+                   help="Output HTML path when used with --from-json "
+                        "(default: reports/<json-name>.html)")
     args = p.parse_args()
 
     if args.from_json:

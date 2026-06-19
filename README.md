@@ -91,13 +91,13 @@ python qodo_metrics.py --org acme-corp
 
 ### Output files
 
-The script generates three output files:
+The script generates three output files, all written into the `reports/` directory (created automatically and gitignored):
 
-- `{org}_{since_date}_{until_date}.csv` — raw per-PR data
-- `{org}_{since_date}_{until_date}.html` — org-wide visual summary report
-- `{org}_{since_date}_{until_date}_user.html` — per-developer impact report with an interactive date-range slider that recomputes the headline, at-a-glance panel, and per-developer table client-side
+- `reports/{org}_{since_date}_{until_date}.csv` — raw per-PR data
+- `reports/{org}_{since_date}_{until_date}.html` — org-wide visual summary report
+- `reports/{org}_{since_date}_{until_date}_user.html` — per-developer impact report with an interactive date-range slider that recomputes the headline, at-a-glance panel, and per-developer table client-side
 
-For example, running `python3 qodo_metrics.py --org acme-corp` creates `acme-corp_2025-05-12_2026-05-12.csv`, `acme-corp_2025-05-12_2026-05-12.html`, and `acme-corp_2025-05-12_2026-05-12_user.html`.
+For example, running `python3 qodo_metrics.py --org acme-corp` creates `reports/acme-corp_2025-05-12_2026-05-12.csv`, `reports/acme-corp_2025-05-12_2026-05-12.html`, and `reports/acme-corp_2025-05-12_2026-05-12_user.html`.
 
 > **Scope note:** In the per-developer report, "Total PRs" currently equals "Qodo-reviewed PRs" — the pipeline's search only returns PRs that carry a Qodo review comment. Reporting true totals (Qodo or not) requires the row producer to also fetch unreviewed PRs and mark them `Has Qodo Review: False`; the report already reads that field correctly. The per-developer report buckets PRs by **creation date** within the window, so a PR merged just inside the window but created before `since` is excluded from the per-developer view.
 
@@ -170,7 +170,7 @@ The Trend, Spotlight (High-impact findings), and Velocity (First feedback) secti
 | `--days` | Lookback window in days (default: `90`; mutually exclusive with `--since`) |
 | `--inspect` | Print the raw body of the first Qodo comment found and exit |
 | `--verbose` | Print per-PR suggestion counts instead of just the final summary |
-| `--resume` | Resume from a previous checkpoint (`ORG-checkpoint.json`) |
+| `--resume` | Resume from a previous checkpoint (`reports/ORG-checkpoint.json`) |
 | `--repos` | Space-delimited list of repo names to scope the run (e.g. `--repos frontend-app backend-api`); omit to scan the full org |
 | `--anonymize [SCOPE]` | Replace identifying data with stable pseudonyms in all output files; output filenames get an `_anon` suffix. `SCOPE`: `users` (PR Creator / Final Approver only), `repos` (Repo Name / PR URL only), or omit `SCOPE` to anonymize both |
 | `--loc-page-size N` | Starting page size for the org-wide LOC GraphQL query (default: `50`, range: `10`–`100`). Lower it (e.g. `25` or `10`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors on the LOC fetch — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
@@ -213,10 +213,12 @@ python3 engineering_audit.py --org acme-corp --output-dir reports/
 
 # Skip GitHub entirely and re-render from a previously saved audit JSON
 # (fast path for iterating on the template — scatter chart will be blank)
-python3 engineering_audit.py --from-json acme-corp_audit_2026-03-22_2026-05-21.json --output audit.html
+# Re-rendered HTML defaults into reports/ next to the source JSON; override with --output
+python3 engineering_audit.py --from-json reports/acme-corp_audit_2026-03-22_2026-05-21.json
 
 # Build from a main-report CSV instead of fetching (only Qodo-reviewed PRs)
-python3 engineering_audit.py --from-csv acme-corp_2026-03-22_2026-05-21.csv
+# qodo_metrics.py writes its CSV under reports/, so point --from-csv there
+python3 engineering_audit.py --from-csv reports/acme-corp_2026-03-22_2026-05-21.csv
 ```
 
 Prerequisites are the same as the main report: the [`gh` CLI](https://cli.github.com/) installed and authenticated (`gh auth status`), with `repo` scope if the org has private repos.
@@ -225,8 +227,8 @@ Prerequisites are the same as the main report: the [`gh` CLI](https://cli.github
 
 A full run writes two files (`{org}_audit_{since}_{until}.*`):
 
-- `{org}_audit_{since}_{until}.html` — the self-contained report
-- `{org}_audit_{since}_{until}.json` — the computed aggregates, so you can re-render later with `--from-json` without re-fetching
+- `reports/{org}_audit_{since}_{until}.html` — the self-contained report (default location; override with `--output-dir`)
+- `reports/{org}_audit_{since}_{until}.json` — the computed aggregates, so you can re-render later with `--from-json` without re-fetching
 
 > The `*_audit_*.json` data dumps are gitignored — they contain real org PR data and should not be committed. The HTML template (`engineering_audit_template.html`) **is** tracked.
 
@@ -240,8 +242,8 @@ A full run writes two files (`{org}_audit_{since}_{until}.*`):
 | `--days` | Lookback window in days when `--since` is omitted (default: `60`) |
 | `--repos` | Space-delimited list of repo names to scope the run; omit to scan the full org |
 | `--chunk-days` | Date-window size per GitHub search query (default: `30`). Lower it if a run warns that GitHub's 1000-result search cap was hit |
-| `--output-dir` | Directory to write reports into (default: current directory) |
+| `--output-dir` | Directory to write reports into (default: `reports/`) |
 | `--template` | Path to the HTML template (default: `./engineering_audit_template.html`) |
 | `--from-json` | Skip fetching and re-render the HTML from a previously saved audit JSON file |
-| `--output` | Output HTML path when used with `--from-json` (default: `audit.html`) |
+| `--output` | Output HTML path when used with `--from-json` (default: `reports/<json-name>.html`) |
 | `--from-csv` | Build the audit from a main-report CSV instead of fetching from GitHub (note: a CSV only contains Qodo-reviewed PRs) |
