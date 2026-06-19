@@ -414,7 +414,7 @@ def main():
     p.add_argument("--verbose", action="store_true",
                    help="Print per-PR results")
     p.add_argument("--resume", action="store_true",
-                   help="Resume from a previous checkpoint (ORG-checkpoint.json)")
+                   help="Resume from a previous checkpoint (reports/ORG-checkpoint.json)")
     p.add_argument(
         "--repos", nargs="+", metavar="REPO",
         help="Limit to specific repos (e.g. --repos frontend-app backend-api)",

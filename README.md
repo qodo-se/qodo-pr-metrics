@@ -170,7 +170,7 @@ The Trend, Spotlight (High-impact findings), and Velocity (First feedback) secti
 | `--days` | Lookback window in days (default: `90`; mutually exclusive with `--since`) |
 | `--inspect` | Print the raw body of the first Qodo comment found and exit |
 | `--verbose` | Print per-PR suggestion counts instead of just the final summary |
-| `--resume` | Resume from a previous checkpoint (`ORG-checkpoint.json`) |
+| `--resume` | Resume from a previous checkpoint (`reports/ORG-checkpoint.json`) |
 | `--repos` | Space-delimited list of repo names to scope the run (e.g. `--repos frontend-app backend-api`); omit to scan the full org |
 | `--anonymize [SCOPE]` | Replace identifying data with stable pseudonyms in all output files; output filenames get an `_anon` suffix. `SCOPE`: `users` (PR Creator / Final Approver only), `repos` (Repo Name / PR URL only), or omit `SCOPE` to anonymize both |
 | `--loc-page-size N` | Starting page size for the org-wide LOC GraphQL query (default: `50`, range: `10`–`100`). Lower it (e.g. `25` or `10`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors on the LOC fetch — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
@@ -217,7 +217,8 @@ python3 engineering_audit.py --org acme-corp --output-dir reports/
 python3 engineering_audit.py --from-json reports/acme-corp_audit_2026-03-22_2026-05-21.json
 
 # Build from a main-report CSV instead of fetching (only Qodo-reviewed PRs)
-python3 engineering_audit.py --from-csv acme-corp_2026-03-22_2026-05-21.csv
+# qodo_metrics.py writes its CSV under reports/, so point --from-csv there
+python3 engineering_audit.py --from-csv reports/acme-corp_2026-03-22_2026-05-21.csv
 ```
 
 Prerequisites are the same as the main report: the [`gh` CLI](https://cli.github.com/) installed and authenticated (`gh auth status`), with `repo` scope if the org has private repos.
