@@ -196,7 +196,7 @@ from core import save_checkpoint, load_checkpoint, checkpoint_path
 
 
 def test_checkpoint_stores_and_loads_repos(monkeypatch, tmp_path):
-    monkeypatch.setattr("github.checkpoint_path", lambda org: tmp_path / f"{org}-checkpoint.json")
+    monkeypatch.setattr("core.checkpoint_path", lambda org: tmp_path / f"{org}-checkpoint.json")
     save_checkpoint("acme", {
         "since": "2025-01-01",
         "pr_total": 0,
@@ -211,7 +211,7 @@ def test_checkpoint_stores_and_loads_repos(monkeypatch, tmp_path):
 
 
 def test_checkpoint_repos_none_when_not_filtered(monkeypatch, tmp_path):
-    monkeypatch.setattr("github.checkpoint_path", lambda org: tmp_path / f"{org}-checkpoint.json")
+    monkeypatch.setattr("core.checkpoint_path", lambda org: tmp_path / f"{org}-checkpoint.json")
     save_checkpoint("acme", {
         "since": "2025-01-01",
         "pr_total": 0,
