@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from github import _build_anon_maps, _apply_anonymization
+from core import _build_anon_maps, _apply_anonymization
 
 
 def test_build_anon_maps_users_sorted_alphabetically():

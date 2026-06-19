@@ -1,7 +1,8 @@
 import sys, os, json
 from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from github import fetch_pr_data, parse_qodo_comment, _minutes_between, compute_timing, find_qodo_comment
+from github import fetch_pr_data
+from core import parse_qodo_comment, _minutes_between, compute_timing, find_qodo_comment
 
 import json
 
@@ -57,7 +58,7 @@ def test_fetch_pr_data_null_author(monkeypatch):
     assert result["comments"][0]["user"]["login"] == ""
 
 
-from github import build_csv_row, QodoStats
+from core import build_csv_row, QodoStats
 
 def _pr(overrides=None):
     base = {
@@ -399,7 +400,7 @@ def test_fetch_pr_data_ci_status_none_when_missing(monkeypatch):
 # detect_ai_authored — identify AI-generated PRs
 # ---------------------------------------------------------------------------
 
-from github import detect_ai_authored
+from core import detect_ai_authored
 
 def test_detect_ai_copilot_coauthor():
     body = "Co-authored-by: github-copilot[bot] <175728472+github-copilot[bot]@users.noreply.github.com>"
@@ -543,7 +544,7 @@ def test_detect_ai_empty_inputs():
 # parse_reviews — reviewer count, request-changes flag, and approver
 # ---------------------------------------------------------------------------
 
-from github import parse_reviews
+from core import parse_reviews
 
 def test_parse_reviews_approved():
     reviews = [{"author": {"login": "alice"}, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"}]
@@ -587,7 +588,7 @@ def test_parse_reviews_null_author_skipped():
 # compute_speed_to_fix — commits pushed after Qodo review
 # ---------------------------------------------------------------------------
 
-from github import compute_speed_to_fix
+from core import compute_speed_to_fix
 
 def test_speed_to_fix_basic():
     commits = [

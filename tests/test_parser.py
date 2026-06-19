@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from github import parse_qodo_comment
+from core import parse_qodo_comment
 
 SAMPLE_WITH_SECTIONS = """
 ## Code Review by Qodo

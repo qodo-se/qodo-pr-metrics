@@ -1,7 +1,7 @@
 import sys, os
 import json
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from github import _qodo_counts_by_week
+from core import _qodo_counts_by_week
 from github import get_all_pr_loc
 from datetime import date
 

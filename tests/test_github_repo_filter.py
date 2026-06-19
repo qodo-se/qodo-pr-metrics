@@ -1,7 +1,7 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from datetime import date
-from github import _output_stem
+from core import _output_stem
 
 _SINCE = date(2025, 5, 12)
 _UNTIL = date(2026, 5, 12)
@@ -192,7 +192,7 @@ def test_search_merged_prs_follows_pagination_cursor(monkeypatch):
 
 
 import json as _json
-from github import save_checkpoint, load_checkpoint, checkpoint_path
+from core import save_checkpoint, load_checkpoint, checkpoint_path
 
 
 def test_checkpoint_stores_and_loads_repos(monkeypatch, tmp_path):
