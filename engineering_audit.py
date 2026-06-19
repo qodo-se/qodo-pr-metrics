@@ -37,10 +37,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Optional
 
-# Reuse GitHub-side helpers from the existing module. None of the
-# Qodo-specific parsing (QodoStats, parse_qodo_comment, QODO_MARKER) is
-# imported — the audit is deliberately Qodo-product-data-free.
-import github as gh_helpers
+import core
+from collectors import get_collector
 
 
 TEMPLATE_FILENAME = "engineering_audit_template.html"
@@ -62,87 +60,6 @@ _BOT_LOGIN_PATTERNS = re.compile(
 # comment for the purpose of the audit so the report stays clean if Qodo is
 # already installed when someone runs the script.
 _QODO_BODY_MARKER = re.compile(r"Code Review by Qodo", re.IGNORECASE)
-
-
-# ── PR search ────────────────────────────────────────────────────────────
-# github.search_merged_prs hardcodes a "Code Review by Qodo" in:comments
-# filter into the GraphQL query — fine for the post-install impact report,
-# wrong for the pre-install audit. We need every merged PR in the window,
-# Qodo or not. Same chunking + pagination strategy.
-
-_AUDIT_GQL_SEARCH_QUERY = (
-    "query($q:String!,$cursor:String){"
-    "search(query:$q,type:ISSUE,first:100,after:$cursor){"
-    "issueCount "
-    "pageInfo{hasNextPage endCursor}"
-    "nodes{...on PullRequest{"
-    "number id "
-    "repository{nameWithOwner} "
-    "url "
-    "author{login} "
-    "createdAt mergedAt"
-    "}}}}"
-)
-
-
-def audit_search_merged_prs(org, since, until, chunk_days=30, repos=None):
-    """Yield PR metadata for every merged PR in [since, until]."""
-    qualifiers = [f"repo:{org}/{r}" for r in repos] if repos else [f"org:{org}"]
-    cursor = since
-    seen: set = set()
-    while cursor <= until:
-        chunk_end = min(cursor + timedelta(days=chunk_days), until)
-        for qual in qualifiers:
-            qual_label = qual.split(":", 1)[1]
-            print(
-                f"  Searching {cursor} .. {chunk_end} ({qual_label}) ...",
-                end="", file=sys.stderr, flush=True,
-            )
-            q = (
-                f"{qual} is:pr is:merged "
-                f"merged:{cursor.isoformat()}..{chunk_end.isoformat()}"
-            )
-            end_cursor = None
-            chunk_count = 0
-            issue_count = 0
-            while True:
-                gh_args = [
-                    "api", "graphql",
-                    "-f", f"query={_AUDIT_GQL_SEARCH_QUERY}",
-                    "-f", f"q={q}",
-                ]
-                if end_cursor:
-                    gh_args += ["-f", f"cursor={end_cursor}"]
-                else:
-                    gh_args += ["-F", "cursor=null"]
-                out = gh_helpers.run_gh(gh_args)
-                data = json.loads(out)
-                search = data["data"]["search"]
-                issue_count = search.get("issueCount", 0)
-                for pr in gh_helpers._parse_search_gql_nodes(search["nodes"]):
-                    key = (pr["owner"], pr["repo"], pr["number"])
-                    if key in seen:
-                        continue
-                    seen.add(key)
-                    chunk_count += 1
-                    yield pr
-                if not search["pageInfo"]["hasNextPage"]:
-                    break
-                end_cursor = search["pageInfo"]["endCursor"]
-            print(f" {chunk_count} PRs", file=sys.stderr)
-            # GitHub search caps any single query at 1000 results; pagination
-            # silently stops there. issueCount is the true match total, so if it
-            # exceeds what we fetched the chunk overflowed the cap and PRs were
-            # dropped — every downstream aggregate would be understated.
-            if issue_count > chunk_count:
-                print(
-                    f"  Warning: search cap hit for chunk {cursor}..{chunk_end} "
-                    f"({qual_label}): fetched {chunk_count}/{issue_count} PRs — "
-                    "results are incomplete. Re-run with a smaller --chunk-days "
-                    "(or a narrower window) so each chunk stays under 1000.",
-                    file=sys.stderr,
-                )
-        cursor = chunk_end + timedelta(days=1)
 
 
 # ── Per-PR row ───────────────────────────────────────────────────────────
@@ -193,7 +110,7 @@ def build_audit_row(pr: dict, pr_data: dict) -> dict:
     additions = pr_data.get("additions") or 0
     deletions = pr_data.get("deletions") or 0
     lines = additions
-    hours = gh_helpers._hours_between(
+    hours = core.hours_between(
         pr.get("created_at", ""), pr.get("merged_at", "")
     )
 
@@ -209,15 +126,15 @@ def build_audit_row(pr: dict, pr_data: dict) -> dict:
     has_human = bool(human_timestamps)
     ttfc_min: Optional[int] = None
     if has_human:
-        ttfc_min = gh_helpers._minutes_between(
+        ttfc_min = core.minutes_between(
             pr.get("created_at", ""), min(human_timestamps)
         )
 
-    is_ai, ai_type = gh_helpers.detect_ai_authored(
+    is_ai, ai_type = core.detect_ai_authored(
         pr_data.get("body", "") or "",
         pr_data.get("labels", []) or [],
     )
-    review_info = gh_helpers.parse_reviews(reviews)
+    review_info = core.parse_reviews(reviews)
 
     return {
         "owner": pr["owner"],
@@ -629,9 +546,10 @@ def cmd_audit(args):
         print(f"Fetching merged PRs for {args.org} ({since} → {until}) …",
               file=sys.stderr)
 
-        pr_meta = list(audit_search_merged_prs(
-            args.org, since, until,
-            chunk_days=args.chunk_days, repos=args.repos,
+        collector = get_collector("github")
+        pr_meta = list(collector.search_merged_prs(
+            args.org, since, until=until,
+            chunk_days=args.chunk_days, repos=args.repos, qodo_only=False,
         ))
         if not pr_meta:
             sys.exit("No merged PRs found in window. Check --org and date range.")
@@ -644,7 +562,7 @@ def cmd_audit(args):
             batch = pr_meta[i:i + batch_size]
             # Pull up to 100 comments (vs the report's default 20) so the
             # "no human comment" / TTFC signal isn't skewed by chatty PRs.
-            pr_data_map = gh_helpers.fetch_pr_data_batch(batch, comments_first=100)
+            pr_data_map = collector.fetch_pr_data_batch(batch, comments_first=100)
             for pr in batch:
                 data = pr_data_map.get(pr.get("node_id", ""))
                 if not data:

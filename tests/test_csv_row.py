@@ -1,7 +1,8 @@
 import sys, os, json
 from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from github import fetch_pr_data, parse_qodo_comment, _minutes_between, compute_timing, find_qodo_comment
+from collectors.github import GitHubCollector
+from core import parse_qodo_comment, minutes_between, compute_timing, find_qodo_comment
 
 import json
 
@@ -28,15 +29,15 @@ def _graphql_response(body1="comment body", additions=120, deletions=40):
 
 
 def test_fetch_pr_data_returns_lines(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response())
-    result = fetch_pr_data("acme", "repo", 42)
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _graphql_response())
+    result = GitHubCollector().fetch_pr_data("acme", "repo", 42)
     assert result["additions"] == 120
     assert result["deletions"] == 40
 
 
 def test_fetch_pr_data_returns_comments(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response(body1="hello"))
-    result = fetch_pr_data("acme", "repo", 42)
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _graphql_response(body1="hello"))
+    result = GitHubCollector().fetch_pr_data("acme", "repo", 42)
     assert len(result["comments"]) == 1
     assert result["comments"][0]["body"] == "hello"
     assert result["comments"][0]["created_at"] == "2026-01-01T10:05:00Z"
@@ -52,12 +53,12 @@ def test_fetch_pr_data_null_author(monkeypatch):
             ]}
         }}}
     })
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: payload)
-    result = fetch_pr_data("acme", "repo", 1)
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: payload)
+    result = GitHubCollector().fetch_pr_data("acme", "repo", 1)
     assert result["comments"][0]["user"]["login"] == ""
 
 
-from github import build_csv_row, QodoStats
+from core import build_csv_row, QodoStats
 
 def _pr(overrides=None):
     base = {
@@ -163,7 +164,7 @@ def test_parse_img_both_sections():
 
 
 # ---------------------------------------------------------------------------
-# _minutes_between and compute_timing
+# minutes_between and compute_timing
 # ---------------------------------------------------------------------------
 
 QODO_COMMENT = {
@@ -178,13 +179,13 @@ HUMAN_COMMENT = {
 }
 
 def test_minutes_between_basic():
-    assert _minutes_between("2026-01-01T10:00:00Z", "2026-01-01T10:08:00Z") == 8
+    assert minutes_between("2026-01-01T10:00:00Z", "2026-01-01T10:08:00Z") == 8
 
 def test_minutes_between_zero():
-    assert _minutes_between("2026-01-01T10:00:00Z", "2026-01-01T10:00:00Z") == 0
+    assert minutes_between("2026-01-01T10:00:00Z", "2026-01-01T10:00:00Z") == 0
 
 def test_minutes_between_bad_input():
-    assert _minutes_between("", "2026-01-01T10:00:00Z") is None
+    assert minutes_between("", "2026-01-01T10:00:00Z") is None
 
 def test_compute_timing_with_both():
     pr = {"created_at": "2026-01-01T10:00:00Z"}
@@ -348,35 +349,35 @@ def _graphql_response_extended(
 
 
 def test_fetch_pr_data_returns_body(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(body="My PR"))
-    result = fetch_pr_data("acme", "repo", 42)
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _graphql_response_extended(body="My PR"))
+    result = GitHubCollector().fetch_pr_data("acme", "repo", 42)
     assert result["body"] == "My PR"
 
 
 def test_fetch_pr_data_returns_labels(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(labels=["copilot", "bug"]))
-    result = fetch_pr_data("acme", "repo", 42)
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _graphql_response_extended(labels=["copilot", "bug"]))
+    result = GitHubCollector().fetch_pr_data("acme", "repo", 42)
     assert result["labels"] == ["copilot", "bug"]
 
 
 def test_fetch_pr_data_returns_reviews(monkeypatch):
     reviews = [{"author": {"login": "alice"}, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"}]
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(reviews=reviews))
-    result = fetch_pr_data("acme", "repo", 42)
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _graphql_response_extended(reviews=reviews))
+    result = GitHubCollector().fetch_pr_data("acme", "repo", 42)
     assert len(result["reviews"]) == 1
     assert result["reviews"][0]["state"] == "APPROVED"
 
 
 def test_fetch_pr_data_returns_ci_status(monkeypatch):
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(ci_state="FAILURE"))
-    result = fetch_pr_data("acme", "repo", 42)
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _graphql_response_extended(ci_state="FAILURE"))
+    result = GitHubCollector().fetch_pr_data("acme", "repo", 42)
     assert result["ci_status"] == "FAILURE"
 
 
 def test_fetch_pr_data_returns_commits(monkeypatch):
     commits = [{"commit": {"committedDate": "2026-01-01T11:00:00Z", "message": "fix: address review"}}]
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: _graphql_response_extended(commits=commits))
-    result = fetch_pr_data("acme", "repo", 42)
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: _graphql_response_extended(commits=commits))
+    result = GitHubCollector().fetch_pr_data("acme", "repo", 42)
     assert len(result["commits"]) == 1
     assert result["commits"][0]["commit"]["committedDate"] == "2026-01-01T11:00:00Z"
 
@@ -390,8 +391,8 @@ def test_fetch_pr_data_ci_status_none_when_missing(monkeypatch):
             "comments": {"nodes": []},
         }}}
     })
-    monkeypatch.setattr("github.run_gh", lambda args, **kw: payload)
-    result = fetch_pr_data("acme", "repo", 1)
+    monkeypatch.setattr("collectors.github.run_gh",lambda args, **kw: payload)
+    result = GitHubCollector().fetch_pr_data("acme", "repo", 1)
     assert result["ci_status"] is None
 
 
@@ -399,7 +400,7 @@ def test_fetch_pr_data_ci_status_none_when_missing(monkeypatch):
 # detect_ai_authored — identify AI-generated PRs
 # ---------------------------------------------------------------------------
 
-from github import detect_ai_authored
+from core import detect_ai_authored
 
 def test_detect_ai_copilot_coauthor():
     body = "Co-authored-by: github-copilot[bot] <175728472+github-copilot[bot]@users.noreply.github.com>"
@@ -543,7 +544,7 @@ def test_detect_ai_empty_inputs():
 # parse_reviews — reviewer count, request-changes flag, and approver
 # ---------------------------------------------------------------------------
 
-from github import parse_reviews
+from core import parse_reviews
 
 def test_parse_reviews_approved():
     reviews = [{"author": {"login": "alice"}, "state": "APPROVED", "submittedAt": "2026-01-01T12:00:00Z"}]
@@ -587,7 +588,7 @@ def test_parse_reviews_null_author_skipped():
 # compute_speed_to_fix — commits pushed after Qodo review
 # ---------------------------------------------------------------------------
 
-from github import compute_speed_to_fix
+from core import compute_speed_to_fix
 
 def test_speed_to_fix_basic():
     commits = [

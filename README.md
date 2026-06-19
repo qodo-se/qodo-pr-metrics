@@ -64,29 +64,29 @@ After a run completes, the script prints a terminal summary that includes:
 
 ```bash
 # Full run, default 90-day lookback
-python3 github.py --org acme-corp
+python3 qodo_metrics.py --org acme-corp
 
 # Custom date window
-python3 github.py --org acme-corp --since 2025-05-12
-python3 github.py --org acme-corp --days 90
+python3 qodo_metrics.py --org acme-corp --since 2025-05-12
+python3 qodo_metrics.py --org acme-corp --days 90
 
 # Scope to specific repos
-python3 github.py --org acme-corp --repos frontend-app backend-api
+python3 qodo_metrics.py --org acme-corp --repos frontend-app backend-api
 
 # Anonymize developer and repo names for external sharing
-python3 github.py --org acme-corp --anonymize
+python3 qodo_metrics.py --org acme-corp --anonymize
 
 # Anonymize only developer names (keep repo names visible)
-python3 github.py --org acme-corp --anonymize users
+python3 qodo_metrics.py --org acme-corp --anonymize users
 
 # Anonymize only repo names (keep developer names visible)
-python3 github.py --org acme-corp --anonymize repos
+python3 qodo_metrics.py --org acme-corp --anonymize repos
 ```
 
 **Windows:**
 
 ```bash
-python github.py --org acme-corp
+python qodo_metrics.py --org acme-corp
 ```
 
 ### Output files
@@ -97,7 +97,7 @@ The script generates three output files:
 - `{org}_{since_date}_{until_date}.html` — org-wide visual summary report
 - `{org}_{since_date}_{until_date}_user.html` — per-developer impact report with an interactive date-range slider that recomputes the headline, at-a-glance panel, and per-developer table client-side
 
-For example, running `python3 github.py --org acme-corp` creates `acme-corp_2025-05-12_2026-05-12.csv`, `acme-corp_2025-05-12_2026-05-12.html`, and `acme-corp_2025-05-12_2026-05-12_user.html`.
+For example, running `python3 qodo_metrics.py --org acme-corp` creates `acme-corp_2025-05-12_2026-05-12.csv`, `acme-corp_2025-05-12_2026-05-12.html`, and `acme-corp_2025-05-12_2026-05-12_user.html`.
 
 > **Scope note:** In the per-developer report, "Total PRs" currently equals "Qodo-reviewed PRs" — the pipeline's search only returns PRs that carry a Qodo review comment. Reporting true totals (Qodo or not) requires the row producer to also fetch unreviewed PRs and mark them `Has Qodo Review: False`; the report already reads that field correctly. The per-developer report buckets PRs by **creation date** within the window, so a PR merged just inside the window but created before `since` is excluded from the per-developer view.
 
