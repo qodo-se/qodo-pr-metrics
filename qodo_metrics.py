@@ -47,6 +47,7 @@ from core import (
     _output_stem,
     _build_anon_maps, _apply_anonymization, _qodo_counts_by_week,
     checkpoint_path, load_checkpoint, save_checkpoint,
+    REPORTS_DIR,
 )
 
 from collectors import get_collector
@@ -310,7 +311,8 @@ def cmd_count(args, collector):
 
     stem = _output_stem(args.org, args.since, today, repos=args.repos,
                         anonymize=args.anonymize)
-    base = Path.cwd()
+    base = REPORTS_DIR
+    base.mkdir(parents=True, exist_ok=True)
 
     csv_path = base / f"{stem}.csv"
     with open(csv_path, "w", newline="", encoding="utf-8") as f:
