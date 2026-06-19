@@ -579,7 +579,7 @@ def cmd_audit(args):
     agg = aggregate_audit(rows, org, since, until)
     scatter = build_scatter(rows, agg)
 
-    out_dir = Path(args.output_dir or ".")
+    out_dir = Path(args.output_dir) if args.output_dir else core.REPORTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
     stem = f"{safe_org}_audit_{since.isoformat()}_{until.isoformat()}"
@@ -661,7 +661,7 @@ def main():
     p.add_argument("--chunk-days", type=int, default=30,
                    help="Date-window size per search query (default: 30). "
                         "Lower it if you hit GitHub's 1000-result search cap.")
-    p.add_argument("--output-dir", help="Directory to write reports into (default: cwd)")
+    p.add_argument("--output-dir", help="Directory to write reports into (default: reports/)")
     p.add_argument("--template", help=f"Path to HTML template (default: ./{TEMPLATE_FILENAME})")
     p.add_argument("--from-csv",
                    help="Build the audit from a report.py CSV instead of "
