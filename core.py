@@ -10,6 +10,9 @@ from pathlib import Path
 from typing import List, Optional
 
 
+# All generated reports and resume checkpoints are written here (gitignored).
+REPORTS_DIR = Path("reports")
+
 # Stable marker in Qodo Merge's review comment, independent of bot account name.
 QODO_MARKER = re.compile(r"Code Review by Qodo", re.IGNORECASE)
 
@@ -587,7 +590,7 @@ def checkpoint_path(org):
     # containing path separators or '..', which would otherwise let the
     # checkpoint read/write outside the working directory.
     safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
-    return Path(f"{safe_org}-checkpoint.json")
+    return REPORTS_DIR / f"{safe_org}-checkpoint.json"
 
 
 def load_checkpoint(org):
@@ -602,4 +605,5 @@ def load_checkpoint(org):
 
 
 def save_checkpoint(org, state):
+    REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     checkpoint_path(org).write_text(json.dumps(state, indent=2))

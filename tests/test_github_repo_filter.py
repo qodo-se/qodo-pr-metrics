@@ -251,6 +251,13 @@ def test_resume_mismatch_detected_when_stored_set_current_none():
     assert _mismatch(["frontend"], None)
 
 
+def test_checkpoint_path_defaults_under_reports_dir():
+    from core import checkpoint_path, REPORTS_DIR
+    p = checkpoint_path("acme")
+    assert p == REPORTS_DIR / "acme-checkpoint.json"
+    assert p.parent.name == "reports"
+
+
 
 
 def _batch_response(nodes):
