@@ -213,7 +213,8 @@ python3 engineering_audit.py --org acme-corp --output-dir reports/
 
 # Skip GitHub entirely and re-render from a previously saved audit JSON
 # (fast path for iterating on the template — scatter chart will be blank)
-python3 engineering_audit.py --from-json acme-corp_audit_2026-03-22_2026-05-21.json --output audit.html
+# Re-rendered HTML defaults into reports/ next to the source JSON; override with --output
+python3 engineering_audit.py --from-json reports/acme-corp_audit_2026-03-22_2026-05-21.json
 
 # Build from a main-report CSV instead of fetching (only Qodo-reviewed PRs)
 python3 engineering_audit.py --from-csv acme-corp_2026-03-22_2026-05-21.csv
@@ -243,5 +244,5 @@ A full run writes two files (`{org}_audit_{since}_{until}.*`):
 | `--output-dir` | Directory to write reports into (default: `reports/`) |
 | `--template` | Path to the HTML template (default: `./engineering_audit_template.html`) |
 | `--from-json` | Skip fetching and re-render the HTML from a previously saved audit JSON file |
-| `--output` | Output HTML path when used with `--from-json` (default: `audit.html`) |
+| `--output` | Output HTML path when used with `--from-json` (default: `reports/<json-name>.html`) |
 | `--from-csv` | Build the audit from a main-report CSV instead of fetching from GitHub (note: a CSV only contains Qodo-reviewed PRs) |

@@ -639,7 +639,13 @@ def render_from_json(args):
     # chart will be blank but the rest of the report is intact.
     scatter = {"generated": datetime.utcnow().isoformat() + "Z",
                "points": [], "rubberStamps": []}
-    out = Path(args.output or "audit.html")
+    if args.output:
+        out = Path(args.output)
+    else:
+        # Default into reports/, reusing the source JSON's stem so the
+        # re-rendered HTML lands next to its data with a matching name.
+        out = core.REPORTS_DIR / f"{json_path.stem}.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render_html(agg, scatter, template_path), encoding="utf-8")
     print(f"Rendered {out}")
 
@@ -669,7 +675,8 @@ def main():
     p.add_argument("--from-json",
                    help="Skip fetching; re-render HTML from a previously saved audit JSON file")
     p.add_argument("--output",
-                   help="Output HTML path when used with --from-json")
+                   help="Output HTML path when used with --from-json "
+                        "(default: reports/<json-name>.html)")
     args = p.parse_args()
 
     if args.from_json:
