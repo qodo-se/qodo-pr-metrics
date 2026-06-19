@@ -11,10 +11,6 @@ def test_github_collector_satisfies_protocol():
 
 
 def test_github_collector_has_every_protocol_method():
-    protocol_methods = {
-        name for name in dir(Collector)
-        if not name.startswith("_") or name == "search_merged_prs"
-    }
     expected = {
         "search_merged_prs", "fetch_pr_data", "fetch_pr_data_batch",
         "get_org_pr_count", "get_org_author_count", "get_org_repo_count",

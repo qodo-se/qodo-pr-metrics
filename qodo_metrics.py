@@ -14,17 +14,17 @@ Authenticates via the `gh` CLI — no token handling needed. Just make sure
 
 Usage:
   # Inspect ONE real Qodo comment to verify the parser matches your output
-  ./qodo_pr_stats.py --org acme-corp --inspect
+  python3 qodo_metrics.py --org acme-corp --inspect
 
   # Full run, default 90-day lookback
-  ./qodo_pr_stats.py --org acme-corp
+  python3 qodo_metrics.py --org acme-corp
 
   # Custom window
-  ./qodo_pr_stats.py --org acme-corp --since 2025-05-12
-  ./qodo_pr_stats.py --org acme-corp --days 90
+  python3 qodo_metrics.py --org acme-corp --since 2025-05-12
+  python3 qodo_metrics.py --org acme-corp --days 90
 
   # Per-PR detail
-  ./qodo_pr_stats.py --org acme-corp --verbose
+  python3 qodo_metrics.py --org acme-corp --verbose
 """
 
 import argparse

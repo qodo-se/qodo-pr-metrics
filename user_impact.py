@@ -7,7 +7,7 @@ at-a-glance panel, and per-developer table on the client.
 Public API:
     generate_user_html(rows, org, since, until, logo_path=None) -> str
 
-Integration (in github.py, right after writing the org report HTML):
+Integration (in qodo_metrics.py, right after writing the org report HTML):
 
     from user_impact import generate_user_html
 
@@ -20,11 +20,11 @@ Integration (in github.py, right after writing the org report HTML):
 
 SCOPE NOTE — Total PRs vs. Qodo-reviewed PRs:
 
-    Only PRs present in `rows` are counted. In the current github.py
+    Only PRs present in `rows` are counted. In the current qodo_metrics.py
     pipeline, `rows` contains PRs that had a Qodo review comment, so
     "Total PRs" in this report = "Qodo-reviewed PRs by this user".
 
-    To report TRUE total PRs (Qodo or not) per author, augment github.py
+    To report TRUE total PRs (Qodo or not) per author, augment qodo_metrics.py
     to also fetch unreviewed PRs (drop the
     `'Code Review by Qodo' in:comments` qualifier from the search) and
     set `Has Qodo Review` False on those rows. This module already

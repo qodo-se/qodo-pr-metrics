@@ -525,7 +525,7 @@ def test_generate_html_requirement_gaps_shown_when_nonzero():
 
 
 def test_aggregate_rows_without_qodo_flag_treated_as_reviewed():
-    # Matches production input shape: github.py no longer emits Has Qodo Review
+    # Matches production input shape: qodo_metrics.py no longer emits Has Qodo Review
     rows = [
         _row(repo="api", creator="alice", suggestions=5, implemented=3),
         _row(repo="web", creator="bob",   suggestions=2, implemented=1),
