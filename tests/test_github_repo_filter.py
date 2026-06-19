@@ -500,3 +500,36 @@ def test_output_stem_anon_with_repos():
 
 def test_output_stem_no_anon_unchanged():
     assert _output_stem("acme-corp", _SINCE, _UNTIL, anonymize=False) == "acme-corp_2025-05-12_2026-05-12"
+
+
+def test_search_merged_prs_respects_until(monkeypatch):
+    captured = {}
+    def fake_run_gh(args, **kw):
+        # capture the q= arg to assert the merged: range upper bound
+        for a in args:
+            if a.startswith("q="):
+                captured["q"] = a[2:]
+        return _gql_search_response([])
+    monkeypatch.setattr("collectors.github.run_gh", fake_run_gh)
+    list(GitHubCollector().search_merged_prs(
+        "acme", date(2026, 5, 1), until=date(2026, 5, 10), repos=["frontend"]))
+    assert "2026-05-10" in captured["q"]
+
+
+def test_search_merged_prs_qodo_only_toggles_filter(monkeypatch):
+    seen = {}
+    def fake_run_gh(args, **kw):
+        for a in args:
+            if a.startswith("q="):
+                seen.setdefault("qs", []).append(a[2:])
+        return _gql_search_response([])
+    monkeypatch.setattr("collectors.github.run_gh", fake_run_gh)
+    list(GitHubCollector().search_merged_prs(
+        "acme", date(2026, 5, 1), until=date(2026, 5, 2),
+        repos=["frontend"], qodo_only=False))
+    assert all("Code Review by Qodo" not in q for q in seen["qs"])
+    seen["qs"] = []
+    list(GitHubCollector().search_merged_prs(
+        "acme", date(2026, 5, 1), until=date(2026, 5, 2),
+        repos=["frontend"], qodo_only=True))
+    assert any("Code Review by Qodo" in q for q in seen["qs"])
