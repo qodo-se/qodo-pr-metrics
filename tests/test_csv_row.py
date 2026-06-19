@@ -2,7 +2,7 @@ import sys, os, json
 from unittest.mock import patch
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from collectors.github import GitHubCollector
-from core import parse_qodo_comment, _minutes_between, compute_timing, find_qodo_comment
+from core import parse_qodo_comment, minutes_between, compute_timing, find_qodo_comment
 
 import json
 
@@ -164,7 +164,7 @@ def test_parse_img_both_sections():
 
 
 # ---------------------------------------------------------------------------
-# _minutes_between and compute_timing
+# minutes_between and compute_timing
 # ---------------------------------------------------------------------------
 
 QODO_COMMENT = {
@@ -179,13 +179,13 @@ HUMAN_COMMENT = {
 }
 
 def test_minutes_between_basic():
-    assert _minutes_between("2026-01-01T10:00:00Z", "2026-01-01T10:08:00Z") == 8
+    assert minutes_between("2026-01-01T10:00:00Z", "2026-01-01T10:08:00Z") == 8
 
 def test_minutes_between_zero():
-    assert _minutes_between("2026-01-01T10:00:00Z", "2026-01-01T10:00:00Z") == 0
+    assert minutes_between("2026-01-01T10:00:00Z", "2026-01-01T10:00:00Z") == 0
 
 def test_minutes_between_bad_input():
-    assert _minutes_between("", "2026-01-01T10:00:00Z") is None
+    assert minutes_between("", "2026-01-01T10:00:00Z") is None
 
 def test_compute_timing_with_both():
     pr = {"created_at": "2026-01-01T10:00:00Z"}

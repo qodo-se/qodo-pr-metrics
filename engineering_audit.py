@@ -110,7 +110,7 @@ def build_audit_row(pr: dict, pr_data: dict) -> dict:
     additions = pr_data.get("additions") or 0
     deletions = pr_data.get("deletions") or 0
     lines = additions
-    hours = core._hours_between(
+    hours = core.hours_between(
         pr.get("created_at", ""), pr.get("merged_at", "")
     )
 
@@ -126,7 +126,7 @@ def build_audit_row(pr: dict, pr_data: dict) -> dict:
     has_human = bool(human_timestamps)
     ttfc_min: Optional[int] = None
     if has_human:
-        ttfc_min = core._minutes_between(
+        ttfc_min = core.minutes_between(
             pr.get("created_at", ""), min(human_timestamps)
         )
 

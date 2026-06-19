@@ -374,7 +374,7 @@ def compute_speed_to_fix(qodo_ts: Optional[str], commits: list) -> dict:
     first_ts = after[0]["commit"]["committedDate"]
     return {
         "commits_after_qodo": len(after),
-        "speed_to_fix_min": _minutes_between(qodo_ts, first_ts),
+        "speed_to_fix_min": minutes_between(qodo_ts, first_ts),
     }
 
 
@@ -397,7 +397,7 @@ CSV_COLUMNS = [
 ]
 
 
-def _hours_between(iso_start: str, iso_end: str) -> int:
+def hours_between(iso_start: str, iso_end: str) -> int:
     """Return whole hours between two ISO-8601 timestamps. Returns 0 on error."""
     try:
         # Normalise GitHub's timestamps — strip trailing Z and any fractional
@@ -411,7 +411,7 @@ def _hours_between(iso_start: str, iso_end: str) -> int:
         return 0
 
 
-def _minutes_between(iso_start: str, iso_end: str) -> Optional[int]:
+def minutes_between(iso_start: str, iso_end: str) -> Optional[int]:
     """Return whole minutes between two ISO-8601 timestamps, or None on error."""
     try:
         def _parse(ts):
@@ -435,7 +435,7 @@ def compute_timing(pr: dict, comments: list) -> dict:
         # When 2 edits exist, edit[0] is when the placeholder was replaced with real content.
         edits = qodo_comment.get("user_content_edits", [])
         qodo_ts = edits[0]["edited_at"] if len(edits) >= 2 else qodo_comment["created_at"]
-        qodo_min = _minutes_between(pr_created, qodo_ts)
+        qodo_min = minutes_between(pr_created, qodo_ts)
     else:
         qodo_min = None
     qodo_login = qodo_comment.get("user", {}).get("login") if qodo_comment else None
@@ -449,7 +449,7 @@ def compute_timing(pr: dict, comments: list) -> dict:
     human_min = None
     if human_comments:
         first = min(human_comments, key=lambda c: c.get("created_at", ""))
-        human_min = _minutes_between(pr_created, first["created_at"])
+        human_min = minutes_between(pr_created, first["created_at"])
     return {"qodo_min": qodo_min, "human_min": human_min, "has_human": has_human}
 
 
@@ -524,7 +524,7 @@ def build_csv_row(pr: dict, lines_added: int, stats: Optional["QodoStats"],
         "PR URL":                               pr.get("url", ""),
         "PR Creation Date":                     pr.get("created_at", ""),
         "PR Merge Date":                        pr.get("merged_at", ""),
-        "Hours to Merge":                       _hours_between(
+        "Hours to Merge":                       hours_between(
                                                     pr.get("created_at", ""),
                                                     pr.get("merged_at", ""),
                                                 ),
@@ -582,14 +582,22 @@ def _qodo_counts_by_week(prs):
 
 
 def checkpoint_path(org):
-    return Path(f"{org}-checkpoint.json")
+    # Sanitize org the same way _output_stem() does: org is part of the
+    # provider-agnostic surface and future providers may use identifiers
+    # containing path separators or '..', which would otherwise let the
+    # checkpoint read/write outside the working directory.
+    safe_org = re.sub(r"[^A-Za-z0-9_.-]", "_", org)
+    return Path(f"{safe_org}-checkpoint.json")
 
 
 def load_checkpoint(org):
     p = checkpoint_path(org)
     if p.exists():
-        data = json.loads(p.read_text())
-        return data
+        try:
+            return json.loads(p.read_text())
+        except (json.JSONDecodeError, OSError):
+            # Corrupt or unreadable checkpoint — start fresh rather than crash.
+            return None
     return None
 
 

@@ -44,17 +44,15 @@ from core import (
     find_qodo_comment, parse_qodo_comment,
     detect_ai_authored, parse_reviews, compute_speed_to_fix,
     compute_timing, build_csv_row,
-    _hours_between, _minutes_between, _output_stem,
+    _output_stem,
     _build_anon_maps, _apply_anonymization, _qodo_counts_by_week,
     checkpoint_path, load_checkpoint, save_checkpoint,
 )
 
 from collectors import get_collector
-from collectors.github import (
-    _LOC_PAGE_SIZE_DEFAULT, _LOC_PAGE_SIZE_MIN, _LOC_PAGE_SIZE_MAX,
-    _PR_BATCH_SIZE_DEFAULT, _PR_BATCH_SIZE_MIN, _PR_BATCH_SIZE_MAX,
-    TransientHttpError, run_gh,
-)
+# GitHub-specific symbols (run_gh, TransientHttpError, and the LOC/PR tuning
+# knobs) are imported lazily inside the functions that use them, so importing
+# this entrypoint module does not require the GitHub provider's internals.
 
 
 def cmd_inspect(args, collector):
@@ -80,6 +78,7 @@ def cmd_inspect(args, collector):
 
 def cmd_test_hotfix_signals(args, collector):
     """Print hotfix detection counts per signal and combined for smoke-testing."""
+    from collectors.github import run_gh
     today = date.today()
     qualifiers = [f"repo:{args.org}/{r}" for r in args.repos] if args.repos else [f"org:{args.org}"]
     signals = {
@@ -121,6 +120,9 @@ def cmd_test_hotfix_signals(args, collector):
 
 
 def cmd_count(args, collector):
+    from collectors.github import (
+        TransientHttpError, _PR_BATCH_SIZE_DEFAULT, _PR_BATCH_SIZE_MIN,
+    )
     start_time = time.monotonic()
     cp_path = checkpoint_path(args.org)
     processed = set()
@@ -392,6 +394,10 @@ def cmd_count(args, collector):
 
 
 def main():
+    from collectors.github import (
+        _LOC_PAGE_SIZE_DEFAULT, _LOC_PAGE_SIZE_MIN, _LOC_PAGE_SIZE_MAX,
+        _PR_BATCH_SIZE_DEFAULT, _PR_BATCH_SIZE_MIN, _PR_BATCH_SIZE_MAX,
+    )
     p = argparse.ArgumentParser(
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
