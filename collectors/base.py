@@ -22,9 +22,16 @@ class Collector(Protocol):
     def get_weekly_pr_counts(self, org, since, repos=None): ...
 
 
-def get_collector(name: str) -> "Collector":
-    """Return a collector for the named git provider."""
+def get_collector(name: str, **config) -> "Collector":
+    """Return a collector for the named git provider.
+
+    `config` carries provider-specific construction args (Bitbucket needs
+    base_url/token/scope); the GitHub collector ignores it.
+    """
     if name == "github":
         from collectors.github import GitHubCollector
         return GitHubCollector()
+    if name == "bitbucket-dc":
+        from collectors.bitbucket import BitbucketCollector
+        return BitbucketCollector(**config)
     raise ValueError(f"Unknown git provider: {name!r}")
