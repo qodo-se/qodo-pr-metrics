@@ -86,3 +86,72 @@ def test_loc_from_diff_sums_added_removed():
 
 def test_loc_from_diff_empty():
     assert bb._loc_from_diff({"diffs": []}) == (0, 0)
+
+
+class _StubClient:
+    """Routes paginate()/get_json() to canned responses keyed by path SUFFIX.
+
+    Suffix (endswith) matching disambiguates nested REST paths — e.g. the repo-list
+    path ends with "/repos" while the PR-list path ends with "/pull-requests", even
+    though one is a prefix of the other. The path passed to the client never includes
+    the query string (params are separate), so suffixes are stable.
+    """
+    def __init__(self, routes): self.routes = routes
+    def _match(self, path):
+        # longest suffix wins, so "/5/activities" beats a hypothetical "/activities"
+        best = None
+        for key, val in self.routes.items():
+            if path.endswith(key) and (best is None or len(key) > len(best[0])):
+                best = (key, val)
+        return best[1] if best else None
+    def paginate(self, path, params=None):
+        yield from (self._match(path) or [])
+    def get_json(self, path, params=None):
+        return self._match(path) or {}
+
+QODO_SUMMARY = "### Code Review by Qodo\n#### 1. Bug here `🐞 Bug` `✓ Correctness`"
+
+def _make_collector():
+    c = bb.BitbucketCollector("https://bb", "tok", project="COD")
+    c._client = _StubClient({
+        "/repos": [{"slug": "repo1"}],
+        "/5/activities": [
+            {"action": "COMMENTED", "comment": {"text": QODO_SUMMARY,
+             "createdDate": 1704067200000, "author": {"name": "talr"}}},
+        ],
+        "/pull-requests": [   # PR list (state=MERGED)
+            {"id": 5, "title": "feat: x", "createdDate": 1704060000000,
+             "closedDate": 1704067200000, "updatedDate": 1704067200000,
+             "author": {"user": {"name": "dev1"}},
+             "fromRef": {"displayId": "feature/x", "latestCommit": "abc"},
+             "reviewers": [], "links": {"self": [{"href": "https://bb/pr/5"}]}},
+        ],
+    })
+    return c
+
+
+def test_search_merged_prs_yields_qodo_prs(monkeypatch):
+    from datetime import date
+    c = _make_collector()
+    prs = list(c.search_merged_prs("COD", date(2023, 12, 1)))
+    assert len(prs) == 1
+    assert prs[0]["repo"] == "repo1"
+    assert prs[0]["number"] == 5
+    assert prs[0]["node_id"] == "COD/repo1/5"
+    assert prs[0]["creator"] == "dev1"
+
+
+def test_fetch_pr_data_batch_returns_core_shape():
+    from datetime import date
+    c = _make_collector()
+    c._client.routes["/5/commits"] = [
+        {"authorTimestamp": 1704067200000, "message": "fix"}]
+    c._client.routes["/5/diff"] = {"diffs": [
+        {"hunks": [{"segments": [{"type": "ADDED", "lines": [{}, {}]}]}]}]}
+    prs = list(c.search_merged_prs("COD", date(2023, 12, 1)))
+    data = c.fetch_pr_data_batch(prs)
+    d = data["COD/repo1/5"]
+    assert d["additions"] == 2
+    assert d["labels"] == []
+    assert d["commits"][0]["commit"]["message"] == "fix"
+    assert any("Code Review by Qodo" in cm["body"] for cm in d["comments"])
