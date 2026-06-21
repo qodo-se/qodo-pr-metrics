@@ -384,3 +384,43 @@ def test_bitbucket_summary_categories():
     stats = parse_qodo_comment(SAMPLE_BITBUCKET)
     assert stats.bugs_suggested == 3
     assert stats.bugs_implemented == 1
+
+
+# ---------------------------------------------------------------------------
+# Inline comments fallback (summary-disabled Qodo)
+# ---------------------------------------------------------------------------
+
+from core import build_stats_from_inline_comments
+
+INLINE_OPEN = """🔴 **Action Required**
+
+1\\. Pad_left can crash `🐞 Bug` `⛯ Reliability`
+
+pad_left() forwards an arbitrary-length string ...
+
+**Agent Prompt:**
+
+```
+fix it
+```
+"""
+
+INLINE_RESOLVED = """**Resolved ✓** 🔴 **Action Required**
+
+~~1\\. Wrong word counting~~ `🐞 Bug` `✓ Correctness`
+
+~~count_words() uses text.split(" ") ...~~
+"""
+
+INLINE_NON_QODO = "count_words should use split() without arguments."
+
+def test_inline_fallback_counts_and_implemented():
+    stats = build_stats_from_inline_comments([
+        {"body": INLINE_OPEN},
+        {"body": INLINE_RESOLVED},
+        {"body": INLINE_NON_QODO},   # human comment — ignored
+    ])
+    assert stats.total_suggestions == 2
+    assert stats.total_implemented == 1
+    assert stats.bugs_suggested == 2
+    assert stats.bugs_implemented == 1

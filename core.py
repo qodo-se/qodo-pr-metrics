@@ -275,6 +275,76 @@ def parse_qodo_comment(body: str) -> "QodoStats":
     return stats
 
 
+# A Qodo inline finding comment (Bitbucket non-GFM) opens with a severity header
+# ("🔴 **Action Required**" / "ℹ️ **Informational**") or a resolved/dismissed header,
+# and carries an "**Agent Prompt:**" block. Used to detect & classify inline findings
+# when the summary comment is disabled.
+_INLINE_SEVERITY_RE = re.compile(r"^(?:🔴|🟡|ℹ️|✅)\s+\*\*(.+?)\*\*", re.MULTILINE)
+_INLINE_RESOLVED_RE = re.compile(r"^\*\*Resolved\b", re.IGNORECASE)
+_INLINE_DISMISSED_RE = re.compile(r"^\*\*Dismissed\b", re.IGNORECASE)
+# Title line inside an inline comment: "1. Title `badges`" (markdown auto-number escape
+# "1\." is tolerated), optionally wrapped in ~~ when resolved.
+_INLINE_TITLE_RE = re.compile(r"^(?:~~)?\s*\d+\\?\.\s+(.+?)(?:~~)?\s*$", re.MULTILINE)
+
+
+def _is_qodo_inline(body: str) -> bool:
+	"""True if a comment body is a Qodo inline finding (vs a human comment)."""
+	if not body:
+		return False
+	return (
+		"**Agent Prompt" in body
+		or _INLINE_RESOLVED_RE.search(body) is not None
+		or _INLINE_DISMISSED_RE.search(body) is not None
+		or _INLINE_SEVERITY_RE.search(body) is not None
+	)
+
+
+def build_stats_from_inline_comments(comments: list) -> "QodoStats":
+	"""Aggregate a QodoStats from Qodo inline finding comments.
+
+	Fallback for PRs where the Qodo summary comment is disabled. One suggestion per
+	Qodo inline comment; implemented when the comment is in resolved form.
+	"""
+	stats = QodoStats()
+	for c in comments:
+		body = c.get("body", "") or ""
+		if not _is_qodo_inline(body):
+			continue
+		is_dismissed = _INLINE_DISMISSED_RE.search(body) is not None
+		is_implemented = (not is_dismissed) and _INLINE_RESOLVED_RE.search(body) is not None
+		m = _INLINE_TITLE_RE.search(body)
+		title = m.group(1) if m else body
+		cat = _classify_category(title)
+		sub_label = _classify_sublabel(title)
+
+		stats.total_suggestions += 1
+		if is_implemented:
+			stats.total_implemented += 1
+		if is_dismissed:
+			stats.total_dismissed += 1
+		if cat == "bug":
+			stats.bugs_suggested += 1
+			if is_implemented:
+				stats.bugs_implemented += 1
+		elif cat == "rule_violation":
+			stats.rule_violations_suggested += 1
+			if is_implemented:
+				stats.rule_violations_implemented += 1
+		elif cat == "requirement_gap":
+			stats.requirement_gaps_suggested += 1
+			if is_implemented:
+				stats.requirement_gaps_implemented += 1
+		if sub_label == "Security":
+			stats.security_suggested += 1
+			if is_implemented:
+				stats.security_implemented += 1
+		elif sub_label == "Correctness":
+			stats.correctness_suggested += 1
+			if is_implemented:
+				stats.correctness_implemented += 1
+	return stats
+
+
 def _classify_category(title: str) -> str:
     """Return 'bug', 'rule_violation', 'requirement_gap', or 'unknown'."""
     if _CAT_RULE.search(title):
