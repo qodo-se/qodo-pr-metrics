@@ -6,6 +6,7 @@ import time
 import urllib.error
 import urllib.parse
 import urllib.request
+from datetime import datetime, timezone
 
 _sleep = time.sleep  # indirection so tests can monkeypatch backoff waits
 
@@ -60,3 +61,61 @@ class _BitbucketClient:
             if data.get("isLastPage", True):
                 return
             start = data.get("nextPageStart", start + params["limit"])
+
+
+# Bitbucket activity actions that map to GitHub review states.
+_REVIEW_ACTION_STATE = {"APPROVED": "APPROVED"}
+
+
+def _iso(ms) -> str:
+    """Epoch-milliseconds -> ISO-8601 Z string. Empty string for falsy input."""
+    if not ms:
+        return ""
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def _activities_to_comments(activities: list) -> list:
+    """Map COMMENTED activities to the comment shape core expects."""
+    out = []
+    for a in activities:
+        if a.get("action") != "COMMENTED":
+            continue
+        c = a.get("comment") or {}
+        out.append({
+            "body": c.get("text", "") or "",
+            "created_at": _iso(c.get("createdDate")),
+            "user_content_edits": [],  # Bitbucket has no per-edit history
+            "user": {"login": (c.get("author") or {}).get("name", ""), "type": "User"},
+        })
+    return out
+
+
+def _activities_to_reviews(activities: list) -> list:
+    """Map APPROVED activities to the review shape parse_reviews expects."""
+    out = []
+    for a in activities:
+        state = _REVIEW_ACTION_STATE.get(a.get("action"))
+        if not state:
+            continue
+        out.append({
+            "author": {"login": (a.get("user") or {}).get("name", "")},
+            "state": state,
+            "submittedAt": _iso(a.get("createdDate")),
+        })
+    return out
+
+
+def _pr_meta(pr: dict, project: str, base_url: str) -> dict:
+    """Build the provider-agnostic PR metadata dict from a Bitbucket PR list object."""
+    links = (pr.get("links") or {}).get("self") or [{}]
+    url = links[0].get("href", "") if links else ""
+    return {
+        "owner": project,
+        "repo": "",  # caller fills in the repo slug
+        "number": pr.get("id"),
+        "node_id": "",  # caller fills "{project}/{slug}/{id}"
+        "url": url,
+        "creator": ((pr.get("author") or {}).get("user") or {}).get("name", ""),
+        "created_at": _iso(pr.get("createdDate")),
+        "merged_at": _iso(pr.get("closedDate")),
+    }

@@ -38,3 +38,38 @@ def test_get_json_retries_on_503_then_succeeds(monkeypatch):
     monkeypatch.setattr(bb.urllib.request, "urlopen", fake_urlopen)
     client = bb._BitbucketClient("https://bb.example.com", "tok")
     assert client.get_json("/x") == {"ok": True}
+
+
+def test_iso_converts_epoch_ms():
+    assert bb._iso(1704067200000) == "2024-01-01T00:00:00Z"
+    assert bb._iso(0) == ""
+    assert bb._iso(None) == ""
+
+
+def test_activities_to_comments_and_reviews():
+    acts = [
+        {"action": "COMMENTED", "comment": {
+            "text": "### Code Review by Qodo\n#### 1. x `🐞 Bug`",
+            "createdDate": 1704067200000,
+            "author": {"name": "talr"}}},
+        {"action": "APPROVED", "createdDate": 1704070800000, "user": {"name": "ravid"}},
+    ]
+    comments = bb._activities_to_comments(acts)
+    assert comments[0]["created_at"] == "2024-01-01T00:00:00Z"
+    assert comments[0]["user"]["login"] == "talr"
+    assert comments[0]["user"]["type"] == "User"
+    assert comments[0]["user_content_edits"] == []
+    reviews = bb._activities_to_reviews(acts)
+    assert reviews == [{"author": {"login": "ravid"}, "state": "APPROVED",
+                        "submittedAt": "2024-01-01T01:00:00Z"}]
+
+
+def test_pr_meta_mapping():
+    pr = {"id": 8, "title": "x", "createdDate": 1704067200000, "closedDate": 1704070800000,
+          "author": {"user": {"name": "talr"}},
+          "links": {"self": [{"href": "https://bb/x/pull-requests/8"}]}}
+    meta = bb._pr_meta(pr, "COD", "https://bb")
+    assert meta["owner"] == "COD" and meta["repo"] == "" and meta["number"] == 8
+    assert meta["creator"] == "talr"
+    assert meta["merged_at"] == "2024-01-01T01:00:00Z"
+    assert meta["url"] == "https://bb/x/pull-requests/8"
