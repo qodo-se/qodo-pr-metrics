@@ -179,3 +179,27 @@ def test_aggregate_counts_from_snapshot():
     assert c.get_org_author_count("COD", since) == 2
     assert c.get_revert_pr_count("COD", since) == 1
     assert c.get_hotfix_pr_count("COD", since) == 1   # branch "hotfix/y"
+
+
+import importlib
+
+def test_cli_builds_bitbucket_collector(monkeypatch):
+    monkeypatch.setenv("BITBUCKET_TOKEN", "tok")
+    qm = importlib.import_module("qodo_metrics")
+    captured = {}
+    def fake_get_collector(name, **config):
+        captured["name"] = name
+        captured["config"] = config
+        raise SystemExit(0)  # stop before the network run
+    monkeypatch.setattr(qm, "get_collector", fake_get_collector)
+    monkeypatch.setattr(sys, "argv", [
+        "qodo_metrics.py", "--provider", "bitbucket-dc",
+        "--base-url", "https://bb.example.com", "--project", "COD",
+        "--loc", "qodo-only", "--since", "2026-01-01"])
+    with __import__("pytest").raises(SystemExit):
+        qm.main()
+    assert captured["name"] == "bitbucket-dc"
+    assert captured["config"]["base_url"] == "https://bb.example.com"
+    assert captured["config"]["project"] == "COD"
+    assert captured["config"]["token"] == "tok"
+    assert captured["config"]["loc_mode"] == "qodo-only"

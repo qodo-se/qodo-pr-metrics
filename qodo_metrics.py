@@ -404,7 +404,7 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--org", required=True, help="GitHub org login (e.g., acme-corp)")
+    p.add_argument("--org", help="GitHub org login (required for --provider github)")
     window = p.add_mutually_exclusive_group()
     window.add_argument("--since", type=date.fromisoformat, help="YYYY-MM-DD")
     window.add_argument("--days", type=int, default=90,
@@ -446,6 +446,19 @@ def main():
             "or stream-cancel errors during the main PR walk."
         ),
     )
+    p.add_argument("--provider", choices=["github", "bitbucket-dc"], default="github",
+                   help="Git provider (default: github)")
+    p.add_argument("--base-url", help="Bitbucket DC base URL (e.g. https://bitbucket.example.com)")
+    scope = p.add_mutually_exclusive_group()
+    scope.add_argument("--project", help="Bitbucket project key (analog to --org)")
+    scope.add_argument("--all-projects", action="store_true",
+                       help="Scan every repo in the instance (Bitbucket only)")
+    p.add_argument("--loc", choices=["all", "qodo-only", "off"], default="all",
+                   help="Line-count collection mode (default: all)")
+    p.add_argument("--concurrency", type=int, default=8,
+                   help="Per-PR fetch concurrency for Bitbucket (default: 8)")
+    p.add_argument("--insecure", action="store_true",
+                   help="Skip TLS verification (self-signed Bitbucket instances)")
     args = p.parse_args()
 
     if args.loc_page_size is not None and not (
@@ -470,7 +483,28 @@ def main():
     if args.repos:
         args.repos = list(dict.fromkeys(args.repos))
 
-    collector = get_collector("github")
+    import os
+    from urllib.parse import urlparse
+    if args.provider == "bitbucket-dc":
+        if not args.base_url:
+            p.error("--base-url is required for --provider bitbucket-dc")
+        if not args.project and not args.all_projects:
+            p.error("one of --project or --all-projects is required for bitbucket-dc")
+        token = os.environ.get("BITBUCKET_TOKEN")
+        if not token:
+            p.error("BITBUCKET_TOKEN environment variable is not set")
+        if args.all_projects:
+            args.org = f"{urlparse(args.base_url).hostname or 'bitbucket'}-all-projects"
+        else:
+            args.org = args.project
+        collector = get_collector(
+            "bitbucket-dc", base_url=args.base_url, token=token,
+            project=args.project, all_projects=args.all_projects,
+            verify=not args.insecure, concurrency=args.concurrency, loc_mode=args.loc)
+    else:
+        if not args.org:
+            p.error("--org is required for --provider github")
+        collector = get_collector("github")
 
     if args.inspect:
         cmd_inspect(args, collector)
