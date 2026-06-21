@@ -203,6 +203,7 @@ class BitbucketCollector:
 
     def search_merged_prs(self, org, since, until=None, chunk_days=None,
                           repos=None, total_prs=None, qodo_only=True):
+        until = until or date.today()
         snap = self._snapshot(since, until)
         for rec in snap["records"]:
             if qodo_only and not rec["is_qodo"]:
@@ -228,7 +229,7 @@ class BitbucketCollector:
                 pass
         ci_status = self._ci_status(project, slug, (pr.get("fromRef") or {}).get("latestCommit"))
         return {
-            "comments": rec["comments"][:comments_limit] if comments_limit else rec["comments"],
+            "comments": rec["comments"][:comments_limit] if comments_limit is not None else rec["comments"],
             "additions": additions, "deletions": deletions,
             "body": pr.get("description", "") or "",
             "labels": [],  # Bitbucket DC has no PR labels
@@ -270,4 +271,4 @@ class BitbucketCollector:
             for rec in snap["records"]:
                 if rec["slug"] == repo and rec["raw"]["id"] == number:
                     return self._pr_data(rec, comments_limit=comments_limit)
-        raise BitbucketHttpError(f"PR not in snapshot: {repo}#{number}")
+        raise BitbucketHttpError(f"PR {repo}#{number} not found in snapshot (snapshot empty — call search_merged_prs first?)" if not self._snapshot_cache else f"PR not in snapshot: {repo}#{number}")
