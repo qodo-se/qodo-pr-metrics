@@ -183,6 +183,33 @@ def test_aggregate_counts_from_snapshot():
 
 import importlib
 
+FIXTURES_DIR = os.path.join(os.path.dirname(__file__), "fixtures", "bitbucket")
+
+
+def test_end_to_end_from_recorded_fixtures():
+    """Pipeline smoke-test: recorded PR#8 fixtures round-trip through collector helpers."""
+    import core
+
+    with open(os.path.join(FIXTURES_DIR, "activities_pr8.json")) as f:
+        activities_envelope = json.load(f)
+    with open(os.path.join(FIXTURES_DIR, "diff_pr8.json")) as f:
+        diff_raw = json.load(f)
+
+    activities = activities_envelope["values"]
+    comments = bb._activities_to_comments(activities)
+
+    qodo_comment = core.find_qodo_comment(comments)
+    assert qodo_comment is not None, "find_qodo_comment should detect the Qodo summary"
+
+    parsed = core.parse_qodo_comment(qodo_comment["body"])
+    assert parsed.total_suggestions >= 1, (
+        f"expected >= 1 suggestion, got {parsed.total_suggestions}"
+    )
+
+    additions, _deletions = bb._loc_from_diff(diff_raw)
+    assert additions > 0, f"expected additions > 0, got {additions}"
+
+
 def test_cli_builds_bitbucket_collector(monkeypatch):
     monkeypatch.setenv("BITBUCKET_TOKEN", "tok")
     qm = importlib.import_module("qodo_metrics")
