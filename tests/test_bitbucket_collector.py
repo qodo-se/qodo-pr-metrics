@@ -155,3 +155,27 @@ def test_fetch_pr_data_batch_returns_core_shape():
     assert d["labels"] == []
     assert d["commits"][0]["commit"]["message"] == "fix"
     assert any("Code Review by Qodo" in cm["body"] for cm in d["comments"])
+
+
+def test_aggregate_counts_from_snapshot():
+    from datetime import date
+    c = _make_collector()
+    # add a second (non-Qodo) merged PR and a revert
+    c._client.routes["/pull-requests"] = [
+        {"id": 5, "title": "feat: x", "createdDate": 1704060000000,
+         "closedDate": 1704067200000, "updatedDate": 1704067200000,
+         "author": {"user": {"name": "dev1"}},
+         "fromRef": {"displayId": "feature/x", "latestCommit": "abc"},
+         "reviewers": [], "links": {"self": [{"href": "https://bb/pr/5"}]}},
+        {"id": 6, "title": "Revert bad change", "createdDate": 1704060000000,
+         "closedDate": 1704067200000, "updatedDate": 1704067200000,
+         "author": {"user": {"name": "dev2"}},
+         "fromRef": {"displayId": "hotfix/y", "latestCommit": "def"},
+         "reviewers": [], "links": {"self": [{"href": "https://bb/pr/6"}]}},
+    ]
+    since = date(2023, 12, 1)
+    assert c.get_org_pr_count("COD", since) == 2
+    assert c.get_qodo_pr_count("COD", since) == 1
+    assert c.get_org_author_count("COD", since) == 2
+    assert c.get_revert_pr_count("COD", since) == 1
+    assert c.get_hotfix_pr_count("COD", since) == 1   # branch "hotfix/y"

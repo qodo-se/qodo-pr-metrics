@@ -1,6 +1,7 @@
 """Bitbucket Data Center / Server collector behind the Collector contract."""
 
 import json
+import re
 import ssl
 import time
 import urllib.error
@@ -272,3 +273,64 @@ class BitbucketCollector:
                 if rec["slug"] == repo and rec["raw"]["id"] == number:
                     return self._pr_data(rec, comments_limit=comments_limit)
         raise BitbucketHttpError(f"PR {repo}#{number} not found in snapshot (snapshot empty — call search_merged_prs first?)" if not self._snapshot_cache else f"PR not in snapshot: {repo}#{number}")
+
+    def get_org_pr_count(self, org, since, repos=None):
+        return len(self._snapshot(since)["records"])
+
+    def get_qodo_pr_count(self, org, since, repos=None):
+        return sum(1 for r in self._snapshot(since)["records"] if r["is_qodo"])
+
+    def get_org_author_count(self, org, since, repos=None, chunk_days=None, total_prs=None):
+        return len({r["meta"]["creator"] for r in self._snapshot(since)["records"]
+                    if r["meta"]["creator"]})
+
+    def get_org_repo_count(self, org):
+        return len(self._list_repos())
+
+    def get_revert_pr_count(self, org, since, repos=None):
+        rx = re.compile(r"\brevert\b", re.IGNORECASE)
+        return sum(1 for r in self._snapshot(since)["records"]
+                   if rx.search(r["raw"].get("title", "") or ""))
+
+    def get_hotfix_pr_count(self, org, since, repos=None):
+        title_rx = re.compile(r"hotfix", re.IGNORECASE)
+        n = 0
+        for r in self._snapshot(since)["records"]:
+            title = r["raw"].get("title", "") or ""
+            branch = (r["raw"].get("fromRef") or {}).get("displayId", "") or ""
+            if title_rx.search(title) or "hotfix" in branch.lower():
+                n += 1
+        return n
+
+    def get_weekly_pr_counts(self, org, since, repos=None):
+        from datetime import timedelta
+        start = since - timedelta(days=since.weekday())
+        buckets = {}
+        for r in self._snapshot(since)["records"]:
+            merged = r["meta"]["merged_at"]
+            if not merged:
+                continue
+            d = date.fromisoformat(merged[:10])
+            monday = d - timedelta(days=d.weekday())
+            buckets[monday.isoformat()] = buckets.get(monday.isoformat(), 0) + 1
+        out, cursor, today = [], start, date.today()
+        while cursor <= today:
+            out.append({"week_start": cursor.isoformat(),
+                        "total": buckets.get(cursor.isoformat(), 0), "qodo": 0})
+            cursor += timedelta(days=7)
+        return out
+
+    def get_all_pr_loc(self, org, since, repos=None, chunk_days=None,
+                       total_prs=None, page_size=None):
+        if self._loc_mode != "all":
+            return None  # 'qodo-only' and 'off' skip the whole-population denominator
+        total = 0
+        for r in self._snapshot(since)["records"]:
+            base = (f"/rest/api/1.0/projects/{r['project']}/repos/{r['slug']}"
+                    f"/pull-requests/{r['raw']['id']}")
+            try:
+                diff = self._client.get_json(f"{base}/diff", {"contextLines": 0})
+                total += _loc_from_diff(diff)[0]
+            except BitbucketHttpError:
+                continue
+        return total
