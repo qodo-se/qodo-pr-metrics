@@ -346,3 +346,41 @@ def test_unicode_titles_do_not_collapse():
     stats = parse_qodo_comment(body)
     assert stats.total_suggestions == 2          # two distinct titles, not collapsed to 1
     assert stats.bugs_suggested == 2
+
+
+SAMPLE_BITBUCKET = """\
+### Code Review by Qodo
+
+`🐞 Bugs (2)`  `📘 Rule violations (0)`  `📎 Requirement gaps (0)`
+
+---
+
+### Action Required
+
+#### 1. Wrong word counting `🐞 Bug` `✓ Correctness`
+
+### Review Recommended
+
+#### 2. pad_left can crash `🐞 Bug` `⛯ Reliability`
+
+### Resolved
+
+#### ~~3. Misleading truncate comment~~ `🐞 Bug` `✧ Quality`
+
+*Reviewed by* **[Qodo](https://www.qodo.ai)**
+"""
+
+def test_bitbucket_summary_totals():
+    stats = parse_qodo_comment(SAMPLE_BITBUCKET)
+    assert stats.total_suggestions == 3
+    assert stats.total_implemented == 1   # the one under ### Resolved (~~struck~~)
+
+def test_bitbucket_summary_sections():
+    stats = parse_qodo_comment(SAMPLE_BITBUCKET)
+    assert stats.action_required_total == 1
+    assert stats.review_recommended_total == 1
+
+def test_bitbucket_summary_categories():
+    stats = parse_qodo_comment(SAMPLE_BITBUCKET)
+    assert stats.bugs_suggested == 3
+    assert stats.bugs_implemented == 1
