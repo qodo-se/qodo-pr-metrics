@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from core import parse_qodo_comment
+from core import parse_qodo_comment, build_stats_from_inline_comments
 
 SAMPLE_WITH_SECTIONS = """
 ## Code Review by Qodo
@@ -389,8 +389,6 @@ def test_bitbucket_summary_categories():
 # ---------------------------------------------------------------------------
 # Inline comments fallback (summary-disabled Qodo)
 # ---------------------------------------------------------------------------
-
-from core import build_stats_from_inline_comments
 
 INLINE_OPEN = """🔴 **Action Required**
 
