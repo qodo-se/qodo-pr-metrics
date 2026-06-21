@@ -3,6 +3,7 @@
 import json
 import re
 import ssl
+import sys
 import time
 import urllib.error
 import urllib.parse
@@ -123,7 +124,7 @@ def _pr_meta(pr: dict, project: str, base_url: str) -> dict:
 
 
 from datetime import date
-from core import find_qodo_comment
+from core import find_qodo_comment, build_stats_from_inline_comments
 
 
 def _loc_from_diff(diff: dict) -> tuple:
@@ -193,10 +194,14 @@ class BitbucketCollector:
                 meta = _pr_meta(pr, project, self._base_url)
                 meta["repo"] = slug
                 meta["node_id"] = f"{project}/{slug}/{pr['id']}"
+                # A PR is Qodo-reviewed if it has the PR-level summary comment OR
+                # (summary disabled) at least one Qodo inline finding comment.
+                is_qodo = (find_qodo_comment(comments) is not None
+                           or build_stats_from_inline_comments(comments).total_suggestions > 0)
                 records.append({
                     "meta": meta, "raw": pr, "slug": slug, "project": project,
                     "comments": comments, "reviews": _activities_to_reviews(acts),
-                    "is_qodo": find_qodo_comment(comments) is not None,
+                    "is_qodo": is_qodo,
                 })
         snap = {"records": records}
         self._snapshot_cache[key] = snap
@@ -216,11 +221,14 @@ class BitbucketCollector:
         project, slug, pr = rec["project"], rec["slug"], rec["raw"]
         pid = pr["id"]
         base = f"/rest/api/1.0/projects/{project}/repos/{slug}/pull-requests/{pid}"
-        commits = [
-            {"commit": {"committedDate": _iso(cm.get("authorTimestamp")),
-                        "message": cm.get("message", "")}}
-            for cm in self._client.paginate(f"{base}/commits")
-        ]
+        try:
+            commits = [
+                {"commit": {"committedDate": _iso(cm.get("authorTimestamp")),
+                            "message": cm.get("message", "")}}
+                for cm in self._client.paginate(f"{base}/commits")
+            ]
+        except BitbucketHttpError:
+            commits = []  # commits unavailable for this PR; don't abort the run
         additions = deletions = 0
         if self._loc_mode != "off":
             try:
@@ -264,7 +272,13 @@ class BitbucketCollector:
             rec = snap_records.get(pr.get("node_id"))
             if rec is None:
                 continue
-            by_node[pr["node_id"]] = self._pr_data(rec, comments_limit=comments_first)
+            try:
+                by_node[pr["node_id"]] = self._pr_data(rec, comments_limit=comments_first)
+            except BitbucketHttpError as exc:
+                # Skip this PR (leave it out of by_node) so the pipeline logs it and
+                # continues, rather than aborting the whole run on one REST failure.
+                print(f"\n  Warning: Bitbucket fetch failed for {pr.get('node_id')}: "
+                      f"{exc} — skipping", file=sys.stderr)
         return by_node
 
     def fetch_pr_data(self, owner, repo, number, comments_limit=20):
@@ -306,7 +320,9 @@ class BitbucketCollector:
         from datetime import timedelta
         start = since - timedelta(days=since.weekday())
         buckets = {}
-        for r in self._snapshot(since)["records"]:
+        # Count from the Monday of since's week so the first weekly bucket isn't
+        # undercounted by PRs merged between that Monday and `since`.
+        for r in self._snapshot(start)["records"]:
             merged = r["meta"]["merged_at"]
             if not merged:
                 continue

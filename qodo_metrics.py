@@ -41,7 +41,8 @@ import user_impact
 from core import (
     QODO_MARKER, SUGGESTION_LINE, IMPLEMENTED_MARKERS, DISMISSED_MARKER,
     CSV_COLUMNS, QodoStats,
-    find_qodo_comment, parse_qodo_comment,
+    find_qodo_comment, parse_qodo_comment, build_stats_from_inline_comments,
+    _is_qodo_inline,
     detect_ai_authored, parse_reviews, compute_speed_to_fix,
     compute_timing, build_csv_row,
     _output_stem,
@@ -249,15 +250,29 @@ def cmd_count(args, collector):
                 lines_added = pr_data["additions"]
                 qodo = find_qodo_comment(comments)
                 timing = compute_timing(pr, comments)
-                if not qodo:
+
+            # Prefer the PR-level summary comment; fall back to aggregating Qodo inline
+            # finding comments when the summary is disabled (e.g. Bitbucket DC).
+            if qodo:
+                stats = parse_qodo_comment(qodo["body"])
+                # Use the real Qodo content timestamp (first real edit if available)
+                edits = (qodo.get("user_content_edits") or [])
+                qodo_ts = edits[0]["edited_at"] if len(edits) >= 2 else qodo.get("created_at")
+            else:
+                stats = build_stats_from_inline_comments(comments)
+                if stats.total_suggestions == 0:
                     print(
                         f"\n  Warning: Qodo comment not found for {owner}/{repo}#{number} — skipping",
                         file=sys.stderr,
                     )
                     continue
+                # No summary comment: anchor speed-to-fix on the earliest inline finding;
+                # timing.qodo_min is already None from compute_timing (left blank).
+                inline_ts = [c.get("created_at") for c in comments
+                             if _is_qodo_inline(c.get("body", "") or "") and c.get("created_at")]
+                qodo_ts = min(inline_ts) if inline_ts else None
 
             qodo_loc_total += pr_data["additions"]
-            stats = parse_qodo_comment(qodo["body"])
             suggestions_total += stats.total_suggestions
             suggestions_implemented += stats.total_implemented
             if args.verbose:
@@ -271,9 +286,6 @@ def cmd_count(args, collector):
             body = pr_data.get("body", "")
             labels = pr_data.get("labels", [])
             is_ai, ai_type = detect_ai_authored(body, labels)
-            # Use the real Qodo content timestamp (first real edit if available)
-            edits = (qodo.get("user_content_edits") or [])
-            qodo_ts = edits[0]["edited_at"] if len(edits) >= 2 else qodo.get("created_at")
             speed_info = compute_speed_to_fix(qodo_ts, pr_data.get("commits", []))
             extras = {
                 "is_ai_authored": is_ai,
