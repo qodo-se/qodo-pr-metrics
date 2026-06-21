@@ -119,3 +119,17 @@ def _pr_meta(pr: dict, project: str, base_url: str) -> dict:
         "created_at": _iso(pr.get("createdDate")),
         "merged_at": _iso(pr.get("closedDate")),
     }
+
+
+def _loc_from_diff(diff: dict) -> tuple:
+    """Sum (additions, deletions) from a Bitbucket structured /diff response."""
+    added = removed = 0
+    for fd in diff.get("diffs") or []:
+        for hunk in fd.get("hunks") or []:
+            for seg in hunk.get("segments") or []:
+                n = len(seg.get("lines") or [])
+                if seg.get("type") == "ADDED":
+                    added += n
+                elif seg.get("type") == "REMOVED":
+                    removed += n
+    return added, removed

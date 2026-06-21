@@ -73,3 +73,16 @@ def test_pr_meta_mapping():
     assert meta["creator"] == "talr"
     assert meta["merged_at"] == "2024-01-01T01:00:00Z"
     assert meta["url"] == "https://bb/x/pull-requests/8"
+
+
+def test_loc_from_diff_sums_added_removed():
+    diff = {"diffs": [{"hunks": [{"segments": [
+        {"type": "CONTEXT", "lines": [{}, {}]},
+        {"type": "ADDED", "lines": [{}, {}, {}]},
+        {"type": "REMOVED", "lines": [{}]},
+    ]}]}]}
+    assert bb._loc_from_diff(diff) == (3, 1)
+
+
+def test_loc_from_diff_empty():
+    assert bb._loc_from_diff({"diffs": []}) == (0, 0)
