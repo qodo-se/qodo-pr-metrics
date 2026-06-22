@@ -1,9 +1,29 @@
 import sys, os
 import json
+import pytest
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from core import _qodo_counts_by_week
 from collectors.github import GitHubCollector
 from datetime import date
+
+
+@pytest.fixture
+def frozen_today(monkeypatch):
+    """Freeze collectors.github's "today" so single-chunk LOC tests stay deterministic.
+
+    get_all_pr_loc walks the window [since, today] in chunk_days-sized chunks
+    (30 by default). These tests use a fixed `since` and a mocked run_gh that
+    returns the same response for every date range. Once wall-clock time moves
+    more than chunk_days past `since`, the window splits into multiple chunks and
+    the mock re-counts the same fixture data, inflating the total. Freezing today
+    to one day after the fixed `since` guarantees exactly one chunk.
+    """
+    class _FrozenDate(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 5, 21)
+
+    monkeypatch.setattr("collectors.github.date", _FrozenDate)
 
 
 def test_empty_list_returns_empty_dict():
@@ -110,7 +130,7 @@ def _loc_response(additions_list, has_next=False, end_cursor=None):
     })
 
 
-def test_get_all_pr_loc_sums_additions(monkeypatch):
+def test_get_all_pr_loc_sums_additions(monkeypatch, frozen_today):
     # Basic test: single chunk with multiple PRs
     monkeypatch.setattr("collectors.github.run_gh",lambda _args, **kw: _loc_response([100, 200, 50]))
     result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 20), repos=["frontend"])
@@ -143,7 +163,7 @@ def test_get_all_pr_loc_sums_across_chunks(monkeypatch):
     assert len(calls) == 2
 
 
-def test_get_all_pr_loc_skips_empty_nodes(monkeypatch):
+def test_get_all_pr_loc_skips_empty_nodes(monkeypatch, frozen_today):
     response = json.dumps({
         "data": {
             "search": {
@@ -157,7 +177,7 @@ def test_get_all_pr_loc_skips_empty_nodes(monkeypatch):
     assert result == 100
 
 
-def test_get_all_pr_loc_handles_null_additions(monkeypatch):
+def test_get_all_pr_loc_handles_null_additions(monkeypatch, frozen_today):
     response = json.dumps({
         "data": {
             "search": {
@@ -171,7 +191,7 @@ def test_get_all_pr_loc_handles_null_additions(monkeypatch):
     assert result == 75
 
 
-def test_get_all_pr_loc_handles_pagination(monkeypatch):
+def test_get_all_pr_loc_handles_pagination(monkeypatch, frozen_today):
     calls = []
 
     def mock_gh(args, **kw):
@@ -208,7 +228,7 @@ def test_get_all_pr_loc_returns_zero_for_empty_window(monkeypatch):
     assert result == 0
 
 
-def test_get_all_pr_loc_uses_org_qualifier_when_no_repos(monkeypatch):
+def test_get_all_pr_loc_uses_org_qualifier_when_no_repos(monkeypatch, frozen_today):
     captured = []
 
     def capture_gh(args, **kw):
@@ -221,7 +241,7 @@ def test_get_all_pr_loc_uses_org_qualifier_when_no_repos(monkeypatch):
     assert any("org:acme" in str(arg) for arg in captured)
 
 
-def test_get_all_pr_loc_queries_each_repo(monkeypatch):
+def test_get_all_pr_loc_queries_each_repo(monkeypatch, frozen_today):
     captured = []
 
     def capture_gh(args, **kw):
@@ -262,7 +282,7 @@ def test_transient_http_ignores_4xx_and_unrelated():
     assert _TRANSIENT_HTTP.search("could not resolve host") is None
 
 
-def test_get_all_pr_loc_honors_page_size_override(monkeypatch):
+def test_get_all_pr_loc_honors_page_size_override(monkeypatch, frozen_today):
     captured = []
 
     def capture_gh(args, **kw):
@@ -279,7 +299,7 @@ def test_get_all_pr_loc_honors_page_size_override(monkeypatch):
     assert not any("first:50" in call for call in captured)
 
 
-def test_get_all_pr_loc_defaults_to_50_when_no_override(monkeypatch):
+def test_get_all_pr_loc_defaults_to_50_when_no_override(monkeypatch, frozen_today):
     captured = []
 
     def capture_gh(args, **kw):
