@@ -41,7 +41,8 @@ import user_impact
 from core import (
     QODO_MARKER, SUGGESTION_LINE, IMPLEMENTED_MARKERS, DISMISSED_MARKER,
     CSV_COLUMNS, QodoStats,
-    find_qodo_comment, parse_qodo_comment,
+    find_qodo_comment, parse_qodo_comment, build_stats_from_inline_comments,
+    _is_qodo_inline,
     detect_ai_authored, parse_reviews, compute_speed_to_fix,
     compute_timing, build_csv_row,
     _output_stem,
@@ -249,15 +250,29 @@ def cmd_count(args, collector):
                 lines_added = pr_data["additions"]
                 qodo = find_qodo_comment(comments)
                 timing = compute_timing(pr, comments)
-                if not qodo:
+
+            # Prefer the PR-level summary comment; fall back to aggregating Qodo inline
+            # finding comments when the summary is disabled (e.g. Bitbucket DC).
+            if qodo:
+                stats = parse_qodo_comment(qodo["body"])
+                # Use the real Qodo content timestamp (first real edit if available)
+                edits = (qodo.get("user_content_edits") or [])
+                qodo_ts = edits[0]["edited_at"] if len(edits) >= 2 else qodo.get("created_at")
+            else:
+                stats = build_stats_from_inline_comments(comments)
+                if stats.total_suggestions == 0:
                     print(
                         f"\n  Warning: Qodo comment not found for {owner}/{repo}#{number} — skipping",
                         file=sys.stderr,
                     )
                     continue
+                # No summary comment: anchor speed-to-fix on the earliest inline finding;
+                # timing.qodo_min is already None from compute_timing (left blank).
+                inline_ts = [c.get("created_at") for c in comments
+                             if _is_qodo_inline(c.get("body", "") or "") and c.get("created_at")]
+                qodo_ts = min(inline_ts) if inline_ts else None
 
             qodo_loc_total += pr_data["additions"]
-            stats = parse_qodo_comment(qodo["body"])
             suggestions_total += stats.total_suggestions
             suggestions_implemented += stats.total_implemented
             if args.verbose:
@@ -271,9 +286,6 @@ def cmd_count(args, collector):
             body = pr_data.get("body", "")
             labels = pr_data.get("labels", [])
             is_ai, ai_type = detect_ai_authored(body, labels)
-            # Use the real Qodo content timestamp (first real edit if available)
-            edits = (qodo.get("user_content_edits") or [])
-            qodo_ts = edits[0]["edited_at"] if len(edits) >= 2 else qodo.get("created_at")
             speed_info = compute_speed_to_fix(qodo_ts, pr_data.get("commits", []))
             extras = {
                 "is_ai_authored": is_ai,
@@ -404,7 +416,7 @@ def main():
         description=__doc__,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    p.add_argument("--org", required=True, help="GitHub org login (e.g., acme-corp)")
+    p.add_argument("--org", help="GitHub org login (required for --provider github)")
     window = p.add_mutually_exclusive_group()
     window.add_argument("--since", type=date.fromisoformat, help="YYYY-MM-DD")
     window.add_argument("--days", type=int, default=90,
@@ -446,6 +458,19 @@ def main():
             "or stream-cancel errors during the main PR walk."
         ),
     )
+    p.add_argument("--provider", choices=["github", "bitbucket-dc"], default="github",
+                   help="Git provider (default: github)")
+    p.add_argument("--base-url", help="Bitbucket DC base URL (e.g. https://bitbucket.example.com)")
+    scope = p.add_mutually_exclusive_group()
+    scope.add_argument("--project", help="Bitbucket project key (analog to --org)")
+    scope.add_argument("--all-projects", action="store_true",
+                       help="Scan every repo in the instance (Bitbucket only)")
+    p.add_argument("--loc", choices=["all", "qodo-only", "off"], default="all",
+                   help="Line-count collection mode (default: all)")
+    p.add_argument("--concurrency", type=int, default=8,
+                   help="Per-PR fetch concurrency for Bitbucket (default: 8)")
+    p.add_argument("--insecure", action="store_true",
+                   help="Skip TLS verification (self-signed Bitbucket instances)")
     args = p.parse_args()
 
     if args.loc_page_size is not None and not (
@@ -470,7 +495,28 @@ def main():
     if args.repos:
         args.repos = list(dict.fromkeys(args.repos))
 
-    collector = get_collector("github")
+    import os
+    from urllib.parse import urlparse
+    if args.provider == "bitbucket-dc":
+        if not args.base_url:
+            p.error("--base-url is required for --provider bitbucket-dc")
+        if not args.project and not args.all_projects:
+            p.error("one of --project or --all-projects is required for bitbucket-dc")
+        token = os.environ.get("BITBUCKET_TOKEN")
+        if not token:
+            p.error("BITBUCKET_TOKEN environment variable is not set")
+        if args.all_projects:
+            args.org = f"{urlparse(args.base_url).hostname or 'bitbucket'}-all-projects"
+        else:
+            args.org = args.project
+        collector = get_collector(
+            "bitbucket-dc", base_url=args.base_url, token=token,
+            project=args.project, all_projects=args.all_projects,
+            verify=not args.insecure, concurrency=args.concurrency, loc_mode=args.loc)
+    else:
+        if not args.org:
+            p.error("--org is required for --provider github")
+        collector = get_collector("github")
 
     if args.inspect:
         cmd_inspect(args, collector)

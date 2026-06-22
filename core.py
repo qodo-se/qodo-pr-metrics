@@ -16,11 +16,12 @@ REPORTS_DIR = Path("reports")
 # Stable marker in Qodo Merge's review comment, independent of bot account name.
 QODO_MARKER = re.compile(r"Code Review by Qodo", re.IGNORECASE)
 
-# A numbered suggestion line. Qodo wraps each in <details><summary>...</summary>,
-# but we also match raw "N. ..." lines as a fallback in case the format changes.
-# The captured group is the suggestion title + trailing labels.
+# A numbered suggestion line. GitHub wraps each in <details><summary>...; Bitbucket's
+# limited-markdown summary renders each as an H4 heading ("#### N. Title"), and resolved
+# ones as "#### ~~N. Title~~". Allow an optional heading prefix and leading strikethrough
+# before the number; keep the raw "N. ..." fallback.
 SUGGESTION_LINE = re.compile(
-    r"(?:<summary>|^)\s*\d+\.\s+(.+?)(?:</summary>|$)",
+    r"(?:<summary>|^#{1,6}\s*(?:~~)?|^)\s*\d+\.\s+(.+?)(?:</summary>|$)",
     re.MULTILINE,
 )
 
@@ -45,7 +46,12 @@ _SECTION_ACTION = re.compile(
 )
 _SECTION_REVIEW = re.compile(
     r"^(?:(?:#+\s*|\*{1,2}\s*)(?:review|remediation)\s+recommended"
+    r"|(?:#+\s*|\*{1,2}\s*)other"
     r"|<img\b[^>]*review-recommended\.png)",
+    re.IGNORECASE,
+)
+_SECTION_RESOLVED = re.compile(
+    r"^(?:#+\s*|\*{1,2}\s*)resolved\b",
     re.IGNORECASE,
 )
 
@@ -59,9 +65,9 @@ _CAT_SECURITY    = re.compile(r"\bSecurity\b",    re.IGNORECASE)
 _CAT_CORRECTNESS = re.compile(r"\bCorrectness\b", re.IGNORECASE)
 _HTML_TAG        = re.compile(r"<[^>]+>")
 _STRIKETHROUGH   = re.compile(r"~~(.+?)~~")
-# Trailing Qodo label/badge blocks, e.g. "<code>🐞 Bug</code> <code>≡ Correctness</code>".
-# Used to strip badges for the dedupe key without truncating the core title.
-_TRAILING_BADGES = re.compile(r"(?:\s*<code>[^<]*</code>)+\s*$")
+# Trailing Qodo label/badge blocks. GitHub uses <code>…</code>; Bitbucket uses backtick
+# code-spans (`🐞 Bug`). Match either so the dedupe key isn't polluted by badges.
+_TRAILING_BADGES = re.compile(r"(?:\s*(?:<code>[^<]*</code>|`[^`]*`))+\s*$")
 
 _AI_BODY_PATTERNS = [
     # GitHub Copilot — covers github-copilot[bot], copilot-swe-agent[bot], and plain Copilot
@@ -169,6 +175,9 @@ def parse_qodo_comment(body: str) -> "QodoStats":
         if _SECTION_REVIEW.match(line.strip()):
             section = "review_recommended"
             continue
+        if _SECTION_RESOLVED.match(line.strip()):
+            section = "resolved"
+            continue
 
         # Match all numbered suggestion patterns on this line
         for m in SUGGESTION_LINE.finditer(line):
@@ -263,6 +272,76 @@ def parse_qodo_comment(body: str) -> "QodoStats":
                 "sub_label": sub_label,
             })
 
+    return stats
+
+
+# A Qodo inline finding comment (Bitbucket non-GFM) opens with a severity header
+# ("🔴 **Action Required**" / "ℹ️ **Informational**") or a resolved/dismissed header,
+# and carries an "**Agent Prompt:**" block. Used to detect & classify inline findings
+# when the summary comment is disabled.
+_INLINE_SEVERITY_RE = re.compile(r"^(?:🔴|🟡|ℹ️|✅)\s+\*\*(.+?)\*\*", re.MULTILINE)
+_INLINE_RESOLVED_RE = re.compile(r"^\*\*Resolved\b", re.IGNORECASE)
+_INLINE_DISMISSED_RE = re.compile(r"^\*\*Dismissed\b", re.IGNORECASE)
+# Title line inside an inline comment: "1. Title `badges`" (markdown auto-number escape
+# "1\." is tolerated), optionally wrapped in ~~ when resolved.
+_INLINE_TITLE_RE = re.compile(r"^(?:~~)?\s*\d+\\?\.\s+(.+?)(?:~~)?\s*$", re.MULTILINE)
+
+
+def _is_qodo_inline(body: str) -> bool:
+    """True if a comment body is a Qodo inline finding (vs a human comment)."""
+    if not body:
+        return False
+    return (
+        "**Agent Prompt" in body
+        or _INLINE_RESOLVED_RE.search(body) is not None
+        or _INLINE_DISMISSED_RE.search(body) is not None
+        or _INLINE_SEVERITY_RE.search(body) is not None
+    )
+
+
+def build_stats_from_inline_comments(comments: list) -> "QodoStats":
+    """Aggregate a QodoStats from Qodo inline finding comments.
+
+    Fallback for PRs where the Qodo summary comment is disabled. One suggestion per
+    Qodo inline comment; implemented when the comment is in resolved form.
+    """
+    stats = QodoStats()
+    for c in comments:
+        body = c.get("body", "") or ""
+        if not _is_qodo_inline(body):
+            continue
+        is_dismissed = _INLINE_DISMISSED_RE.search(body) is not None
+        is_implemented = (not is_dismissed) and _INLINE_RESOLVED_RE.search(body) is not None
+        m = _INLINE_TITLE_RE.search(body)
+        title = m.group(1) if m else body
+        cat = _classify_category(title)
+        sub_label = _classify_sublabel(title)
+
+        stats.total_suggestions += 1
+        if is_implemented:
+            stats.total_implemented += 1
+        if is_dismissed:
+            stats.total_dismissed += 1
+        if cat == "bug":
+            stats.bugs_suggested += 1
+            if is_implemented:
+                stats.bugs_implemented += 1
+        elif cat == "rule_violation":
+            stats.rule_violations_suggested += 1
+            if is_implemented:
+                stats.rule_violations_implemented += 1
+        elif cat == "requirement_gap":
+            stats.requirement_gaps_suggested += 1
+            if is_implemented:
+                stats.requirement_gaps_implemented += 1
+        if sub_label == "Security":
+            stats.security_suggested += 1
+            if is_implemented:
+                stats.security_implemented += 1
+        elif sub_label == "Correctness":
+            stats.correctness_suggested += 1
+            if is_implemented:
+                stats.correctness_implemented += 1
     return stats
 
 

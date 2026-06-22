@@ -176,6 +176,72 @@ The Trend, Spotlight (High-impact findings), and Velocity (First feedback) secti
 | `--loc-page-size N` | Starting page size for the org-wide LOC GraphQL query (default: `50`, range: `10`–`100`). Lower it (e.g. `25` or `10`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors on the LOC fetch — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
 | `--pr-batch-size N` | Starting batch size for the per-PR GraphQL data lookup that pulls comments, reviews, commits, and CI status (default: `25`, range: `5`–`50`). Lower it (e.g. `10` or `5`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors during the main PR walk — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
 
+## Bitbucket Data Center
+
+Pass `--provider bitbucket-dc` to run against a Bitbucket Data Center (or Server) instance instead of GitHub. The same output files are produced; the same report sections are rendered.
+
+### Prerequisites
+
+A personal access token with **read** access to the target project(s). Export it before running:
+
+```bash
+export BITBUCKET_TOKEN=<your-token>
+```
+
+No `gh` CLI is required for Bitbucket runs.
+
+### Usage
+
+```bash
+# Scan a single Bitbucket project, default 90-day lookback
+python3 qodo_metrics.py --provider bitbucket-dc \
+    --base-url https://bitbucket.example.com \
+    --project COD
+
+# Custom date window
+python3 qodo_metrics.py --provider bitbucket-dc \
+    --base-url https://bitbucket.example.com \
+    --project COD --since 2025-05-01
+
+# Scan every repo in the instance (requires broad token permissions)
+python3 qodo_metrics.py --provider bitbucket-dc \
+    --base-url https://bitbucket.example.com \
+    --all-projects
+
+# Only count LOC for Qodo-reviewed PRs (skip the whole-population LOC denominator)
+python3 qodo_metrics.py --provider bitbucket-dc \
+    --base-url https://bitbucket.example.com \
+    --project COD --loc qodo-only
+
+# Skip TLS verification for self-signed certificates
+python3 qodo_metrics.py --provider bitbucket-dc \
+    --base-url https://bitbucket.example.com \
+    --project COD --insecure
+```
+
+### Options
+
+| Flag | Description |
+|---|---|
+| `--provider bitbucket-dc` | Select the Bitbucket Data Center collector (default: `github`) |
+| `--base-url URL` | Bitbucket instance base URL, e.g. `https://bitbucket.example.com` (required) |
+| `--project KEY` | Bitbucket project key to scan, e.g. `COD` (mutually exclusive with `--all-projects`) |
+| `--all-projects` | Scan every repository in the instance (mutually exclusive with `--project`) |
+| `--loc {all,qodo-only,off}` | Line-count collection mode (default: `all`). `all` fetches LOC for every merged PR; `qodo-only` skips the whole-population denominator; `off` disables LOC collection entirely |
+| `--concurrency N` | Maximum concurrent per-PR HTTP fetches (default: `8`) |
+| `--insecure` | Disable TLS certificate verification — use this for self-signed or internal CA certificates |
+
+`BITBUCKET_TOKEN` environment variable must be set; the script exits with an error if it is absent.
+
+### Limitations
+
+Bitbucket Data Center differs from GitHub in a few ways that affect what the report can show:
+
+- **No PR labels.** Bitbucket DC does not support PR labels, so the *AI-authored-by-label* and *hotfix-by-label* signals are unavailable. Title, branch name, and PR body signals still work.
+- **Coarser Time-to-First-Qodo-Comment.** Bitbucket's activity feed records when a comment was created but not its edit history, so this metric reflects the original post time rather than the time of any subsequent edits to the review body.
+- **Per-section implemented breakdown unavailable.** Bitbucket's PR comment model does not expose the strikethrough edit history that signals an implemented finding. Implemented findings are moved to a "Resolved" section in the comment, but the action-level breakdown (which specific suggestion was resolved) is not recoverable — the resolved count is available, but the per-suggestion trail is not.
+- **LOC requires Bitbucket DC 9.1+ for diff-stats.** On older instances the collector falls back to computing LOC from the raw diff endpoint, which is slower and counts changed lines rather than added lines for binary-patched files.
+
 ## Engineering Audit (pre-install diagnostic)
 
 `engineering_audit.py` is a separate, **pre-install** report. Where the main report measures Qodo's impact *after* it's installed, the Engineering Audit establishes a **baseline before Qodo is in the picture** — it reads only the GitHub GraphQL API via the `gh` CLI and **does not touch any Qodo product data**. Run it before install to surface the pain a team should be solving, then re-run after install to quantify what changed.

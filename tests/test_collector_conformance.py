@@ -3,6 +3,7 @@ import pytest
 
 from collectors.base import Collector, get_collector
 from collectors.github import GitHubCollector
+from collectors.bitbucket import BitbucketCollector
 
 
 def _bare_signature(fn):
@@ -43,6 +44,28 @@ def test_get_collector_returns_github():
     assert isinstance(get_collector("github"), GitHubCollector)
 
 
+def test_bitbucket_collector_satisfies_protocol():
+    bb = BitbucketCollector("https://bb", "tok", project="COD")
+    assert isinstance(bb, Collector)
+
+
+def test_bitbucket_collector_has_every_protocol_method():
+    protocol_methods = (
+        Collector.__protocol_attrs__
+        if hasattr(Collector, "__protocol_attrs__")
+        else {n for n in vars(Collector) if not n.startswith("_") and callable(getattr(Collector, n, None))}
+    )
+    for name in protocol_methods:
+        proto_sig = _bare_signature(getattr(Collector, name))
+        impl_sig = _bare_signature(getattr(BitbucketCollector, name))
+        assert impl_sig == proto_sig, f"signature mismatch for {name}"
+
+
+def test_get_collector_returns_bitbucket():
+    c = get_collector("bitbucket-dc", base_url="https://bb", token="tok", project="COD")
+    assert isinstance(c, BitbucketCollector)
+
+
 def test_get_collector_unknown_provider_raises():
     with pytest.raises(ValueError):
-        get_collector("bitbucket")
+        get_collector("gitlab")

@@ -1,6 +1,6 @@
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
-from core import parse_qodo_comment
+from core import parse_qodo_comment, build_stats_from_inline_comments
 
 SAMPLE_WITH_SECTIONS = """
 ## Code Review by Qodo
@@ -346,3 +346,79 @@ def test_unicode_titles_do_not_collapse():
     stats = parse_qodo_comment(body)
     assert stats.total_suggestions == 2          # two distinct titles, not collapsed to 1
     assert stats.bugs_suggested == 2
+
+
+SAMPLE_BITBUCKET = """\
+### Code Review by Qodo
+
+`🐞 Bugs (2)`  `📘 Rule violations (0)`  `📎 Requirement gaps (0)`
+
+---
+
+### Action Required
+
+#### 1. Wrong word counting `🐞 Bug` `✓ Correctness`
+
+### Review Recommended
+
+#### 2. pad_left can crash `🐞 Bug` `⛯ Reliability`
+
+### Resolved
+
+#### ~~3. Misleading truncate comment~~ `🐞 Bug` `✧ Quality`
+
+*Reviewed by* **[Qodo](https://www.qodo.ai)**
+"""
+
+def test_bitbucket_summary_totals():
+    stats = parse_qodo_comment(SAMPLE_BITBUCKET)
+    assert stats.total_suggestions == 3
+    assert stats.total_implemented == 1   # the one under ### Resolved (~~struck~~)
+
+def test_bitbucket_summary_sections():
+    stats = parse_qodo_comment(SAMPLE_BITBUCKET)
+    assert stats.action_required_total == 1
+    assert stats.review_recommended_total == 1
+
+def test_bitbucket_summary_categories():
+    stats = parse_qodo_comment(SAMPLE_BITBUCKET)
+    assert stats.bugs_suggested == 3
+    assert stats.bugs_implemented == 1
+
+
+# ---------------------------------------------------------------------------
+# Inline comments fallback (summary-disabled Qodo)
+# ---------------------------------------------------------------------------
+
+INLINE_OPEN = """🔴 **Action Required**
+
+1\\. Pad_left can crash `🐞 Bug` `⛯ Reliability`
+
+pad_left() forwards an arbitrary-length string ...
+
+**Agent Prompt:**
+
+```
+fix it
+```
+"""
+
+INLINE_RESOLVED = """**Resolved ✓** 🔴 **Action Required**
+
+~~1\\. Wrong word counting~~ `🐞 Bug` `✓ Correctness`
+
+~~count_words() uses text.split(" ") ...~~
+"""
+
+INLINE_NON_QODO = "count_words should use split() without arguments."
+
+def test_inline_fallback_counts_and_implemented():
+    stats = build_stats_from_inline_comments([
+        {"body": INLINE_OPEN},
+        {"body": INLINE_RESOLVED},
+        {"body": INLINE_NON_QODO},   # human comment — ignored
+    ])
+    assert stats.total_suggestions == 2
+    assert stats.total_implemented == 1
+    assert stats.bugs_suggested == 2
+    assert stats.bugs_implemented == 1
