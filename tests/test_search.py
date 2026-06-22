@@ -6,6 +6,11 @@ from core import _qodo_counts_by_week
 from collectors.github import GitHubCollector
 from datetime import date
 
+# Fixed "today" shared by every test that patches collectors.github.date.
+# Keep all freezes pointed at this single value so the test window can be
+# changed in one place.
+FROZEN_TODAY = date(2026, 5, 21)
+
 
 @pytest.fixture
 def frozen_today(monkeypatch):
@@ -21,7 +26,7 @@ def frozen_today(monkeypatch):
     class _FrozenDate(date):
         @classmethod
         def today(cls):
-            return date(2026, 5, 21)
+            return cls(FROZEN_TODAY.year, FROZEN_TODAY.month, FROZEN_TODAY.day)
 
     monkeypatch.setattr("collectors.github.date", _FrozenDate)
 
@@ -137,9 +142,12 @@ def test_get_all_pr_loc_sums_additions(monkeypatch, frozen_today):
     assert result == 350
 
 
-def test_get_all_pr_loc_sums_across_chunks(monkeypatch):
+def test_get_all_pr_loc_sums_across_chunks(monkeypatch, frozen_today):
     # chunk_days=1 with a 2-day window forces two separate API calls (chunks),
     # verifying the outer date loop accumulates correctly across both.
+    # The frozen_today fixture pins "today" to FROZEN_TODAY so the chunk count is
+    # deterministic regardless of when the test runs — otherwise the window grows
+    # with wall-clock time and the chunk count (and call count) drifts.
     calls = []
 
     def mock_gh(_args, **kw):
@@ -148,15 +156,6 @@ def test_get_all_pr_loc_sums_across_chunks(monkeypatch):
 
     monkeypatch.setattr("collectors.github.run_gh",mock_gh)
 
-    # Freeze "today" so the chunk count is deterministic regardless of when the
-    # test runs — otherwise the window grows with wall-clock time and the chunk
-    # count (and call count) drifts.
-    class _FrozenDate(date):
-        @classmethod
-        def today(cls):
-            return date(2026, 5, 21)
-
-    monkeypatch.setattr("collectors.github.date", _FrozenDate)
     # 2026-05-19 to frozen today 2026-05-21 = 2 days → 2 chunks with chunk_days=1
     result = GitHubCollector().get_all_pr_loc("acme", date(2026, 5, 19), repos=["frontend"], chunk_days=1)
     assert result == 300   # 150 per chunk × 2 chunks
