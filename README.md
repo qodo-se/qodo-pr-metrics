@@ -16,12 +16,14 @@ It produces an org-wide HTML report, a per-developer impact report, and a raw CS
 
 ## How it works
 
-- Authenticates through the `gh` CLI — no token management required
-- Searches merged PRs in date-chunked windows (30-day chunks) to stay under GitHub's 1000-result search cap
 - Identifies Qodo comments by the stable "Code Review by Qodo" string, which is bot-account-name-independent
 - Detects implemented suggestions by looking for strikethrough markers (`~~text~~`, `<s>`, `<del>`, `<strike>`, or the ☑ emoji) on suggestion titles
 
-## Prerequisites
+## Providers
+
+### GitHub
+
+#### Prerequisites
 
 - Python 3.7+
 - [`gh` CLI](https://cli.github.com/) installed and authenticated with access to the target org
@@ -30,7 +32,8 @@ It produces an org-wide HTML report, a per-developer impact report, and a raw CS
 gh auth status   # should show you logged in
 ```
 
-### GitHub token permissions
+- Authenticates through the `gh` CLI — no token management required
+- Searches merged PRs in date-chunked windows (30-day chunks) to stay under GitHub's 1000-result search cap
 
 The script uses the GitHub Search API and GraphQL API. The `gh` CLI handles authentication — no manual token management is required, but your token must have the right scopes:
 
@@ -53,12 +56,7 @@ gh auth refresh -s repo
 
 > **Note:** Results are always scoped to repos the authenticated token can access. If you suspect missing repos, compare the "Repos in results" list printed at the end of a run against your expected scope, or use `--repos` to declare the repos explicitly.
 
-After a run completes, the script prints a terminal summary that includes:
-
-- **Total LOC added (all PRs):** sum of lines added across every merged PR in the window
-- **Qodo-reviewed LOC:** lines added in Qodo-reviewed PRs, with its share of the total
-
-## Usage
+#### Usage
 
 **Mac/Linux:**
 
@@ -89,6 +87,94 @@ python3 qodo_metrics.py --org acme-corp --anonymize repos
 python qodo_metrics.py --org acme-corp
 ```
 
+#### Options
+
+| Flag | Description |
+|---|---|
+| `--org` | GitHub org login (required, e.g. `acme-corp`) |
+| `--since` | Start date in `YYYY-MM-DD` format |
+| `--days` | Lookback window in days (default: `90`; mutually exclusive with `--since`) |
+| `--inspect` | Print the raw body of the first Qodo comment found and exit |
+| `--verbose` | Print per-PR suggestion counts instead of just the final summary |
+| `--resume` | Resume from a previous checkpoint (`reports/ORG-checkpoint.json`) |
+| `--repos` | Space-delimited list of repo names to scope the run (e.g. `--repos frontend-app backend-api`); omit to scan the full org |
+| `--anonymize [SCOPE]` | Replace identifying data with stable pseudonyms in all output files; output filenames get an `_anon` suffix. `SCOPE`: `users` (PR Creator / Final Approver only), `repos` (Repo Name / PR URL only), or omit `SCOPE` to anonymize both |
+| `--loc-page-size N` | Starting page size for the org-wide LOC GraphQL query (default: `50`, range: `10`–`100`). Lower it (e.g. `25` or `10`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors on the LOC fetch — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
+| `--pr-batch-size N` | Starting batch size for the per-PR GraphQL data lookup that pulls comments, reviews, commits, and CI status (default: `25`, range: `5`–`50`). Lower it (e.g. `10` or `5`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors during the main PR walk — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
+
+### Bitbucket Data Center
+
+Pass `--provider bitbucket-dc` to run against a Bitbucket Data Center (or Server) instance instead of GitHub. The same output files are produced; the same report sections are rendered.
+
+#### Prerequisites
+
+A personal access token with **read** access to the target project(s). Export it before running:
+
+```bash
+export BITBUCKET_TOKEN=<your-token>
+```
+
+No `gh` CLI is required for Bitbucket runs.
+
+#### Usage
+
+```bash
+# Scan a single Bitbucket project, default 90-day lookback
+python3 qodo_metrics.py --provider bitbucket-dc \
+    --base-url https://bitbucket.example.com \
+    --project COD
+
+# Custom date window
+python3 qodo_metrics.py --provider bitbucket-dc \
+    --base-url https://bitbucket.example.com \
+    --project COD --since 2025-05-01
+
+# Scan every repo in the instance (requires broad token permissions)
+python3 qodo_metrics.py --provider bitbucket-dc \
+    --base-url https://bitbucket.example.com \
+    --all-projects
+
+# Only count LOC for Qodo-reviewed PRs (skip the whole-population LOC denominator)
+python3 qodo_metrics.py --provider bitbucket-dc \
+    --base-url https://bitbucket.example.com \
+    --project COD --loc qodo-only
+
+# Skip TLS verification for self-signed certificates
+python3 qodo_metrics.py --provider bitbucket-dc \
+    --base-url https://bitbucket.example.com \
+    --project COD --insecure
+```
+
+#### Options
+
+| Flag | Description |
+|---|---|
+| `--provider bitbucket-dc` | Select the Bitbucket Data Center collector (default: `github`) |
+| `--base-url URL` | Bitbucket instance base URL, e.g. `https://bitbucket.example.com` (required) |
+| `--project KEY` | Bitbucket project key to scan, e.g. `COD` (mutually exclusive with `--all-projects`) |
+| `--all-projects` | Scan every repository in the instance (mutually exclusive with `--project`) |
+| `--loc {all,qodo-only,off}` | Line-count collection mode (default: `all`). `all` fetches LOC for every merged PR; `qodo-only` skips the whole-population denominator; `off` disables LOC collection entirely |
+| `--concurrency N` | Maximum concurrent per-PR HTTP fetches (default: `8`) |
+| `--insecure` | Disable TLS certificate verification — use this for self-signed or internal CA certificates |
+
+`BITBUCKET_TOKEN` environment variable must be set; the script exits with an error if it is absent.
+
+#### Limitations
+
+Bitbucket Data Center differs from GitHub in a few ways that affect what the report can show:
+
+- **No PR labels.** Bitbucket DC does not support PR labels, so the *AI-authored-by-label* and *hotfix-by-label* signals are unavailable. Title, branch name, and PR body signals still work.
+- **Coarser Time-to-First-Qodo-Comment.** Bitbucket's activity feed records when a comment was created but not its edit history, so this metric reflects the original post time rather than the time of any subsequent edits to the review body.
+- **Per-section implemented breakdown unavailable.** Bitbucket's PR comment model does not expose the strikethrough edit history that signals an implemented finding. Implemented findings are moved to a "Resolved" section in the comment, but the action-level breakdown (which specific suggestion was resolved) is not recoverable — the resolved count is available, but the per-suggestion trail is not.
+- **LOC requires Bitbucket DC 9.1+ for diff-stats.** On older instances the collector falls back to computing LOC from the raw diff endpoint, which is slower and counts changed lines rather than added lines for binary-patched files.
+
+## Output
+
+After a run completes, the script prints a terminal summary that includes:
+
+- **Total LOC added (all PRs):** sum of lines added across every merged PR in the window
+- **Qodo-reviewed LOC:** lines added in Qodo-reviewed PRs, with its share of the total
+
 ### Output files
 
 The script generates three output files, all written into the `reports/` directory (created automatically and gitignored):
@@ -100,6 +186,8 @@ The script generates three output files, all written into the `reports/` directo
 For example, running `python3 qodo_metrics.py --org acme-corp` creates `reports/acme-corp_2025-05-12_2026-05-12.csv`, `reports/acme-corp_2025-05-12_2026-05-12.html`, and `reports/acme-corp_2025-05-12_2026-05-12_user.html`.
 
 > **Scope note:** In the per-developer report, "Total PRs" currently equals "Qodo-reviewed PRs" — the pipeline's search only returns PRs that carry a Qodo review comment. Reporting true totals (Qodo or not) requires the row producer to also fetch unreviewed PRs and mark them `Has Qodo Review: False`; the report already reads that field correctly. The per-developer report buckets PRs by **creation date** within the window, so a PR merged just inside the window but created before `since` is excluded from the per-developer view.
+
+### CSV columns
 
 Each row in the CSV contains 37 columns with per-PR data:
 
@@ -160,87 +248,6 @@ The HTML report is organized into the following sections:
 | Hours Saved | Estimated senior-engineer review hours offloaded, based on lines of code reviewed |
 
 The Trend, Spotlight (High-impact findings), and Velocity (First feedback) sections are omitted from the report if no relevant data is present.
-
-### Options
-
-| Flag | Description |
-|---|---|
-| `--org` | GitHub org login (required, e.g. `acme-corp`) |
-| `--since` | Start date in `YYYY-MM-DD` format |
-| `--days` | Lookback window in days (default: `90`; mutually exclusive with `--since`) |
-| `--inspect` | Print the raw body of the first Qodo comment found and exit |
-| `--verbose` | Print per-PR suggestion counts instead of just the final summary |
-| `--resume` | Resume from a previous checkpoint (`reports/ORG-checkpoint.json`) |
-| `--repos` | Space-delimited list of repo names to scope the run (e.g. `--repos frontend-app backend-api`); omit to scan the full org |
-| `--anonymize [SCOPE]` | Replace identifying data with stable pseudonyms in all output files; output filenames get an `_anon` suffix. `SCOPE`: `users` (PR Creator / Final Approver only), `repos` (Repo Name / PR URL only), or omit `SCOPE` to anonymize both |
-| `--loc-page-size N` | Starting page size for the org-wide LOC GraphQL query (default: `50`, range: `10`–`100`). Lower it (e.g. `25` or `10`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors on the LOC fetch — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
-| `--pr-batch-size N` | Starting batch size for the per-PR GraphQL data lookup that pulls comments, reviews, commits, and CI status (default: `25`, range: `5`–`50`). Lower it (e.g. `10` or `5`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors during the main PR walk — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
-
-## Bitbucket Data Center
-
-Pass `--provider bitbucket-dc` to run against a Bitbucket Data Center (or Server) instance instead of GitHub. The same output files are produced; the same report sections are rendered.
-
-### Prerequisites
-
-A personal access token with **read** access to the target project(s). Export it before running:
-
-```bash
-export BITBUCKET_TOKEN=<your-token>
-```
-
-No `gh` CLI is required for Bitbucket runs.
-
-### Usage
-
-```bash
-# Scan a single Bitbucket project, default 90-day lookback
-python3 qodo_metrics.py --provider bitbucket-dc \
-    --base-url https://bitbucket.example.com \
-    --project COD
-
-# Custom date window
-python3 qodo_metrics.py --provider bitbucket-dc \
-    --base-url https://bitbucket.example.com \
-    --project COD --since 2025-05-01
-
-# Scan every repo in the instance (requires broad token permissions)
-python3 qodo_metrics.py --provider bitbucket-dc \
-    --base-url https://bitbucket.example.com \
-    --all-projects
-
-# Only count LOC for Qodo-reviewed PRs (skip the whole-population LOC denominator)
-python3 qodo_metrics.py --provider bitbucket-dc \
-    --base-url https://bitbucket.example.com \
-    --project COD --loc qodo-only
-
-# Skip TLS verification for self-signed certificates
-python3 qodo_metrics.py --provider bitbucket-dc \
-    --base-url https://bitbucket.example.com \
-    --project COD --insecure
-```
-
-### Options
-
-| Flag | Description |
-|---|---|
-| `--provider bitbucket-dc` | Select the Bitbucket Data Center collector (default: `github`) |
-| `--base-url URL` | Bitbucket instance base URL, e.g. `https://bitbucket.example.com` (required) |
-| `--project KEY` | Bitbucket project key to scan, e.g. `COD` (mutually exclusive with `--all-projects`) |
-| `--all-projects` | Scan every repository in the instance (mutually exclusive with `--project`) |
-| `--loc {all,qodo-only,off}` | Line-count collection mode (default: `all`). `all` fetches LOC for every merged PR; `qodo-only` skips the whole-population denominator; `off` disables LOC collection entirely |
-| `--concurrency N` | Maximum concurrent per-PR HTTP fetches (default: `8`) |
-| `--insecure` | Disable TLS certificate verification — use this for self-signed or internal CA certificates |
-
-`BITBUCKET_TOKEN` environment variable must be set; the script exits with an error if it is absent.
-
-### Limitations
-
-Bitbucket Data Center differs from GitHub in a few ways that affect what the report can show:
-
-- **No PR labels.** Bitbucket DC does not support PR labels, so the *AI-authored-by-label* and *hotfix-by-label* signals are unavailable. Title, branch name, and PR body signals still work.
-- **Coarser Time-to-First-Qodo-Comment.** Bitbucket's activity feed records when a comment was created but not its edit history, so this metric reflects the original post time rather than the time of any subsequent edits to the review body.
-- **Per-section implemented breakdown unavailable.** Bitbucket's PR comment model does not expose the strikethrough edit history that signals an implemented finding. Implemented findings are moved to a "Resolved" section in the comment, but the action-level breakdown (which specific suggestion was resolved) is not recoverable — the resolved count is available, but the per-suggestion trail is not.
-- **LOC requires Bitbucket DC 9.1+ for diff-stats.** On older instances the collector falls back to computing LOC from the raw diff endpoint, which is slower and counts changed lines rather than added lines for binary-patched files.
 
 ## Engineering Audit (pre-install diagnostic)
 
