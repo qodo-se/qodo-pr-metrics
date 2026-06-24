@@ -12,7 +12,7 @@ Generates an HTML report measuring Qodo code-review impact across merged PRs in 
   - [GitHub](#github)
   - [Bitbucket Data Center](#bitbucket-data-center)
 - [Output](#output)
-- [Engineering Audit](#engineering-audit)
+- [Engineering Audit](#engineering-audit-pre-install-diagnostic)
 
 ## What it does
 
