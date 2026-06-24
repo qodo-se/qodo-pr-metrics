@@ -4,6 +4,16 @@ Generates an HTML report measuring Qodo code-review impact across merged PRs in 
 
 [View sample report](https://qodo-se.github.io/qodo-pr-metrics/examples/sample_report.html) · [View sample per-user report](https://qodo-se.github.io/qodo-pr-metrics/examples/sample_user_report.html)
 
+## Contents
+
+- [What it does](#what-it-does)
+- [How it works](#how-it-works)
+- [Providers](#providers)
+  - [GitHub](#github)
+  - [Bitbucket Data Center](#bitbucket-data-center)
+- [Output](#output)
+- [Engineering Audit](#engineering-audit)
+
 ## What it does
 
 For each merged PR in a configurable lookback window, the script:
