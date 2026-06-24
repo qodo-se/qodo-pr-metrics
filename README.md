@@ -205,11 +205,11 @@ Each row in the CSV contains 37 columns with per-PR data:
 |---|---|
 | Repo Name | Repository name within the org |
 | PR # | Pull request number |
-| PR URL | Link to the PR on GitHub |
+| PR URL | Link to the PR (GitHub PR URL, or Bitbucket PR self link) |
 | PR Creation Date | ISO-8601 timestamp when the PR was opened |
 | PR Merge Date | ISO-8601 timestamp when the PR was merged |
 | Hours to Merge | Whole hours from creation to merge |
-| PR Creator | GitHub login of the PR author |
+| PR Creator | Username of the PR author (GitHub login, or Bitbucket username) |
 | Lines Added | Total lines added |
 | Action Required Suggestions | Count of "Action Required" suggestions |
 | Action Required Implemented | Count of implemented "Action Required" suggestions |
@@ -236,7 +236,7 @@ Each row in the CSV contains 37 columns with per-PR data:
 | AI Author Type | Which AI tool: `copilot`, `cursor`, `claude`, `ai`, or blank if not detected |
 | Reviewer Count | Number of distinct reviewers who submitted a review |
 | Had Request Changes | `True` if any reviewer submitted a "Request Changes" review |
-| Final Approver | GitHub login of the last reviewer to approve; blank if none |
+| Final Approver | Username of the last reviewer to approve (GitHub login, or Bitbucket username); blank if none |
 | CI Status | Status check rollup state at the last commit: `SUCCESS`, `FAILURE`, `PENDING`, or blank if unavailable |
 | Commits After Qodo | Number of commits pushed after Qodo posted its first review |
 | Speed to First Fix (min) | Minutes between Qodo's first review and the first commit that followed it; blank if no post-review commit |
