@@ -4,6 +4,16 @@ Generates an HTML report measuring Qodo code-review impact across merged PRs in 
 
 [View sample report](https://qodo-se.github.io/qodo-pr-metrics/examples/sample_report.html) · [View sample per-user report](https://qodo-se.github.io/qodo-pr-metrics/examples/sample_user_report.html)
 
+## Contents
+
+- [What it does](#what-it-does)
+- [How it works](#how-it-works)
+- [Providers](#providers)
+  - [GitHub](#github)
+  - [Bitbucket Data Center](#bitbucket-data-center)
+- [Output](#output)
+- [Engineering Audit](#engineering-audit-pre-install-diagnostic)
+
 ## What it does
 
 For each merged PR in a configurable lookback window, the script:
@@ -16,12 +26,14 @@ It produces an org-wide HTML report, a per-developer impact report, and a raw CS
 
 ## How it works
 
-- Authenticates through the `gh` CLI — no token management required
-- Searches merged PRs in date-chunked windows (30-day chunks) to stay under GitHub's 1000-result search cap
 - Identifies Qodo comments by the stable "Code Review by Qodo" string, which is bot-account-name-independent
 - Detects implemented suggestions by looking for strikethrough markers (`~~text~~`, `<s>`, `<del>`, `<strike>`, or the ☑ emoji) on suggestion titles
 
-## Prerequisites
+## Providers
+
+### GitHub
+
+#### Prerequisites
 
 - Python 3.7+
 - [`gh` CLI](https://cli.github.com/) installed and authenticated with access to the target org
@@ -30,7 +42,8 @@ It produces an org-wide HTML report, a per-developer impact report, and a raw CS
 gh auth status   # should show you logged in
 ```
 
-### GitHub token permissions
+- Authenticates through the `gh` CLI — no token management required
+- Searches merged PRs in date-chunked windows (30-day chunks) to stay under GitHub's 1000-result search cap
 
 The script uses the GitHub Search API and GraphQL API. The `gh` CLI handles authentication — no manual token management is required, but your token must have the right scopes:
 
@@ -53,12 +66,7 @@ gh auth refresh -s repo
 
 > **Note:** Results are always scoped to repos the authenticated token can access. If you suspect missing repos, compare the "Repos in results" list printed at the end of a run against your expected scope, or use `--repos` to declare the repos explicitly.
 
-After a run completes, the script prints a terminal summary that includes:
-
-- **Total LOC added (all PRs):** sum of lines added across every merged PR in the window
-- **Qodo-reviewed LOC:** lines added in Qodo-reviewed PRs, with its share of the total
-
-## Usage
+#### Usage
 
 **Mac/Linux:**
 
@@ -89,79 +97,7 @@ python3 qodo_metrics.py --org acme-corp --anonymize repos
 python qodo_metrics.py --org acme-corp
 ```
 
-### Output files
-
-The script generates three output files, all written into the `reports/` directory (created automatically and gitignored):
-
-- `reports/{org}_{since_date}_{until_date}.csv` — raw per-PR data
-- `reports/{org}_{since_date}_{until_date}.html` — org-wide visual summary report
-- `reports/{org}_{since_date}_{until_date}_user.html` — per-developer impact report with an interactive date-range slider that recomputes the headline, at-a-glance panel, and per-developer table client-side
-
-For example, running `python3 qodo_metrics.py --org acme-corp` creates `reports/acme-corp_2025-05-12_2026-05-12.csv`, `reports/acme-corp_2025-05-12_2026-05-12.html`, and `reports/acme-corp_2025-05-12_2026-05-12_user.html`.
-
-> **Scope note:** In the per-developer report, "Total PRs" currently equals "Qodo-reviewed PRs" — the pipeline's search only returns PRs that carry a Qodo review comment. Reporting true totals (Qodo or not) requires the row producer to also fetch unreviewed PRs and mark them `Has Qodo Review: False`; the report already reads that field correctly. The per-developer report buckets PRs by **creation date** within the window, so a PR merged just inside the window but created before `since` is excluded from the per-developer view.
-
-Each row in the CSV contains 37 columns with per-PR data:
-
-| Column | Description |
-|---|---|
-| Repo Name | Repository name within the org |
-| PR # | Pull request number |
-| PR URL | Link to the PR on GitHub |
-| PR Creation Date | ISO-8601 timestamp when the PR was opened |
-| PR Merge Date | ISO-8601 timestamp when the PR was merged |
-| Hours to Merge | Whole hours from creation to merge |
-| PR Creator | GitHub login of the PR author |
-| Lines Added | Total lines added |
-| Action Required Suggestions | Count of "Action Required" suggestions |
-| Action Required Implemented | Count of implemented "Action Required" suggestions |
-| Action Required Dismissed | Count of "Action Required" suggestions the developer explicitly dismissed (strikethrough + ✗ Dismissed badge). These are NOT included in `Action Required Implemented`. |
-| Review Recommended Suggestions | Count of "Review Recommended" suggestions |
-| Review Recommended Implemented | Count of implemented "Review Recommended" suggestions |
-| Review Recommended Dismissed | Count of "Review Recommended" suggestions explicitly dismissed. |
-| Bugs Suggested | Count of bug suggestions |
-| Bugs Implemented | Count of implemented bug suggestions |
-| Rule Violations Suggested | Count of rule-violation suggestions |
-| Rule Violations Implemented | Count of implemented rule-violation suggestions |
-| Requirement Gaps Suggested | Count of requirement-gap suggestions |
-| Requirement Gaps Implemented | Count of implemented requirement-gap suggestions |
-| Total Suggestions | Sum of all suggestion categories |
-| Total Implemented | Sum of all implemented categories |
-| Total Dismissed | Total suggestions dismissed across all sections. `Implementation Rate (%)` reflects only suggestions that were actually fixed, not dismissed ones. |
-| Implementation Rate (%) | `Total Implemented / Total Suggestions × 100`, blank when 0 suggestions |
-| Suggestions per 100 Lines | `Total Suggestions / Lines Added × 100`, blank when lines = 0 or suggestions = 0 |
-| Time to First Qodo Comment (min) | Minutes from PR creation to Qodo's first comment; blank if no Qodo comment |
-| Time to First Human Comment (min) | Minutes from PR creation to the first non-Qodo comment; blank if none |
-| Has Human Comment | `True` if any non-Qodo comment exists on the PR |
-| Spotlight Issues | JSON array of high-impact Action Required issues (Security or Correctness sub-label) that were implemented |
-| Is AI Authored | `True` if the PR was detected as AI-assisted (by body patterns or labels) |
-| AI Author Type | Which AI tool: `copilot`, `cursor`, `claude`, `ai`, or blank if not detected |
-| Reviewer Count | Number of distinct reviewers who submitted a review |
-| Had Request Changes | `True` if any reviewer submitted a "Request Changes" review |
-| Final Approver | GitHub login of the last reviewer to approve; blank if none |
-| CI Status | Status check rollup state at the last commit: `SUCCESS`, `FAILURE`, `PENDING`, or blank if unavailable |
-| Commits After Qodo | Number of commits pushed after Qodo posted its first review |
-| Speed to First Fix (min) | Minutes between Qodo's first review and the first commit that followed it; blank if no post-review commit |
-
-### HTML report sections
-
-The HTML report is organized into the following sections:
-
-| Section | What it shows |
-|---|---|
-| Hero | Narrative headline summarizing Qodo's impact for the org and period |
-| Executive Summary | At-a-glance stat cards: PRs reviewed by Qodo, total issues caught, issues resolved, overall implementation rate |
-| Trend | Findings caught & fixed, week over week; shown when weekly coverage data is available |
-| From merged PR to high-impact fix | Conversion funnel: the share of PRs surviving each step, down to PRs where Qodo measurably prevented something from reaching production |
-| High-impact findings caught & fixed | Cards for Action Required findings flagged as Security or Correctness — the issues most likely to have caused an incident in production |
-| What Qodo flagged & how it landed | Counts and implementation rates by severity (Action Required vs Review Recommended) and by category (Bugs, Rule Violations, Requirement Gaps) |
-| First feedback on a PR | Density plot of time to first feedback, comparing Qodo's median vs the first human reviewer's |
-| Developer adoption matrix | Every author plotted by action-required findings (log scale) vs implementation rate, split into four quadrants |
-| Hours Saved | Estimated senior-engineer review hours offloaded, based on lines of code reviewed |
-
-The Trend, Spotlight (High-impact findings), and Velocity (First feedback) sections are omitted from the report if no relevant data is present.
-
-### Options
+#### Options
 
 | Flag | Description |
 |---|---|
@@ -176,11 +112,11 @@ The Trend, Spotlight (High-impact findings), and Velocity (First feedback) secti
 | `--loc-page-size N` | Starting page size for the org-wide LOC GraphQL query (default: `50`, range: `10`–`100`). Lower it (e.g. `25` or `10`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors on the LOC fetch — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
 | `--pr-batch-size N` | Starting batch size for the per-PR GraphQL data lookup that pulls comments, reviews, commits, and CI status (default: `25`, range: `5`–`50`). Lower it (e.g. `10` or `5`) for very large orgs where GitHub returns persistent 5xx or stream-cancel errors during the main PR walk — the script already shrinks adaptively on those errors, but starting smaller avoids the wasted retries. |
 
-## Bitbucket Data Center
+### Bitbucket Data Center
 
 Pass `--provider bitbucket-dc` to run against a Bitbucket Data Center (or Server) instance instead of GitHub. The same output files are produced; the same report sections are rendered.
 
-### Prerequisites
+#### Prerequisites
 
 A personal access token with **read** access to the target project(s). Export it before running:
 
@@ -190,7 +126,7 @@ export BITBUCKET_TOKEN=<your-token>
 
 No `gh` CLI is required for Bitbucket runs.
 
-### Usage
+#### Usage
 
 ```bash
 # Scan a single Bitbucket project, default 90-day lookback
@@ -219,7 +155,7 @@ python3 qodo_metrics.py --provider bitbucket-dc \
     --project COD --insecure
 ```
 
-### Options
+#### Options
 
 | Flag | Description |
 |---|---|
@@ -233,7 +169,7 @@ python3 qodo_metrics.py --provider bitbucket-dc \
 
 `BITBUCKET_TOKEN` environment variable must be set; the script exits with an error if it is absent.
 
-### Limitations
+#### Limitations
 
 Bitbucket Data Center differs from GitHub in a few ways that affect what the report can show:
 
@@ -241,6 +177,87 @@ Bitbucket Data Center differs from GitHub in a few ways that affect what the rep
 - **Coarser Time-to-First-Qodo-Comment.** Bitbucket's activity feed records when a comment was created but not its edit history, so this metric reflects the original post time rather than the time of any subsequent edits to the review body.
 - **Per-section implemented breakdown unavailable.** Bitbucket's PR comment model does not expose the strikethrough edit history that signals an implemented finding. Implemented findings are moved to a "Resolved" section in the comment, but the action-level breakdown (which specific suggestion was resolved) is not recoverable — the resolved count is available, but the per-suggestion trail is not.
 - **LOC requires Bitbucket DC 9.1+ for diff-stats.** On older instances the collector falls back to computing LOC from the raw diff endpoint, which is slower and counts changed lines rather than added lines for binary-patched files.
+
+## Output
+
+After a run completes, the script prints a terminal summary that includes:
+
+- **Total LOC added (all PRs):** sum of lines added across every merged PR in the window
+- **Qodo-reviewed LOC:** lines added in Qodo-reviewed PRs, with its share of the total
+
+### Output files
+
+The script generates three output files, all written into the `reports/` directory (created automatically and gitignored):
+
+- `reports/{org}_{since_date}_{until_date}.csv` — raw per-PR data
+- `reports/{org}_{since_date}_{until_date}.html` — org-wide visual summary report
+- `reports/{org}_{since_date}_{until_date}_user.html` — per-developer impact report with an interactive date-range slider that recomputes the headline, at-a-glance panel, and per-developer table client-side
+
+For example, running `python3 qodo_metrics.py --org acme-corp` creates `reports/acme-corp_2025-05-12_2026-05-12.csv`, `reports/acme-corp_2025-05-12_2026-05-12.html`, and `reports/acme-corp_2025-05-12_2026-05-12_user.html`.
+
+> **Scope note:** In the per-developer report, "Total PRs" currently equals "Qodo-reviewed PRs" — the pipeline's search only returns PRs that carry a Qodo review comment. Reporting true totals (Qodo or not) requires the row producer to also fetch unreviewed PRs and mark them `Has Qodo Review: False`; the report already reads that field correctly. The per-developer report buckets PRs by **creation date** within the window, so a PR merged just inside the window but created before `since` is excluded from the per-developer view.
+
+### CSV columns
+
+Each row in the CSV contains 37 columns with per-PR data:
+
+| Column | Description |
+|---|---|
+| Repo Name | Repository name within the org |
+| PR # | Pull request number |
+| PR URL | Link to the PR (GitHub PR URL, or Bitbucket PR self link) |
+| PR Creation Date | ISO-8601 timestamp when the PR was opened |
+| PR Merge Date | ISO-8601 timestamp when the PR was merged |
+| Hours to Merge | Whole hours from creation to merge |
+| PR Creator | Username of the PR author (GitHub login, or Bitbucket username) |
+| Lines Added | Total lines added |
+| Action Required Suggestions | Count of "Action Required" suggestions |
+| Action Required Implemented | Count of implemented "Action Required" suggestions |
+| Action Required Dismissed | Count of "Action Required" suggestions the developer explicitly dismissed (strikethrough + ✗ Dismissed badge). These are NOT included in `Action Required Implemented`. |
+| Review Recommended Suggestions | Count of "Review Recommended" suggestions |
+| Review Recommended Implemented | Count of implemented "Review Recommended" suggestions |
+| Review Recommended Dismissed | Count of "Review Recommended" suggestions explicitly dismissed. |
+| Bugs Suggested | Count of bug suggestions |
+| Bugs Implemented | Count of implemented bug suggestions |
+| Rule Violations Suggested | Count of rule-violation suggestions |
+| Rule Violations Implemented | Count of implemented rule-violation suggestions |
+| Requirement Gaps Suggested | Count of requirement-gap suggestions |
+| Requirement Gaps Implemented | Count of implemented requirement-gap suggestions |
+| Total Suggestions | Sum of all suggestion categories |
+| Total Implemented | Sum of all implemented categories |
+| Total Dismissed | Total suggestions dismissed across all sections. `Implementation Rate (%)` reflects only suggestions that were actually fixed, not dismissed ones. |
+| Implementation Rate (%) | `Total Implemented / Total Suggestions × 100`, blank when 0 suggestions |
+| Suggestions per 100 Lines | `Total Suggestions / Lines Added × 100`, blank when lines = 0 or suggestions = 0 |
+| Time to First Qodo Comment (min) | Minutes from PR creation to Qodo's first comment; blank if no Qodo comment |
+| Time to First Human Comment (min) | Minutes from PR creation to the first non-Qodo comment; blank if none |
+| Has Human Comment | `True` if any non-Qodo comment exists on the PR |
+| Spotlight Issues | JSON array of high-impact Action Required issues (Security or Correctness sub-label) that were implemented |
+| Is AI Authored | `True` if the PR was detected as AI-assisted (by body patterns or labels) |
+| AI Author Type | Which AI tool: `copilot`, `cursor`, `claude`, `ai`, or blank if not detected |
+| Reviewer Count | Number of distinct reviewers who submitted a review |
+| Had Request Changes | `True` if any reviewer submitted a "Request Changes" review |
+| Final Approver | Username of the last reviewer to approve (GitHub login, or Bitbucket username); blank if none |
+| CI Status | Status check rollup state at the last commit: `SUCCESS`, `FAILURE`, `PENDING`, or blank if unavailable |
+| Commits After Qodo | Number of commits pushed after Qodo posted its first review |
+| Speed to First Fix (min) | Minutes between Qodo's first review and the first commit that followed it; blank if no post-review commit |
+
+### HTML report sections
+
+The HTML report is organized into the following sections:
+
+| Section | What it shows |
+|---|---|
+| Hero | Narrative headline summarizing Qodo's impact for the org and period |
+| Executive Summary | At-a-glance stat cards: PRs reviewed by Qodo, total issues caught, issues resolved, overall implementation rate |
+| Trend | Findings caught & fixed, week over week; shown when weekly coverage data is available |
+| From merged PR to high-impact fix | Conversion funnel: the share of PRs surviving each step, down to PRs where Qodo measurably prevented something from reaching production |
+| High-impact findings caught & fixed | Cards for Action Required findings flagged as Security or Correctness — the issues most likely to have caused an incident in production |
+| What Qodo flagged & how it landed | Counts and implementation rates by severity (Action Required vs Review Recommended) and by category (Bugs, Rule Violations, Requirement Gaps) |
+| First feedback on a PR | Density plot of time to first feedback, comparing Qodo's median vs the first human reviewer's |
+| Developer adoption matrix | Every author plotted by action-required findings (log scale) vs implementation rate, split into four quadrants |
+| Hours Saved | Estimated senior-engineer review hours offloaded, based on lines of code reviewed |
+
+The Trend, Spotlight (High-impact findings), and Velocity (First feedback) sections are omitted from the report if no relevant data is present.
 
 ## Engineering Audit (pre-install diagnostic)
 
